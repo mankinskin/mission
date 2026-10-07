@@ -134,6 +134,8 @@ pub enum MissionError {
     StaleRevision { expected: u64, actual: u64 },
     #[error("mission {0} was not found")]
     NotFound(Uuid),
+    #[error("publication recovery is required for mission {mission_id}: {message}")]
+    PublicationRecovery { mission_id: Uuid, message: String },
     #[error("filesystem error: {0}")]
     Io(#[from] std::io::Error),
     #[error("JSON error: {0}")]
@@ -726,13 +728,23 @@ pub struct MissionStore {
 }
 
 impl MissionStore {
-    pub fn init(workspace_root: &Path) -> Result<Self, MissionError> {
+    fn at_workspace(workspace_root: &Path) -> Self {
         let root = workspace_root
             .join(".workflow-tools")
             .join("mission")
             .join("missions");
-        fs::create_dir_all(&root)?;
-        Ok(Self { root })
+        Self { root }
+    }
+
+    pub fn init(workspace_root: &Path) -> Result<Self, MissionError> {
+        let store = Self::at_workspace(workspace_root);
+        fs::create_dir_all(&store.root)?;
+        Ok(store)
+    }
+
+    /// Open a store without creating directories or changing filesystem state.
+    pub fn open(workspace_root: &Path) -> Self {
+        Self::at_workspace(workspace_root)
     }
 
     pub fn import(
@@ -859,6 +871,137 @@ impl MissionStore {
         }
         Ok(serde_json::from_slice::<AcceptedMission>(&fs::read(path)?)?.label_mapping)
     }
+
+    /// Atomically replaces the accepted record and its generated projection.
+    ///
+    /// The entire mission directory is staged before its current directory is
+    /// moved aside.  A failed replacement restores that directory; failure to
+    /// restore is reported explicitly rather than silently selecting either
+    /// version.
+    pub fn publish(
+        &self,
+        mission_id: Uuid,
+        bundle: MissionBundle,
+        expected_current_revision: u64,
+    ) -> Result<AcceptedMission, MissionError> {
+        validate_bundle(&bundle)
+            .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
+        let current = match self.get(mission_id) {
+            Ok(current) => Some(current),
+            Err(MissionError::NotFound(_)) => None,
+            Err(error) => return Err(error),
+        };
+        let actual = current
+            .as_ref()
+            .map_or(0, |mission| mission.bundle.manifest.revision);
+        if expected_current_revision != actual {
+            return Err(MissionError::StaleRevision {
+                expected: expected_current_revision,
+                actual,
+            });
+        }
+        if let Some(existing) = &current
+            && bundle.manifest.revision <= existing.bundle.manifest.revision
+        {
+            return Err(MissionError::StaleRevision {
+                expected: existing.bundle.manifest.revision + 1,
+                actual: bundle.manifest.revision,
+            });
+        }
+        let rendered = render(&bundle, mission_id)
+            .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
+        let accepted = AcceptedMission {
+            mission_id,
+            label_mapping: LabelMapping {
+                revision: bundle.manifest.revision,
+                labels: bundle
+                    .manifest
+                    .execution_order
+                    .iter()
+                    .enumerate()
+                    .map(|(index, id)| (format!("W{}", index + 1), id.clone()))
+                    .collect(),
+            },
+            bundle,
+        };
+        let mission_dir = self.root.join(mission_id.to_string());
+        let stage = self.root.join(format!(".{mission_id}.publish.tmp"));
+        let backup = self.root.join(format!(".{mission_id}.publish.backup"));
+        if stage.exists() || backup.exists() {
+            return Err(MissionError::PublicationRecovery {
+                mission_id,
+                message: "a previous publication staging or backup directory exists".into(),
+            });
+        }
+        if mission_dir.exists() {
+            copy_directory(&mission_dir, &stage)?;
+        } else {
+            fs::create_dir_all(&stage)?;
+        }
+        let write_result = (|| -> Result<(), MissionError> {
+            fs::create_dir_all(stage.join("history"))?;
+            let bytes = serde_json::to_vec_pretty(&accepted)?;
+            fs::write(stage.join("accepted.json"), &bytes)?;
+            fs::write(
+                stage.join("history").join(format!(
+                    "revision-{}.json",
+                    accepted.bundle.manifest.revision
+                )),
+                &bytes,
+            )?;
+            let generated = stage.join("generated");
+            if generated.exists() {
+                fs::remove_dir_all(&generated)?;
+            }
+            fs::create_dir_all(&generated)?;
+            fs::write(generated.join("ROADMAP.md"), &rendered.roadmap)?;
+            for (name, bytes) in &rendered.parts {
+                fs::write(generated.join(name), bytes)?;
+            }
+            Ok(())
+        })();
+        if let Err(error) = write_result {
+            let _ = fs::remove_dir_all(&stage);
+            return Err(error);
+        }
+        if mission_dir.exists() {
+            fs::rename(&mission_dir, &backup)?;
+        }
+        if let Err(error) = fs::rename(&stage, &mission_dir) {
+            let recovery = if backup.exists() {
+                fs::rename(&backup, &mission_dir)
+            } else {
+                Ok(())
+            };
+            return match recovery {
+                Ok(()) => Err(error.into()),
+                Err(recovery_error) => Err(MissionError::PublicationRecovery {
+                    mission_id,
+                    message: format!(
+                        "replacement failed ({error}); restoring the prior mission also failed ({recovery_error})"
+                    ),
+                }),
+            };
+        }
+        if backup.exists() {
+            fs::remove_dir_all(backup)?;
+        }
+        self.get(mission_id)
+    }
+}
+
+fn copy_directory(source: &Path, destination: &Path) -> Result<(), MissionError> {
+    fs::create_dir_all(destination)?;
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        let target = destination.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_directory(&entry.path(), &target)?;
+        } else {
+            fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

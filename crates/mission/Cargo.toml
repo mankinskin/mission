@@ -1,0 +1,33 @@
+[package]
+name = "mission"
+version = "0.1.0"
+edition = "2024"
+description = "Public Mission facade with CLI and MCP transports"
+
+[features]
+default = []
+cli = ["dep:clap", "dep:transport-harness", "transport-harness/cli"]
+mcp = ["dep:rmcp", "dep:schemars", "dep:transport-harness", "transport-harness/mcp"]
+
+[[bin]]
+name = "mission"
+path = "src/bin/mission.rs"
+required-features = ["cli"]
+
+[[bin]]
+name = "mission-mcp"
+path = "src/bin/mission-mcp.rs"
+required-features = ["mcp"]
+
+[dependencies]
+mission-api = { path = "../mission-api" }
+clap = { version = "4", features = ["derive"], optional = true }
+rmcp = { version = "0.14", features = ["server", "transport-io"], optional = true }
+schemars = { version = "1", optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+transport-harness = { git = "https://github.com/mankinskin/memory-kernel", branch = "main", optional = true, default-features = false }
+uuid = { version = "1", features = ["serde"] }
+
+[dev-dependencies]
+tempfile = "3"
