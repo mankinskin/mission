@@ -1,0 +1,18 @@
+[package]
+name = "mission-api"
+version = "0.1.0"
+edition = "2024"
+description = "Internal durable mission roadmap model, validation, storage, and rendering"
+
+[lib]
+name = "mission_api"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["serde", "v4"] }
+
+[dev-dependencies]
+tempfile = "3"
