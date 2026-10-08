@@ -27,6 +27,10 @@ struct MissionOperationInput {
     manifest_path: Option<PathBuf>,
     #[serde(default)]
     expected_current_revision: Option<u64>,
+    #[serde(default)]
+    dossier_path: Option<PathBuf>,
+    #[serde(default)]
+    dry_run: bool,
 }
 
 impl MissionServer {
@@ -42,7 +46,7 @@ impl MissionServer {
 impl MissionServer {
     #[tool(
         name = "mission_operation",
-        description = "Run validate-preview, import, render-preview, publish, or check-generated and return a structured Mission status snapshot."
+        description = "Run mission get, validate-preview, import, render-preview, publish, check-generated, or migrate-dossiers and return a structured Mission status snapshot."
     )]
     async fn operation(
         &self,
@@ -65,6 +69,9 @@ impl MissionServer {
                 .ok_or_else(|| McpError::invalid_params("manifest_path is required", None))
         };
         let operation = match input.operation.as_str() {
+            "get" => Operation::Get {
+                mission_id: required_id()?,
+            },
             "validate-preview" => Operation::ValidatePreview {
                 manifest_path: required_manifest()?,
             },
@@ -87,6 +94,10 @@ impl MissionServer {
             },
             "check-generated" => Operation::CheckGenerated {
                 mission_id: required_id()?,
+            },
+            "migrate-dossiers" => Operation::MigrateDossiers {
+                dossier_path: input.dossier_path.clone(),
+                dry_run: input.dry_run,
             },
             _ => return Err(McpError::invalid_params("unknown operation", None)),
         };

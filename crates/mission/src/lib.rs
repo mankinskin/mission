@@ -9,9 +9,16 @@ pub use mission_api::*;
 use serde::Serialize;
 use uuid::Uuid;
 
+mod migration;
+
+pub use migration::{DossierMigrationRecord, DossierMigrationReport};
+
 /// Operations exposed identically by the CLI and MCP adapters.
 #[derive(Clone, Debug)]
 pub enum Operation {
+    Get {
+        mission_id: Uuid,
+    },
     ValidatePreview {
         manifest_path: PathBuf,
     },
@@ -31,6 +38,10 @@ pub enum Operation {
     CheckGenerated {
         mission_id: Uuid,
     },
+    MigrateDossiers {
+        dossier_path: Option<PathBuf>,
+        dry_run: bool,
+    },
 }
 
 /// A stable operation result suitable for either transport.
@@ -42,6 +53,10 @@ pub struct StatusSnapshot {
     pub diagnostics: Vec<StatusDiagnostic>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rendered: Option<RenderedPreview>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accepted: Option<AcceptedMission>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub migration_report: Option<DossierMigrationReport>,
 }
 
 /// Deterministic document bytes returned by render-preview.
@@ -64,6 +79,18 @@ pub struct StatusDiagnostic {
 /// Runs an operation. CLI and MCP adapters intentionally delegate here.
 pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
     match operation {
+        Operation::Get { mission_id } => match MissionStore::open(workspace_root).get(mission_id) {
+            Ok(accepted) => StatusSnapshot {
+                status: "ok".into(),
+                mission_id: Some(mission_id),
+                revision: Some(accepted.bundle.manifest.revision),
+                diagnostics: vec![],
+                rendered: None,
+                accepted: Some(accepted),
+                migration_report: None,
+            },
+            Err(error) => failure(Some(mission_id), error),
+        },
         Operation::ValidatePreview { manifest_path } => match collect_bundle(&manifest_path) {
             Ok(bundle) => success(None, Some(bundle.manifest.revision)),
             Err(error) => failure(None, error),
@@ -110,6 +137,8 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
                 revision: Some(accepted.bundle.manifest.revision),
                 diagnostics: vec![],
                 rendered: Some(rendered),
+                accepted: None,
+                migration_report: None,
             },
             Err(error) => failure(Some(mission_id), error),
         },
@@ -125,6 +154,21 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
             )
         }),
         Operation::CheckGenerated { mission_id } => check_generated(workspace_root, mission_id),
+        Operation::MigrateDossiers {
+            dossier_path,
+            dry_run,
+        } => match migration::migrate_dossiers(workspace_root, dossier_path.as_deref(), dry_run) {
+            Ok(migration_report) => StatusSnapshot {
+                status: "ok".into(),
+                mission_id: None,
+                revision: None,
+                diagnostics: vec![],
+                rendered: None,
+                accepted: None,
+                migration_report: Some(migration_report),
+            },
+            Err(error) => failure(None, error),
+        },
     }
 }
 
@@ -190,6 +234,8 @@ fn check_generated(workspace_root: &Path, mission_id: Uuid) -> StatusSnapshot {
             revision: Some(accepted.bundle.manifest.revision),
             diagnostics,
             rendered: None,
+            accepted: None,
+            migration_report: None,
         },
         Err(error) => failure(Some(mission_id), error),
     }
@@ -221,6 +267,8 @@ fn success(mission_id: Option<Uuid>, revision: Option<u64>) -> StatusSnapshot {
         revision,
         diagnostics: vec![],
         rendered: None,
+        accepted: None,
+        migration_report: None,
     }
 }
 
@@ -260,5 +308,7 @@ fn failure(mission_id: Option<Uuid>, error: MissionError) -> StatusSnapshot {
         revision: None,
         diagnostics,
         rendered: None,
+        accepted: None,
+        migration_report: None,
     }
 }
