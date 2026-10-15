@@ -260,3 +260,93 @@ fn ticket_backed_source_status_remains_externally_owned() {
         Some("ce://default/ticket/1486c2f9-301e-4709-a8d0-cae3c4e6f5d4")
     );
 }
+
+#[test]
+fn migration_accepts_case_variant_headings_and_preserves_authored_part_content() {
+    let workspace = TempDir::new().unwrap();
+    let contents = roadmap("Case Variant Mission", &[("Alpha", "01-first.md", None)])
+        .replace("## Outcome Summary", "## Outcome summary")
+        .replace(
+            "## Roadmap Waypoints",
+            "## Validation gates\n\n- `cargo test -p first`\n- `cargo test -p second`\n\n## Roadmap Waypoints",
+        );
+    let dossier = write_dossier(workspace.path(), "case-variant", &contents);
+    fs::write(
+        dossier.join("01-first.md"),
+        "## Outcome\n\nPreserve part content.\n\n## Expected state\n\nAuthored state remains intact.\n",
+    )
+    .unwrap();
+
+    let result = execute_cli(
+        workspace.path(),
+        Operation::MigrateDossiers {
+            dossier_path: Some(dossier),
+            dry_run: false,
+        },
+    );
+    assert_eq!(result.status, "ok");
+    let report = result.migration_report.unwrap();
+    assert_eq!(report.migrated, 1, "{:?}", report.records);
+    let accepted = MissionStore::open(workspace.path())
+        .get(report.records[0].mission_id.unwrap())
+        .unwrap();
+    assert_eq!(
+        accepted.bundle.manifest.objective,
+        "Preserve this legacy roadmap."
+    );
+    assert_eq!(
+        accepted
+            .bundle
+            .manifest
+            .validation_gates
+            .iter()
+            .map(|gate| gate.command.as_str())
+            .collect::<Vec<_>>(),
+        ["cargo test -p first", "cargo test -p second"]
+    );
+    assert!(
+        accepted.bundle.waypoints[0]
+            .part_markdown
+            .contains("## Expected state\n\nAuthored state remains intact.")
+    );
+}
+
+#[test]
+fn migration_rejects_missing_or_empty_outcome_summary() {
+    for (name, contents) in [
+        (
+            "missing-outcome",
+            roadmap("Missing Outcome", &[("Alpha", "01-first.md", None)]).replace(
+                "## Outcome Summary\n\nPreserve this legacy roadmap.\n\n",
+                "",
+            ),
+        ),
+        (
+            "empty-outcome",
+            roadmap("Empty Outcome", &[("Alpha", "01-first.md", None)])
+                .replace("Preserve this legacy roadmap.", "   "),
+        ),
+    ] {
+        let workspace = TempDir::new().unwrap();
+        let dossier = write_dossier(workspace.path(), name, &contents);
+        let result = execute_cli(
+            workspace.path(),
+            Operation::MigrateDossiers {
+                dossier_path: Some(dossier),
+                dry_run: true,
+            },
+        );
+        assert_eq!(result.status, "ok");
+        let report = result.migration_report.unwrap();
+        assert_eq!(report.blocked, 1, "{:?}", report.records);
+        assert!(
+            report.records[0]
+                .reason
+                .as_deref()
+                .unwrap()
+                .contains("non-empty Outcome Summary"),
+            "{:?}",
+            report.records
+        );
+    }
+}

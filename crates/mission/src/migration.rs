@@ -324,13 +324,11 @@ fn parse_roadmap(
         .unwrap_or(roadmap_path)
         .to_string_lossy()
         .replace('\\', "/");
-    let mut validation_gates =
+    let validation_gates =
         backtick_values(&section_text(&lines, "Validation Gates").unwrap_or_default())
             .into_iter()
             .map(|command| ValidationGate { command, cwd: None })
             .collect::<Vec<_>>();
-    validation_gates.sort_by(|left, right| left.command.cmp(&right.command));
-    validation_gates.dedup_by(|left, right| left.command == right.command);
 
     let bundle = MissionBundle {
         manifest: BundleManifest {
@@ -499,7 +497,10 @@ fn parse_waypoint(
 
 fn section_text(lines: &[&str], section: &str) -> Option<String> {
     let header = format!("## {section}");
-    let start = lines.iter().position(|line| line.trim() == header)? + 1;
+    let start = lines
+        .iter()
+        .position(|line| line.trim().eq_ignore_ascii_case(&header))?
+        + 1;
     let end = lines[start..]
         .iter()
         .position(|line| line.trim_start().starts_with("## "))
