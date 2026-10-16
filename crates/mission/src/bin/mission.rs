@@ -2,7 +2,7 @@ use mission::{Operation, execute_cli};
 use std::process::ExitCode;
 use transport_harness::{
     HarnessError, Output,
-    cli::clap::{Parser, Subcommand},
+    cli::clap::{Parser, Subcommand, error::ErrorKind},
 };
 use uuid::Uuid;
 
@@ -48,6 +48,19 @@ enum CommandOperation {
 }
 
 fn main() -> Result<ExitCode, HarnessError> {
+    if let Err(error) = Command::try_parse_from(std::env::args_os()) {
+        if matches!(
+            error.kind(),
+            ErrorKind::DisplayHelp
+                | ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+                | ErrorKind::DisplayVersion
+        ) {
+            print!("{error}");
+            return Ok(ExitCode::SUCCESS);
+        }
+        return Err(HarnessError::Arguments(error.to_string()));
+    }
+
     let mut succeeded = false;
     transport_harness::cli::run(|command: Command| {
         let operation = match command.operation {
