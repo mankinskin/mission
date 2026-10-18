@@ -10,6 +10,7 @@ fn bundle() -> MissionBundle {
         scope: Scope::SingleSession,
         state: Some(WaypointState::Pending),
         ticket_ref: None,
+        child_mission_ref: None,
         session_package: id.into(),
         prompt: "go | now".into(),
         artifacts: vec![],
@@ -67,7 +68,10 @@ fn render_parts_follow_execution_order() {
 }
 #[test]
 fn render_contains_waypoint_contract_and_validation_details() {
-    let output = render(&bundle(), Uuid::nil()).unwrap();
+    let mut value = bundle();
+    value.waypoints[0].state = None;
+    value.waypoints[0].child_mission_ref = Some(format!("ce://workspace/mission/{}", Uuid::nil()));
+    let output = render(&value, Uuid::nil()).unwrap();
     let roadmap = String::from_utf8(output.roadmap).unwrap();
     let first_part = String::from_utf8(output.parts["01-first.md"].clone()).unwrap();
     assert!(roadmap.contains("execution-side-effect"));
@@ -75,6 +79,10 @@ fn render_contains_waypoint_contract_and_validation_details() {
     assert!(first_part.contains("## Waypoint Details"));
     assert!(first_part.contains("`true`"));
     assert!(first_part.contains("## Part"));
+    assert!(
+        roadmap.contains("**Child mission**")
+            && first_part.contains("ce://workspace/mission/00000000-0000-0000-0000-000000000000")
+    );
 }
 #[test]
 fn revision_mapping_preserves_old_label_identity() {
@@ -83,4 +91,71 @@ fn revision_mapping_preserves_old_label_identity() {
     let id = Uuid::new_v4();
     store.import(id, bundle(), 0).unwrap();
     assert_eq!(store.revision_mapping(id, 1).unwrap().labels["W1"], "first");
+}
+
+#[test]
+fn render_with_snapshot_accepts_ephemeral_external_state() {
+    let mut value = bundle();
+    let ticket_ref = format!("ce://workspace/ticket/{}", Uuid::nil());
+    value.waypoints[0].scope = Scope::TicketBacked {
+        ticket_ref: ticket_ref.clone(),
+    };
+    value.waypoints[0].ticket_ref = Some(ticket_ref);
+    value.waypoints[0].state = Some(WaypointState::InProgress);
+
+    assert!(render(&value, Uuid::nil()).is_err());
+    let output =
+        render_with_snapshot(&value, Uuid::nil(), Some("ticket-status-v1:fixture")).unwrap();
+    let roadmap = String::from_utf8(output.roadmap).unwrap();
+
+    assert!(roadmap.contains("external-status-snapshot: ticket-status-v1:fixture"));
+    assert!(roadmap.contains("| **State** | in-progress |"));
+}
+
+#[test]
+fn validation_rejects_conflicting_ticket_references() {
+    let mut value = bundle();
+    value.waypoints[0].scope = Scope::TicketBacked {
+        ticket_ref: format!("ce://workspace/ticket/{}", Uuid::nil()),
+    };
+    value.waypoints[0].ticket_ref = Some(format!("ce://workspace/ticket/{}", Uuid::new_v4()));
+    value.waypoints[0].state = None;
+
+    assert!(
+        validate_bundle(&value)
+            .unwrap_err()
+            .iter()
+            .any(|diagnostic| diagnostic.code == "ticket-reference-mismatch")
+    );
+}
+
+#[test]
+fn snapshot_derivation_keeps_unstarted_local_waypoints_pending() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = MissionStore::init(directory.path()).unwrap();
+    let id = Uuid::new_v4();
+    let mut value = bundle();
+    value.waypoints[0].state = None;
+    value.waypoints[1].state = Some(WaypointState::Blocked);
+    store.import(id, value, 0).unwrap();
+
+    assert_eq!(
+        store
+            .derived_state_with_status_snapshot(id, &Default::default())
+            .unwrap(),
+        WaypointState::Pending
+    );
+
+    let mut parent = bundle();
+    parent.waypoints[0].state = None;
+    parent.waypoints[0].child_mission_ref = Some(format!("ce://default/mission/{id}"));
+    parent.waypoints[1].state = Some(WaypointState::Completed);
+    let parent_id = Uuid::new_v4();
+    store.import(parent_id, parent, 0).unwrap();
+    assert_eq!(
+        store
+            .derived_state_with_status_snapshot(parent_id, &Default::default())
+            .unwrap(),
+        WaypointState::Pending
+    );
 }

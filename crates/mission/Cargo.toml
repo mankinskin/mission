@@ -21,6 +21,7 @@ required-features = ["mcp"]
 
 [dependencies]
 mission-api = { path = "../mission-api" }
+ticket-api = { path = "../../../ticket/crates/ticket-api" }
 clap = { version = "4", features = ["derive"], optional = true }
 rmcp = { version = "0.14", features = ["server", "transport-io"], optional = true }
 schemars = { version = "1", optional = true }

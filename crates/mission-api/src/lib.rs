@@ -66,6 +66,10 @@ pub struct WaypointFragment {
     pub state: Option<WaypointState>,
     #[serde(default)]
     pub ticket_ref: Option<String>,
+    /// Canonical reference to an accepted child mission.  This is deliberately
+    /// separate from ticket ownership and from the execution scope.
+    #[serde(default)]
+    pub child_mission_ref: Option<String>,
     pub session_package: String,
     pub prompt: String,
     #[serde(default)]
@@ -279,6 +283,42 @@ pub fn validate_bundle(bundle: &MissionBundle) -> Result<(), Vec<Diagnostic>> {
                 "Ticket references must use ce://<workspace>/ticket/<uuid>.",
             ));
         }
+        if let (
+            Some(ticket_ref),
+            Scope::TicketBacked {
+                ticket_ref: scoped_ref,
+            },
+        ) = (&waypoint.ticket_ref, &waypoint.scope)
+            && ticket_ref != scoped_ref
+        {
+            diagnostics.push(diag(
+                "ticket-reference-mismatch",
+                Path::new(&source),
+                "/ticket_ref",
+                Some(&waypoint.waypoint_id),
+                "ticket_ref must match the reference declared by ticket-backed scope.",
+            ));
+        }
+        if let Some(child_mission_ref) = &waypoint.child_mission_ref {
+            if !canonical_reference(child_mission_ref, "mission") {
+                diagnostics.push(diag(
+                    "invalid-child-mission-reference",
+                    Path::new(&source),
+                    "/child_mission_ref",
+                    Some(&waypoint.waypoint_id),
+                    "Child mission references must use ce://<workspace>/mission/<uuid>.",
+                ));
+            }
+            if waypoint.state.is_some() {
+                diagnostics.push(diag(
+                    "child-mission-state-derived",
+                    Path::new(&source),
+                    "/state",
+                    Some(&waypoint.waypoint_id),
+                    "Child mission waypoint state is derived from the accepted child mission.",
+                ));
+            }
+        }
         if let Scope::TicketBacked { ticket_ref } = &waypoint.scope
             && !canonical_reference(ticket_ref, "ticket")
         {
@@ -335,6 +375,15 @@ pub fn validate_bundle(bundle: &MissionBundle) -> Result<(), Vec<Diagnostic>> {
         }
     }
     let order = &bundle.manifest.execution_order;
+    if order.is_empty() {
+        diagnostics.push(diag(
+            "empty-mission",
+            Path::new("manifest.json"),
+            "/execution_order",
+            None,
+            "An accepted mission must contain at least one waypoint.",
+        ));
+    }
     if order.len() != waypoint_by_id.len()
         || order.iter().collect::<BTreeSet<_>>().len() != order.len()
         || order
@@ -510,6 +559,40 @@ fn canonical_reference(value: &str, store: &str) -> bool {
         && Uuid::parse_str(id).is_ok_and(|uuid| uuid.to_string() == id)
 }
 
+fn mission_reference(value: &str) -> Option<(&str, Uuid)> {
+    let path = value.strip_prefix("ce://")?;
+    let mut segments = path.split('/');
+    let (workspace, store, id, None) = (
+        segments.next()?,
+        segments.next()?,
+        segments.next()?,
+        segments.next(),
+    ) else {
+        return None;
+    };
+    (store == "mission").then_some((workspace, Uuid::parse_str(id).ok()?))
+}
+
+fn mission_reference_id(value: &str) -> Option<Uuid> {
+    mission_reference(value).map(|(_, id)| id)
+}
+
+fn first_incomplete_state(bundle: &MissionBundle) -> WaypointState {
+    bundle
+        .manifest
+        .execution_order
+        .iter()
+        .find_map(|id| {
+            bundle
+                .waypoints
+                .iter()
+                .find(|waypoint| waypoint.waypoint_id == *id)
+                .map(|waypoint| waypoint.state.clone().unwrap_or(WaypointState::Pending))
+                .filter(|state| *state != WaypointState::Completed)
+        })
+        .unwrap_or(WaypointState::Completed)
+}
+
 fn diag(
     code: &'static str,
     source: &Path,
@@ -552,9 +635,46 @@ pub fn render(
     bundle: &MissionBundle,
     mission_id: Uuid,
 ) -> Result<RenderedRoadmap, Vec<Diagnostic>> {
-    validate_bundle(bundle)?;
+    render_with_snapshot(bundle, mission_id, None)
+}
+
+/// Render a previously materialized status snapshot without reading a store.
+pub fn render_with_snapshot(
+    bundle: &MissionBundle,
+    mission_id: Uuid,
+    snapshot_id: Option<&str>,
+) -> Result<RenderedRoadmap, Vec<Diagnostic>> {
+    if snapshot_id.is_some() {
+        let mut validation_bundle = bundle.clone();
+        for waypoint in &mut validation_bundle.waypoints {
+            if waypoint.ticket_ref.is_some()
+                || waypoint.child_mission_ref.is_some()
+                || matches!(waypoint.scope, Scope::TicketBacked { .. })
+            {
+                waypoint.state = None;
+            }
+        }
+        validate_bundle(&validation_bundle)?;
+    } else {
+        validate_bundle(bundle)?;
+    }
+    Ok(render_materialized_with_snapshot(
+        bundle,
+        mission_id,
+        snapshot_id,
+    ))
+}
+
+fn render_materialized_with_snapshot(
+    bundle: &MissionBundle,
+    mission_id: Uuid,
+    snapshot_id: Option<&str>,
+) -> RenderedRoadmap {
+    let snapshot_provenance = snapshot_id
+        .map(|id| format!("; external-status-snapshot: {id}"))
+        .unwrap_or_default();
     let mut roadmap = format!(
-        "# {}\n\n<!-- mission: {mission_id}; revision: {}; renderer: {RENDERER_VERSION} -->\n\n## Objective\n\n{}\n\n",
+        "# {}\n\n<!-- mission: {mission_id}; revision: {}; renderer: {RENDERER_VERSION}{snapshot_provenance} -->\n\n## Objective\n\n{}\n\n",
         escape(&bundle.manifest.title),
         bundle.manifest.revision,
         bundle.manifest.objective
@@ -606,14 +726,16 @@ pub fn render(
                 WaypointState::Blocked => "blocked".to_string(),
             },
         );
+        let child_mission = waypoint.child_mission_ref.as_deref().unwrap_or("None");
         roadmap.push_str(&format!(
-            "### {label}. {} (`{}`)\n\n| Field | Value |\n|---|---|\n| **Part** | [{}]({}) |\n| **Mode** | {:?} |\n| **Scope** | {} |\n| **State** | {} |\n| **Prerequisites** | {} |\n| **Session package** | {} |\n| **Prompt** | {} |\n| **Artifacts** | {} |\n| **Requirements** | {} |\n| **Non-goals** | {} |\n| **Commit checkpoint** | {} |\n\n",
+            "### {label}. {} (`{}`)\n\n| Field | Value |\n|---|---|\n| **Part** | [{}]({}) |\n| **Mode** | {:?} |\n| **Scope** | {} |\n| **Child mission** | {} |\n| **State** | {} |\n| **Prerequisites** | {} |\n| **Session package** | {} |\n| **Prompt** | {} |\n| **Artifacts** | {} |\n| **Requirements** | {} |\n| **Non-goals** | {} |\n| **Commit checkpoint** | {} |\n\n",
             escape(&waypoint.title),
             waypoint.waypoint_id,
             escape(&filename),
             filename,
             mode_label(&waypoint.mode),
             escape(&scope),
+            escape(child_mission),
             escape(&state),
             escape(&dependencies),
             escape(&waypoint.session_package),
@@ -649,15 +771,16 @@ pub fn render(
             (None, None) => String::new(),
         };
         let mut part = format!(
-            "# {label}. {} (`{}`)\n\n<!-- mission: {mission_id}; revision: {}; renderer: {RENDERER_VERSION} -->\n\n{navigation}\n\n",
+            "# {label}. {} (`{}`)\n\n<!-- mission: {mission_id}; revision: {}; renderer: {RENDERER_VERSION}{snapshot_provenance} -->\n\n{navigation}\n\n",
             escape(&waypoint.title),
             waypoint.waypoint_id,
             bundle.manifest.revision,
         );
         part.push_str(&format!(
-            "## Waypoint Details\n\n| Field | Value |\n|---|---|\n| **Mode** | {:?} |\n| **Scope** | {} |\n| **State** | {} |\n| **Prerequisites** | {} |\n| **Session package** | {} |\n| **Prompt** | {} |\n| **Artifacts** | {} |\n| **Requirements** | {} |\n| **Non-goals** | {} |\n| **Commit checkpoint** | {} |\n\n",
+            "## Waypoint Details\n\n| Field | Value |\n|---|---|\n| **Mode** | {:?} |\n| **Scope** | {} |\n| **Child mission** | {} |\n| **State** | {} |\n| **Prerequisites** | {} |\n| **Session package** | {} |\n| **Prompt** | {} |\n| **Artifacts** | {} |\n| **Requirements** | {} |\n| **Non-goals** | {} |\n| **Commit checkpoint** | {} |\n\n",
             mode_label(&waypoint.mode),
             escape(&scope),
+            escape(child_mission),
             escape(&state),
             escape(&dependencies),
             escape(&waypoint.session_package),
@@ -676,10 +799,10 @@ pub fn render(
         }
         parts.insert(filename, part.into_bytes());
     }
-    Ok(RenderedRoadmap {
+    RenderedRoadmap {
         roadmap: roadmap.into_bytes(),
         parts,
-    })
+    }
 }
 
 fn render_string_section(output: &mut String, title: &str, values: &[String]) {
@@ -754,6 +877,8 @@ impl MissionStore {
         expected_current_revision: u64,
     ) -> Result<AcceptedMission, MissionError> {
         validate_bundle(&bundle)
+            .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
+        self.validate_child_missions(mission_id, &bundle)
             .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
         let mission_dir = self.root.join(mission_id.to_string());
         let current = match self.get(mission_id) {
@@ -884,7 +1009,35 @@ impl MissionStore {
         bundle: MissionBundle,
         expected_current_revision: u64,
     ) -> Result<AcceptedMission, MissionError> {
+        self.publish_inner(mission_id, bundle, expected_current_revision, None)
+    }
+
+    pub fn publish_with_status_snapshot(
+        &self,
+        mission_id: Uuid,
+        bundle: MissionBundle,
+        expected_current_revision: u64,
+        ticket_states: &BTreeMap<String, WaypointState>,
+        snapshot_id: &str,
+    ) -> Result<AcceptedMission, MissionError> {
+        self.publish_inner(
+            mission_id,
+            bundle,
+            expected_current_revision,
+            Some((ticket_states, snapshot_id)),
+        )
+    }
+
+    fn publish_inner(
+        &self,
+        mission_id: Uuid,
+        bundle: MissionBundle,
+        expected_current_revision: u64,
+        status_snapshot: Option<(&BTreeMap<String, WaypointState>, &str)>,
+    ) -> Result<AcceptedMission, MissionError> {
         validate_bundle(&bundle)
+            .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
+        self.validate_child_missions(mission_id, &bundle)
             .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
         let current = match self.get(mission_id) {
             Ok(current) => Some(current),
@@ -908,8 +1061,17 @@ impl MissionStore {
                 actual: bundle.manifest.revision,
             });
         }
-        let rendered = render(&bundle, mission_id)
-            .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
+        let rendered = if let Some((ticket_states, snapshot_id)) = status_snapshot {
+            self.render_bundle_with_status_snapshot(
+                mission_id,
+                &bundle,
+                ticket_states,
+                snapshot_id,
+            )?
+        } else {
+            render(&bundle, mission_id)
+                .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?
+        };
         let accepted = AcceptedMission {
             mission_id,
             label_mapping: LabelMapping {
@@ -988,6 +1150,268 @@ impl MissionStore {
         }
         self.get(mission_id)
     }
+
+    /// Derive a mission's current state from its accepted ordered waypoints.
+    /// Child mission waypoints use the recursively derived child state.
+    pub fn derived_state(&self, mission_id: Uuid) -> Result<WaypointState, MissionError> {
+        self.derived_state_inner(mission_id, &mut BTreeSet::new())
+    }
+
+    /// Materialize externally owned ticket state and recursive child state into
+    /// an ephemeral rendering bundle; accepted records are never changed.
+    pub fn render_with_status_snapshot(
+        &self,
+        mission_id: Uuid,
+        ticket_states: &BTreeMap<String, WaypointState>,
+        snapshot_id: &str,
+    ) -> Result<RenderedRoadmap, MissionError> {
+        let accepted = self.get(mission_id)?;
+        self.render_bundle_with_status_snapshot(
+            mission_id,
+            &accepted.bundle,
+            ticket_states,
+            snapshot_id,
+        )
+    }
+
+    pub fn derived_state_with_status_snapshot(
+        &self,
+        mission_id: Uuid,
+        ticket_states: &BTreeMap<String, WaypointState>,
+    ) -> Result<WaypointState, MissionError> {
+        let accepted = self.get(mission_id)?;
+        let mut bundle = accepted.bundle;
+        self.materialize_accepted_bundle(mission_id, &mut bundle, ticket_states)?;
+        Ok(first_incomplete_state(&bundle))
+    }
+
+    fn render_bundle_with_status_snapshot(
+        &self,
+        mission_id: Uuid,
+        source_bundle: &MissionBundle,
+        ticket_states: &BTreeMap<String, WaypointState>,
+        snapshot_id: &str,
+    ) -> Result<RenderedRoadmap, MissionError> {
+        validate_bundle(source_bundle)
+            .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
+        let mut bundle = source_bundle.clone();
+        self.materialize_accepted_bundle(mission_id, &mut bundle, ticket_states)?;
+        Ok(render_materialized_with_snapshot(
+            &bundle,
+            mission_id,
+            Some(snapshot_id),
+        ))
+    }
+
+    fn materialize_accepted_bundle(
+        &self,
+        mission_id: Uuid,
+        bundle: &mut MissionBundle,
+        ticket_states: &BTreeMap<String, WaypointState>,
+    ) -> Result<(), MissionError> {
+        self.validate_child_missions(mission_id, bundle)
+            .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
+        let mut visiting = BTreeSet::from([mission_id]);
+        self.materialize_states(bundle, ticket_states, &mut visiting)
+    }
+
+    fn materialize_states(
+        &self,
+        bundle: &mut MissionBundle,
+        ticket_states: &BTreeMap<String, WaypointState>,
+        visiting: &mut BTreeSet<Uuid>,
+    ) -> Result<(), MissionError> {
+        for waypoint in &mut bundle.waypoints {
+            if let Some(reference) = &waypoint.child_mission_ref {
+                let child_id = mission_reference_id(reference).expect("validated child reference");
+                if !visiting.insert(child_id) {
+                    return Err(MissionError::Validation(
+                        1,
+                        vec![diag(
+                            "child-mission-cycle",
+                            Path::new("accepted.json"),
+                            "",
+                            Some(&waypoint.waypoint_id),
+                            "Child mission references must not form a cycle.",
+                        )],
+                    ));
+                }
+                let mut child = self.get(child_id)?.bundle;
+                self.materialize_states(&mut child, ticket_states, visiting)?;
+                waypoint.state = Some(first_incomplete_state(&child));
+                visiting.remove(&child_id);
+            } else if let Some(reference) = waypoint.ticket_ref.as_ref().or(match &waypoint.scope {
+                Scope::TicketBacked { ticket_ref } => Some(ticket_ref),
+                Scope::SingleSession => None,
+            }) {
+                let Some(state) = ticket_states.get(reference).cloned() else {
+                    return Err(MissionError::Validation(
+                        1,
+                        vec![diag(
+                            "external-status-unresolved",
+                            Path::new("accepted.json"),
+                            "/ticket_ref",
+                            Some(&waypoint.waypoint_id),
+                            &format!(
+                                "Ticket status snapshot does not contain canonical reference `{reference}`."
+                            ),
+                        )],
+                    ));
+                };
+                waypoint.state = Some(state);
+            }
+        }
+        Ok(())
+    }
+
+    fn derived_state_inner(
+        &self,
+        mission_id: Uuid,
+        visiting: &mut BTreeSet<Uuid>,
+    ) -> Result<WaypointState, MissionError> {
+        if !visiting.insert(mission_id) {
+            return Err(MissionError::Validation(
+                1,
+                vec![diag(
+                    "child-mission-cycle",
+                    Path::new("accepted.json"),
+                    "",
+                    None,
+                    "Child mission references must not form a cycle.",
+                )],
+            ));
+        }
+        let accepted = self.get(mission_id)?;
+        for waypoint_id in &accepted.bundle.manifest.execution_order {
+            let waypoint = accepted
+                .bundle
+                .waypoints
+                .iter()
+                .find(|waypoint| waypoint.waypoint_id == *waypoint_id)
+                .expect("accepted order is valid");
+            let state = match &waypoint.child_mission_ref {
+                Some(reference) => {
+                    let child =
+                        mission_reference_id(reference).expect("accepted child reference is valid");
+                    self.derived_state_inner(child, visiting)?
+                }
+                None => waypoint.state.clone().unwrap_or(WaypointState::Pending),
+            };
+            if state != WaypointState::Completed {
+                visiting.remove(&mission_id);
+                return Ok(state);
+            }
+        }
+        visiting.remove(&mission_id);
+        Ok(WaypointState::Completed)
+    }
+
+    fn validate_child_missions(
+        &self,
+        mission_id: Uuid,
+        bundle: &MissionBundle,
+    ) -> Result<(), Vec<Diagnostic>> {
+        let workspace = self
+            .root
+            .parent()
+            .and_then(Path::parent)
+            .and_then(Path::parent)
+            .and_then(Path::file_name)
+            .and_then(|name| name.to_str())
+            .unwrap_or_default();
+        let mut diagnostics = Vec::new();
+        self.validate_child_missions_inner(
+            mission_id,
+            bundle,
+            workspace,
+            &mut BTreeSet::new(),
+            &mut diagnostics,
+        );
+        if diagnostics.is_empty() {
+            Ok(())
+        } else {
+            Err(diagnostics)
+        }
+    }
+
+    fn validate_child_missions_inner(
+        &self,
+        mission_id: Uuid,
+        bundle: &MissionBundle,
+        workspace: &str,
+        visiting: &mut BTreeSet<Uuid>,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        if !visiting.insert(mission_id) {
+            diagnostics.push(diag(
+                "child-mission-cycle",
+                Path::new("manifest.json"),
+                "",
+                None,
+                "Child mission references must not form a cycle.",
+            ));
+            return;
+        }
+        for waypoint in &bundle.waypoints {
+            let Some(reference) = &waypoint.child_mission_ref else {
+                continue;
+            };
+            let Some((reference_workspace, child_id)) = mission_reference(reference) else {
+                continue;
+            };
+            if reference_workspace != workspace && reference_workspace != "default" {
+                diagnostics.push(diag(
+                    "cross-workspace-child-mission",
+                    Path::new("manifest.json"),
+                    "/child_mission_ref",
+                    Some(&waypoint.waypoint_id),
+                    "Child missions must resolve from the selected workspace mission store.",
+                ));
+                continue;
+            }
+            if visiting.contains(&child_id) {
+                diagnostics.push(diag(
+                    "child-mission-cycle",
+                    Path::new("manifest.json"),
+                    "/child_mission_ref",
+                    Some(&waypoint.waypoint_id),
+                    "Child mission references must not form a cycle.",
+                ));
+                continue;
+            }
+            match self.get(child_id) {
+                Ok(child) if child.bundle.waypoints.is_empty() => diagnostics.push(diag(
+                    "empty-child-mission",
+                    Path::new("manifest.json"),
+                    "/child_mission_ref",
+                    Some(&waypoint.waypoint_id),
+                    "Child missions must contain at least one waypoint.",
+                )),
+                Ok(child) => self.validate_child_missions_inner(
+                    child_id,
+                    &child.bundle,
+                    workspace,
+                    visiting,
+                    diagnostics,
+                ),
+                Err(MissionError::NotFound(_)) => diagnostics.push(diag(
+                    "unaccepted-child-mission",
+                    Path::new("manifest.json"),
+                    "/child_mission_ref",
+                    Some(&waypoint.waypoint_id),
+                    "Child mission must be accepted in the selected workspace.",
+                )),
+                Err(error) => diagnostics.push(diag(
+                    "child-mission-resolution-failed",
+                    Path::new("manifest.json"),
+                    "/child_mission_ref",
+                    Some(&waypoint.waypoint_id),
+                    &error.to_string(),
+                )),
+            }
+        }
+        visiting.remove(&mission_id);
+    }
 }
 
 fn copy_directory(source: &Path, destination: &Path) -> Result<(), MissionError> {
@@ -1017,6 +1441,7 @@ mod tests {
             scope: Scope::SingleSession,
             state: Some(WaypointState::Pending),
             ticket_ref: None,
+            child_mission_ref: None,
             session_package: id.into(),
             prompt: "implement".into(),
             artifacts: vec![],

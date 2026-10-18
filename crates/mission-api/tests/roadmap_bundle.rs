@@ -12,6 +12,7 @@ fn waypoint(id: &str, depends_on: &[&str]) -> WaypointFragment {
         scope: Scope::SingleSession,
         state: Some(WaypointState::Pending),
         ticket_ref: None,
+        child_mission_ref: None,
         session_package: id.into(),
         prompt: "do the work".into(),
         artifacts: vec![],
@@ -125,4 +126,134 @@ fn invalid_waypoint_filename_id_is_rejected() {
     let mut value = bundle(&["one", "two"]);
     value.waypoints[0].waypoint_id = "../escape".into();
     assert!(codes(validate_bundle(&value)).contains(&"invalid-waypoint-id"));
+}
+
+#[test]
+fn nested_missions_resolve_recursively_and_derive_child_state() {
+    let directory = tempdir().unwrap();
+    let store = MissionStore::init(directory.path()).unwrap();
+    let child_id = Uuid::new_v4();
+    let mut child = bundle(&["one", "two"]);
+    child
+        .waypoints
+        .iter_mut()
+        .for_each(|waypoint| waypoint.state = Some(WaypointState::Completed));
+    store.import(child_id, child, 0).unwrap();
+
+    let parent_id = Uuid::new_v4();
+    let workspace = directory.path().file_name().unwrap().to_string_lossy();
+    let mut parent = bundle(&["one", "two"]);
+    parent.manifest.execution_order = vec!["one".into()];
+    parent.waypoints.truncate(1);
+    parent.waypoints[0].child_mission_ref = Some(format!("ce://{workspace}/mission/{child_id}"));
+    parent.waypoints[0].state = None;
+    store.import(parent_id, parent, 0).unwrap();
+    assert_eq!(
+        store.derived_state(parent_id).unwrap(),
+        WaypointState::Completed
+    );
+}
+
+#[test]
+fn child_mission_rejects_missing_cross_workspace_and_cycles() {
+    let directory = tempdir().unwrap();
+    let store = MissionStore::init(directory.path()).unwrap();
+    let parent_id = Uuid::new_v4();
+    let mut parent = bundle(&["one", "two"]);
+    parent.manifest.execution_order = vec!["one".into()];
+    parent.waypoints.truncate(1);
+    parent.waypoints[0].state = None;
+    parent.waypoints[0].child_mission_ref = Some(format!("ce://other/mission/{parent_id}"));
+    let error = store.import(parent_id, parent.clone(), 0).unwrap_err();
+    assert_eq!(
+        error.diagnostics().unwrap()[0].code,
+        "cross-workspace-child-mission"
+    );
+
+    let workspace = directory.path().file_name().unwrap().to_string_lossy();
+    parent.waypoints[0].child_mission_ref = Some(format!("ce://{workspace}/mission/{parent_id}"));
+    let error = store.import(parent_id, parent, 0).unwrap_err();
+    assert_eq!(error.diagnostics().unwrap()[0].code, "child-mission-cycle");
+}
+
+#[test]
+fn child_mission_rejects_transitive_cycles_without_replacing_accepted_revision() {
+    let directory = tempdir().unwrap();
+    let store = MissionStore::init(directory.path()).unwrap();
+    let workspace = directory.path().file_name().unwrap().to_string_lossy();
+    let parent_id = Uuid::new_v4();
+    let child_id = Uuid::new_v4();
+
+    let mut child = bundle(&["one", "two"]);
+    child.manifest.execution_order = vec!["one".into()];
+    child.waypoints.truncate(1);
+    store.import(child_id, child.clone(), 0).unwrap();
+
+    let mut parent = bundle(&["one", "two"]);
+    parent.manifest.execution_order = vec!["one".into()];
+    parent.waypoints.truncate(1);
+    parent.waypoints[0].state = None;
+    parent.waypoints[0].child_mission_ref = Some(format!("ce://{workspace}/mission/{child_id}"));
+    store.import(parent_id, parent, 0).unwrap();
+
+    child.manifest.revision = 2;
+    child.waypoints[0].state = None;
+    child.waypoints[0].child_mission_ref = Some(format!("ce://{workspace}/mission/{parent_id}"));
+    let error = store.import(child_id, child, 1).unwrap_err();
+
+    assert_eq!(error.diagnostics().unwrap()[0].code, "child-mission-cycle");
+    assert_eq!(store.get(child_id).unwrap().bundle.manifest.revision, 1);
+}
+
+#[test]
+fn empty_mission_is_not_vacuously_complete() {
+    let mut empty = bundle(&[]);
+    empty.waypoints.clear();
+    assert!(codes(validate_bundle(&empty)).contains(&"empty-mission"));
+}
+
+#[test]
+fn unresolved_or_empty_child_preserves_published_parent() {
+    let directory = tempdir().unwrap();
+    let store = MissionStore::init(directory.path()).unwrap();
+    let parent_id = Uuid::new_v4();
+    let child_id = Uuid::new_v4();
+    let original = store
+        .publish(parent_id, bundle(&["one", "two"]), 0)
+        .unwrap();
+    let parent_path = directory
+        .path()
+        .join(".workflow-tools/mission/missions")
+        .join(parent_id.to_string());
+    let roadmap_before = std::fs::read(parent_path.join("generated/ROADMAP.md")).unwrap();
+    let mut parent = bundle(&["one", "two"]);
+    parent.manifest.revision = 2;
+    parent.waypoints[0].state = None;
+    parent.waypoints[0].child_mission_ref = Some(format!("ce://default/mission/{child_id}"));
+
+    let missing = store.publish(parent_id, parent.clone(), 1).unwrap_err();
+    assert_eq!(
+        missing.diagnostics().unwrap()[0].code,
+        "unaccepted-child-mission"
+    );
+
+    let mut child = store.import(child_id, bundle(&["one", "two"]), 0).unwrap();
+    child.bundle.waypoints.clear();
+    child.bundle.manifest.execution_order.clear();
+    std::fs::write(
+        directory
+            .path()
+            .join(".workflow-tools/mission/missions")
+            .join(child_id.to_string())
+            .join("accepted.json"),
+        serde_json::to_vec(&child).unwrap(),
+    )
+    .unwrap();
+    let empty = store.publish(parent_id, parent, 1).unwrap_err();
+    assert_eq!(empty.diagnostics().unwrap()[0].code, "empty-child-mission");
+    assert_eq!(store.get(parent_id).unwrap(), original);
+    assert_eq!(
+        std::fs::read(parent_path.join("generated/ROADMAP.md")).unwrap(),
+        roadmap_before
+    );
 }

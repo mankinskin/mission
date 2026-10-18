@@ -3,8 +3,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use mission::{MissionStore, Operation, execute_cli};
+use mission::{
+    BundleManifest, CommitCheckpoint, MissionBundle, MissionStore, Operation, Scope,
+    ValidationGate, WaypointFragment, WaypointMode, WaypointState, execute_cli,
+};
 use tempfile::TempDir;
+use ticket_api::storage::TicketStore;
+use uuid::Uuid;
 
 fn roadmap(title: &str, waypoints: &[(&str, &str, Option<usize>)]) -> String {
     let mut contents = format!(
@@ -39,6 +44,46 @@ fn write_dossier(root: &Path, name: &str, contents: &str) -> PathBuf {
     )
     .unwrap();
     dossier
+}
+
+fn completed_child_bundle() -> MissionBundle {
+    MissionBundle {
+        manifest: BundleManifest {
+            schema_version: 1,
+            revision: 1,
+            title: "Accepted child".into(),
+            objective: "Complete child work.".into(),
+            waypoint_files: vec![],
+            execution_order: vec!["child-work".into()],
+            artifacts: vec![],
+            requirements: vec![],
+            validation_gates: vec![],
+            notes: vec![],
+        },
+        waypoints: vec![WaypointFragment {
+            waypoint_id: "child-work".into(),
+            title: "Child work".into(),
+            depends_on: vec![],
+            mode: WaypointMode::ExecutionSideEffect,
+            scope: Scope::SingleSession,
+            state: Some(WaypointState::Completed),
+            ticket_ref: None,
+            child_mission_ref: None,
+            session_package: "child-work".into(),
+            prompt: "Complete the child work.".into(),
+            artifacts: vec![],
+            requirement_ids: vec![],
+            non_goals: vec![],
+            validation: vec![ValidationGate {
+                command: "cargo test -p mission".into(),
+                cwd: None,
+            }],
+            commit_checkpoint: CommitCheckpoint {
+                message: "test: complete child mission".into(),
+            },
+            part_markdown: "## Outcome\n\nChild work is complete.\n".into(),
+        }],
+    }
 }
 
 #[test]
@@ -235,6 +280,19 @@ fn ambiguous_source_is_reported_blocked() {
 #[test]
 fn ticket_backed_source_status_remains_externally_owned() {
     let workspace = TempDir::new().unwrap();
+    let ticket_id = Uuid::parse_str("1486c2f9-301e-4709-a8d0-cae3c4e6f5d4").unwrap();
+    TicketStore::init(workspace.path())
+        .unwrap()
+        .create(
+            Some(ticket_id),
+            "tracker-improvement",
+            Some("Ticket-backed migration fixture"),
+            Some("planning"),
+            Default::default(),
+            None,
+            Some("Provide the external state for this migration fixture."),
+        )
+        .unwrap();
     let contents = roadmap("Ticket Mission", &[("Implementation", "01-first.md", None)]).replace(
         "| **Scope** | single-session |",
         "| **Scope** | ticket-backed |\n| **Ticket** | ce://default/ticket/1486c2f9-301e-4709-a8d0-cae3c4e6f5d4 |",
@@ -259,6 +317,48 @@ fn ticket_backed_source_status_remains_externally_owned() {
         accepted.bundle.waypoints[0].ticket_ref.as_deref(),
         Some("ce://default/ticket/1486c2f9-301e-4709-a8d0-cae3c4e6f5d4")
     );
+}
+
+#[test]
+fn migration_renders_accepted_child_mission_state() {
+    let workspace = TempDir::new().unwrap();
+    let child_id = Uuid::new_v4();
+    let store = MissionStore::open(workspace.path());
+    store.import(child_id, completed_child_bundle(), 0).unwrap();
+    let contents = roadmap("Parent Mission", &[("Child work", "01-first.md", None)]).replace(
+        "| **Scope** | single-session |",
+        &format!(
+            "| **Scope** | single-session |\n| **Child mission** | ce://default/mission/{child_id} |"
+        ),
+    );
+    let dossier = write_dossier(workspace.path(), "parent-with-child", &contents);
+
+    let result = execute_cli(
+        workspace.path(),
+        Operation::MigrateDossiers {
+            dossier_path: Some(dossier),
+            dry_run: false,
+        },
+    );
+
+    assert_eq!(result.status, "ok");
+    let report = result.migration_report.unwrap();
+    assert_eq!(report.migrated, 1, "{:?}", report.records);
+    let parent_id = report.records[0].mission_id.unwrap();
+    let accepted = store.get(parent_id).unwrap();
+    assert_eq!(
+        accepted.bundle.waypoints[0].child_mission_ref.as_deref(),
+        Some(format!("ce://default/mission/{child_id}").as_str())
+    );
+    assert!(accepted.bundle.waypoints[0].state.is_none());
+    let generated = workspace
+        .path()
+        .join(".workflow-tools/mission/missions")
+        .join(parent_id.to_string())
+        .join("generated/ROADMAP.md");
+    let rendered = fs::read_to_string(generated).unwrap();
+    assert!(rendered.contains("| **State** | completed |"));
+    assert!(rendered.contains("external-status-snapshot: ticket-status-v1:"));
 }
 
 #[test]

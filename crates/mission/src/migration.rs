@@ -176,6 +176,13 @@ fn migrate_one(
         0
     };
 
+    let snapshot = super::ticket_snapshot(workspace_root, store, mission_id, &bundle)
+        .map_err(|error| format!("Could not resolve external status: {error}"))?;
+    let states = super::snapshot_states(&snapshot)
+        .map_err(|error| format!("Could not map external status: {error}"))?;
+    let snapshot_id = super::snapshot_id(&snapshot)
+        .map_err(|error| format!("Could not identify external status snapshot: {error}"))?;
+
     if dry_run {
         return if actual_revision == 1 {
             Ok(("skipped", Some("This source is already migrated.".into())))
@@ -189,7 +196,7 @@ fn migrate_one(
     }
 
     store
-        .publish(mission_id, bundle, 0)
+        .publish_with_status_snapshot(mission_id, bundle, 0, &states, &snapshot_id)
         .map_err(|error| format!("Could not publish the migrated mission: {error}"))?;
     Ok(("migrated", None))
 }
@@ -406,19 +413,29 @@ fn parse_waypoint(
             "W{source_label} has unsupported scope `{scope_text}`."
         ));
     };
+    let child_mission_ref = fields
+        .get("child mission")
+        .or_else(|| fields.get("mission"))
+        .map(|value| clean_text(value))
+        .filter(|value| !value.is_empty() && !value.eq_ignore_ascii_case("none"));
     let status = clean_text(get("status")?).to_ascii_lowercase();
-    let state = match (&scope, status.as_str()) {
-        (Scope::TicketBacked { .. }, status) if !status.is_empty() => None,
-        (Scope::TicketBacked { .. }, _) => {
+    let state = match (&scope, child_mission_ref.as_ref(), status.as_str()) {
+        (_, Some(_), _) => None,
+        (Scope::TicketBacked { .. }, None, status) if !status.is_empty() => None,
+        (Scope::TicketBacked { .. }, None, _) => {
             return Err(format!(
                 "W{source_label} has an empty ticket-backed status field."
             ));
         }
-        (Scope::SingleSession, "pending" | "planned") => Some(WaypointState::Pending),
-        (Scope::SingleSession, "in-progress" | "in progress") => Some(WaypointState::InProgress),
-        (Scope::SingleSession, "completed" | "complete" | "done") => Some(WaypointState::Completed),
-        (Scope::SingleSession, "blocked") => Some(WaypointState::Blocked),
-        (Scope::SingleSession, other) => {
+        (Scope::SingleSession, None, "pending" | "planned") => Some(WaypointState::Pending),
+        (Scope::SingleSession, None, "in-progress" | "in progress") => {
+            Some(WaypointState::InProgress)
+        }
+        (Scope::SingleSession, None, "completed" | "complete" | "done") => {
+            Some(WaypointState::Completed)
+        }
+        (Scope::SingleSession, None, "blocked") => Some(WaypointState::Blocked),
+        (Scope::SingleSession, None, other) => {
             return Err(format!(
                 "W{source_label} has unsupported single-session status `{other}`."
             ));
@@ -480,6 +497,7 @@ fn parse_waypoint(
             scope,
             state,
             ticket_ref,
+            child_mission_ref,
             session_package,
             prompt,
             artifacts,
