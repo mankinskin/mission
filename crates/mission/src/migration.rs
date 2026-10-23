@@ -246,9 +246,22 @@ fn parse_roadmap(
         })
         .filter(|title| !title.is_empty())
         .ok_or_else(|| "The roadmap has no top-level title.".to_string())?;
+    if has_legacy_waypoint_index_table(&lines)
+        && !lines
+            .iter()
+            .any(|line| parse_waypoint_heading(line).is_some())
+    {
+        return Err(
+            "The roadmap uses a legacy waypoint index table. Re-author and re-review it with `### Wn. Title` waypoint sections and the required Status, Scope, Mode, Session package, Part, Prompt, Validate, and Commit checkpoint fields before migration."
+                .into(),
+        );
+    }
     let objective = section_text(&lines, "Outcome Summary")
+        .or_else(|| section_text(&lines, "Outcome"))
         .filter(|summary| !summary.trim().is_empty())
-        .ok_or_else(|| "The roadmap has no non-empty Outcome Summary section.".to_string())?;
+        .ok_or_else(|| {
+            "The roadmap has no non-empty Outcome Summary (or legacy Outcome) section.".to_string()
+        })?;
 
     let mut parsed = Vec::new();
     let mut index = 0;
@@ -393,7 +406,7 @@ fn parse_waypoint(
     }
     let mode = match clean_text(get("mode")?).to_ascii_lowercase().as_str() {
         "execution side effect" | "execution-side-effect" => WaypointMode::ExecutionSideEffect,
-        "research" => WaypointMode::Research,
+        "research" | "dependent read-only waypoint" => WaypointMode::Research,
         other => return Err(format!("W{source_label} has unsupported mode `{other}`.")),
     };
     let scope_text = clean_text(get("scope")?).to_ascii_lowercase();
@@ -443,6 +456,7 @@ fn parse_waypoint(
     };
     let depends_text = fields
         .get("depends")
+        .or_else(|| fields.get("depends on"))
         .map(String::as_str)
         .unwrap_or_default();
     let dependencies = source_labels(depends_text);
@@ -524,6 +538,19 @@ fn section_text(lines: &[&str], section: &str) -> Option<String> {
         .position(|line| line.trim_start().starts_with("## "))
         .map_or(lines.len(), |offset| start + offset);
     Some(lines[start..end].join("\n").trim().to_string())
+}
+
+fn has_legacy_waypoint_index_table(lines: &[&str]) -> bool {
+    lines.iter().any(|line| {
+        let Some(cells) = split_table_cells(line) else {
+            return false;
+        };
+        cells.len() >= 4
+            && cells[0].trim().eq_ignore_ascii_case("waypoint")
+            && cells[1].trim().eq_ignore_ascii_case("package")
+            && cells[2].trim().eq_ignore_ascii_case("depends on")
+            && cells[3].trim().eq_ignore_ascii_case("status")
+    })
 }
 
 fn parse_waypoint_heading(line: &str) -> Option<(usize, String)> {

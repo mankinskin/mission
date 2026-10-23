@@ -29,6 +29,51 @@ fn roadmap(title: &str, waypoints: &[(&str, &str, Option<usize>)]) -> String {
     contents
 }
 
+fn authored_roadmap() -> String {
+    "# Roadmap: Authored Mission
+
+## Outcome
+
+Preserve the authoring contract without adding execution metadata.
+
+## Roadmap Waypoints
+
+### W1. Inspect the current state
+
+| | |
+|---|---|
+| **Status** | done |
+| **Scope** | single-session |
+| **Mode** | Dependent read-only waypoint |
+| **Expected state** | The current state is recorded. |
+| **Session package** | inspect-current-state |
+| **Part** | [01-first.md](01-first.md) |
+| **Prompt** | Inspect the current state. |
+| **Artifacts** | source artifact |
+| **Non-goal** | unrelated work |
+| **Validate** | `cargo test -p mission` |
+| **Commit checkpoint** | none (read-only waypoint) |
+
+### W2. Apply the change
+
+| | |
+|---|---|
+| **Status** | pending |
+| **Scope** | single-session |
+| **Mode** | Execution side effect |
+| **Expected state** | The change is applied. |
+| **Session package** | apply-change |
+| **Part** | [02-second.md](02-second.md) |
+| **Prompt** | Apply the change. |
+| **Artifacts** | source artifact |
+| **Non-goal** | unrelated work |
+| **Validate** | `cargo test -p mission` |
+| **Commit checkpoint** | feat: apply change |
+| **Depends on** | W1 |
+"
+    .into()
+}
+
 fn write_dossier(root: &Path, name: &str, contents: &str) -> PathBuf {
     let dossier = root.join("transcripts").join(name);
     fs::create_dir_all(&dossier).unwrap();
@@ -449,4 +494,87 @@ fn migration_rejects_missing_or_empty_outcome_summary() {
             report.records
         );
     }
+}
+
+#[test]
+fn migration_accepts_authored_schema_aliases_without_synthesizing_metadata() {
+    let workspace = TempDir::new().unwrap();
+    let dossier = write_dossier(workspace.path(), "authored-schema", &authored_roadmap());
+
+    let result = execute_cli(
+        workspace.path(),
+        Operation::MigrateDossiers {
+            dossier_path: Some(dossier),
+            dry_run: false,
+        },
+    );
+
+    assert_eq!(result.status, "ok");
+    let report = result.migration_report.unwrap();
+    assert_eq!(report.migrated, 1, "{:?}", report.records);
+    let accepted = MissionStore::open(workspace.path())
+        .get(report.records[0].mission_id.unwrap())
+        .unwrap();
+    assert_eq!(
+        accepted.bundle.manifest.objective,
+        "Preserve the authoring contract without adding execution metadata."
+    );
+    assert_eq!(accepted.bundle.waypoints[0].mode, WaypointMode::Research);
+    assert_eq!(
+        accepted.bundle.waypoints[1].depends_on,
+        ["inspect-the-current-state"]
+    );
+}
+
+#[test]
+fn migration_accepts_authored_waypoints_with_an_overview_index_table() {
+    let workspace = TempDir::new().unwrap();
+    let roadmap = authored_roadmap().replace(
+        "## Roadmap Waypoints",
+        "| Waypoint | Package | Depends on | Status |\n|---|---|---|---|\n| W1 | inspect-current-state | — | done |\n| W2 | apply-change | W1 | pending |\n\n## Roadmap Waypoints",
+    );
+    let dossier = write_dossier(workspace.path(), "authored-with-index", &roadmap);
+
+    let result = execute_cli(
+        workspace.path(),
+        Operation::MigrateDossiers {
+            dossier_path: Some(dossier),
+            dry_run: false,
+        },
+    );
+
+    assert_eq!(result.status, "ok");
+    let report = result.migration_report.unwrap();
+    assert_eq!(report.migrated, 1, "{:?}", report.records);
+}
+
+#[test]
+fn migration_explains_unsupported_legacy_waypoint_index_tables() {
+    let workspace = TempDir::new().unwrap();
+    let dossier = write_dossier(
+        workspace.path(),
+        "legacy-index",
+        "# ROADMAP — legacy index\n\nOutcome: Preserve legacy content.\n\n| Waypoint | Package | Depends on | Status |\n|---|---|---|---|\n| W1 | package | — | done |\n",
+    );
+
+    let result = execute_cli(
+        workspace.path(),
+        Operation::MigrateDossiers {
+            dossier_path: Some(dossier),
+            dry_run: true,
+        },
+    );
+
+    assert_eq!(result.status, "ok");
+    let report = result.migration_report.unwrap();
+    assert_eq!(report.blocked, 1, "{:?}", report.records);
+    assert!(
+        report.records[0]
+            .reason
+            .as_deref()
+            .unwrap()
+            .contains("legacy waypoint index table"),
+        "{:?}",
+        report.records
+    );
 }
