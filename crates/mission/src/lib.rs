@@ -25,6 +25,26 @@ pub enum Operation {
         objective: String,
         waypoints: Vec<DirectWaypoint>,
     },
+    CreateDraft {
+        title: String,
+        objective: String,
+    },
+    SaveDraft {
+        mission_id: Uuid,
+        draft: TypedDraft,
+        expected_current_revision: u64,
+    },
+    PublishDraft {
+        mission_id: Uuid,
+        draft: TypedDraft,
+        expected_current_revision: u64,
+    },
+    GetMissionSource {
+        mission_id: Uuid,
+    },
+    RenderMission {
+        mission_id: Uuid,
+    },
     EditMissionObjective {
         mission_id: Uuid,
         objective: String,
@@ -107,6 +127,9 @@ pub struct StatusSnapshot {
     pub rendered: Option<RenderedPreview>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accepted: Option<AcceptedMission>,
+    /// API-owned typed source returned by the draft lifecycle.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<TypedDraft>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub migration_report: Option<DossierMigrationReport>,
     #[serde(default)]
@@ -146,6 +169,56 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
             objective,
             waypoints,
         } => direct::create(workspace_root, title, objective, waypoints),
+        Operation::CreateDraft { title, objective } => {
+            typed_result(MissionLifecycle::open(workspace_root).create_draft(title, objective))
+        }
+        Operation::SaveDraft {
+            mission_id,
+            draft,
+            expected_current_revision,
+        } => typed_result(MissionLifecycle::open(workspace_root).save_draft(
+            mission_id,
+            draft,
+            expected_current_revision,
+        )),
+        Operation::PublishDraft {
+            mission_id,
+            draft,
+            expected_current_revision,
+        } => typed_result(MissionLifecycle::open(workspace_root).publish_draft(
+            mission_id,
+            draft,
+            expected_current_revision,
+        )),
+        Operation::GetMissionSource { mission_id } => {
+            typed_result(MissionLifecycle::open(workspace_root).get_mission_source(mission_id))
+        }
+        Operation::RenderMission { mission_id } => {
+            let lifecycle = MissionLifecycle::open(workspace_root);
+            match lifecycle.get_mission_source(mission_id).and_then(|source| {
+                lifecycle
+                    .render_mission(mission_id)
+                    .map(|rendered| (source, rendered))
+            }) {
+                Ok((source, roadmap)) => StatusSnapshot {
+                    status: "ok".into(),
+                    mission_id: Some(mission_id),
+                    revision: Some(source.revision),
+                    mission_state: None,
+                    publication_state: None,
+                    diagnostics: vec![],
+                    rendered: Some(RenderedPreview {
+                        roadmap,
+                        parts: BTreeMap::new(),
+                    }),
+                    accepted: None,
+                    source: Some(source),
+                    migration_report: None,
+                    external_status_snapshot: BTreeMap::new(),
+                },
+                Err(error) => failure(Some(mission_id), error),
+            }
+        }
         Operation::EditMissionObjective {
             mission_id,
             objective,
@@ -216,7 +289,7 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
             expected_current_revision,
         } => direct::publish(workspace_root, mission_id, expected_current_revision),
         Operation::Get { mission_id } => {
-            let mut snapshot = direct::get(workspace_root, mission_id);
+            let mut snapshot = inspect_mission(workspace_root, mission_id, true);
             if snapshot.status != "error" {
                 snapshot.status = "ok".into();
                 if snapshot.publication_state == Some(PublicationState::NotPublished) {
@@ -284,6 +357,7 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
                         diagnostics: vec![],
                         rendered: Some(rendered),
                         accepted: None,
+                        source: None,
                         migration_report: None,
                         external_status_snapshot,
                     }
@@ -315,6 +389,7 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
                 diagnostics: vec![],
                 rendered: None,
                 accepted: None,
+                source: None,
                 migration_report: Some(migration_report),
                 external_status_snapshot: BTreeMap::new(),
             },
@@ -331,6 +406,25 @@ pub fn execute_cli(workspace_root: &Path, operation: Operation) -> StatusSnapsho
 /// MCP adapter boundary; behavior is intentionally identical to CLI.
 pub fn execute_mcp(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
     execute(workspace_root, operation)
+}
+
+fn typed_result(result: Result<TypedDraft, MissionError>) -> StatusSnapshot {
+    match result {
+        Ok(source) => StatusSnapshot {
+            status: "ok".into(),
+            mission_id: Some(source.mission_id),
+            revision: Some(source.revision),
+            mission_state: None,
+            publication_state: None,
+            diagnostics: vec![],
+            rendered: None,
+            accepted: None,
+            source: Some(source),
+            migration_report: None,
+            external_status_snapshot: BTreeMap::new(),
+        },
+        Err(error) => failure(None, error),
+    }
 }
 
 fn import_bundle(
@@ -357,6 +451,7 @@ fn import_bundle(
             diagnostics: vec![],
             rendered: None,
             accepted: None,
+            source: None,
             migration_report: None,
             external_status_snapshot,
         },
@@ -395,6 +490,7 @@ fn publish_bundle(
             diagnostics: vec![],
             rendered: None,
             accepted: None,
+            source: None,
             migration_report: None,
             external_status_snapshot,
         },
@@ -670,6 +766,7 @@ fn inspect_mission(
                 diagnostics,
                 rendered: None,
                 accepted: include_accepted.then_some(accepted),
+                source: None,
                 migration_report: None,
                 external_status_snapshot,
             }
@@ -689,6 +786,7 @@ fn inspect_mission(
             diagnostics,
             rendered: None,
             accepted: include_accepted.then_some(accepted),
+            source: None,
             migration_report: None,
             external_status_snapshot,
         },
@@ -742,6 +840,7 @@ fn success(mission_id: Option<Uuid>, revision: Option<u64>) -> StatusSnapshot {
         diagnostics: vec![],
         rendered: None,
         accepted: None,
+        source: None,
         migration_report: None,
         external_status_snapshot: BTreeMap::new(),
     }
@@ -786,6 +885,7 @@ fn failure(mission_id: Option<Uuid>, error: MissionError) -> StatusSnapshot {
         diagnostics,
         rendered: None,
         accepted: None,
+        source: None,
         migration_report: None,
         external_status_snapshot: BTreeMap::new(),
     }

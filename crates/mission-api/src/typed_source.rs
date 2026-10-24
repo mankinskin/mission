@@ -1,11 +1,13 @@
 use super::*;
+use schemars::JsonSchema;
 
 pub const TYPED_SOURCE_SCHEMA_VERSION: u32 = 2;
 pub const PART_SOURCE_SCHEMA_VERSION: u32 = 1;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TypedDraft {
+    #[schemars(with = "String")]
     pub mission_id: Uuid,
     pub schema_version: u32,
     pub revision: u64,
@@ -15,7 +17,7 @@ pub struct TypedDraft {
     pub waypoints: Vec<TypedWaypoint>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TypedWaypoint {
     pub waypoint_id: String,
@@ -34,16 +36,18 @@ pub struct TypedWaypoint {
     pub ownership_refs: OwnershipRefs,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct OwnershipRefs {
     #[serde(default)]
+    #[schemars(with = "Option<String>")]
     pub ticket_id: Option<Uuid>,
     #[serde(default)]
+    #[schemars(with = "Option<String>")]
     pub child_mission_id: Option<Uuid>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PartSource {
     pub waypoint_id: String,
@@ -80,14 +84,14 @@ struct StoredWaypoint {
     ownership_refs: OwnershipRefs,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Document {
     #[serde(default)]
     pub blocks: Vec<Block>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Block {
     Heading {
@@ -117,7 +121,7 @@ pub enum Block {
     ThematicBreak,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Inline {
     Text { text: String },

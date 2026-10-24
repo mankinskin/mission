@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use mission::{
-    CommitCheckpoint, DirectWaypoint, Operation, OperatorResult, ValidationGate, WaypointState,
-    execute_mcp,
+    CommitCheckpoint, DirectWaypoint, Operation, OperatorResult, TypedDraft, ValidationGate,
+    WaypointState, execute_mcp,
 };
 use rmcp::{
     ErrorData as McpError, ServerHandler,
@@ -38,6 +38,8 @@ struct MissionOperationInput {
     title: Option<String>,
     #[serde(default)]
     objective: Option<String>,
+    #[serde(default)]
+    draft: Option<TypedDraft>,
     #[serde(default)]
     waypoints: Option<Vec<McpWaypoint>>,
     #[serde(default)]
@@ -132,7 +134,7 @@ impl MissionServer {
 impl MissionServer {
     #[tool(
         name = "mission_operation",
-        description = "Run create_mission, edit_mission_objective, add_waypoint, edit_waypoint, order_waypoints, record_progress, record_validation_result, validate_mission, or publish_mission directly by stored ID. Waypoints require prompt, validation commands and commit_checkpoint; results record operator evidence without executing commands. Existing get, validate-preview, import, render-preview, publish, check-generated and migrate-dossiers remain supported. Return a structured Mission status snapshot."
+        description = "Run typed create_draft, save_draft, publish_draft, get_mission_source, or render_mission with API-owned IDs and managed source references; or run legacy create_mission, edit_mission_objective, add_waypoint, edit_waypoint, order_waypoints, record_progress, record_validation_result, validate_mission, or publish_mission directly by stored ID. Draft input is inline typed source, never a client path or manifest. Existing get, validate-preview, import, render-preview, publish, check-generated and migrate-dossiers remain supported. Return a structured Mission status snapshot."
     )]
     async fn operation(
         &self,
@@ -176,6 +178,36 @@ impl MissionServer {
             }))
         };
         let operation = match input.operation.as_str() {
+            "create_draft" => Operation::CreateDraft {
+                title: required(&input.title, "title")?,
+                objective: required(&input.objective, "objective")?,
+            },
+            "save_draft" => Operation::SaveDraft {
+                mission_id: required_id()?,
+                draft: input
+                    .draft
+                    .clone()
+                    .ok_or_else(|| McpError::invalid_params("draft is required", None))?,
+                expected_current_revision: input.expected_current_revision.ok_or_else(|| {
+                    McpError::invalid_params("expected_current_revision is required", None)
+                })?,
+            },
+            "publish_draft" => Operation::PublishDraft {
+                mission_id: required_id()?,
+                draft: input
+                    .draft
+                    .clone()
+                    .ok_or_else(|| McpError::invalid_params("draft is required", None))?,
+                expected_current_revision: input.expected_current_revision.ok_or_else(|| {
+                    McpError::invalid_params("expected_current_revision is required", None)
+                })?,
+            },
+            "get_mission_source" => Operation::GetMissionSource {
+                mission_id: required_id()?,
+            },
+            "render_mission" => Operation::RenderMission {
+                mission_id: required_id()?,
+            },
             "create_mission" => Operation::CreateMission {
                 title: required(&input.title, "title")?,
                 objective: required(&input.objective, "objective")?,

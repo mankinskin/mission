@@ -25,6 +25,26 @@ enum CommandOperation {
         objective: String,
         waypoints: String,
     },
+    CreateDraft {
+        title: String,
+        objective: String,
+    },
+    SaveDraft {
+        mission_id: Uuid,
+        draft: String,
+        expected_current_revision: u64,
+    },
+    PublishDraft {
+        mission_id: Uuid,
+        draft: String,
+        expected_current_revision: u64,
+    },
+    GetMissionSource {
+        mission_id: Uuid,
+    },
+    RenderMission {
+        mission_id: Uuid,
+    },
     EditMissionObjective {
         mission_id: Uuid,
         objective: String,
@@ -172,6 +192,35 @@ fn main() -> Result<ExitCode, HarnessError> {
                 waypoints: serde_json::from_str(&waypoints)
                     .map_err(|error| HarnessError::Arguments(error.to_string()))?,
             },
+            CommandOperation::CreateDraft { title, objective } => {
+                Operation::CreateDraft { title, objective }
+            }
+            CommandOperation::SaveDraft {
+                mission_id,
+                draft,
+                expected_current_revision,
+            } => Operation::SaveDraft {
+                mission_id,
+                draft: serde_json::from_str(&draft)
+                    .map_err(|error| HarnessError::Arguments(error.to_string()))?,
+                expected_current_revision,
+            },
+            CommandOperation::PublishDraft {
+                mission_id,
+                draft,
+                expected_current_revision,
+            } => Operation::PublishDraft {
+                mission_id,
+                draft: serde_json::from_str(&draft)
+                    .map_err(|error| HarnessError::Arguments(error.to_string()))?,
+                expected_current_revision,
+            },
+            CommandOperation::GetMissionSource { mission_id } => {
+                Operation::GetMissionSource { mission_id }
+            }
+            CommandOperation::RenderMission { mission_id } => {
+                Operation::RenderMission { mission_id }
+            }
             CommandOperation::EditMissionObjective {
                 mission_id,
                 objective,

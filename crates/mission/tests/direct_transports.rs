@@ -395,3 +395,110 @@ fn invalid_and_stale_cli_requests_preserve_accepted_state() {
         "accepted"
     );
 }
+
+#[test]
+fn typed_drafts_have_cli_mcp_parity_for_identity_gates_and_serial_sources() {
+    let workspace = TempDir::new().expect("workspace");
+    let created = cli(
+        workspace.path(),
+        &[
+            "create-draft".into(),
+            "Typed transport".into(),
+            "Exercise typed adapters.".into(),
+        ],
+    );
+    assert_ok(&created);
+    let mission_id = created["mission_id"]
+        .as_str()
+        .expect("mission id")
+        .to_owned();
+    let mut mcp = Mcp::start(workspace.path());
+    mcp.initialize();
+    let tools = mcp.request(40, "tools/list", json!({}));
+    let tool = tools["tools"]
+        .as_array()
+        .expect("tools list")
+        .iter()
+        .find(|tool| {
+            tool["description"]
+                .as_str()
+                .is_some_and(|text| text.contains("create_draft"))
+        })
+        .expect("typed MCP tool");
+    assert!(tool["inputSchema"]["properties"].get("draft").is_some());
+    let tool_name = tool["name"].as_str().expect("tool name").to_owned();
+    let source = mcp.call(
+        41,
+        &tool_name,
+        json!({"operation":"get_mission_source", "mission_id":mission_id}),
+    );
+    assert_eq!(source["source"]["mission_id"], mission_id);
+    let mut incomplete = source["source"].clone();
+    incomplete["waypoints"] = json!([{
+        "waypoint_id": "save",
+        "title": "Save",
+        "prompt": "Keep this distinct from the typed Part.",
+        "part": {"waypoint_id": "save", "document": {"blocks": []}},
+        "validation": [],
+        "commit_checkpoint": {"message": ""}
+    }]);
+    let saved = mcp.call(
+        42,
+        &tool_name,
+        json!({
+            "operation":"save_draft", "mission_id":mission_id, "draft":incomplete,
+            "expected_current_revision":revision(&source)
+        }),
+    );
+    assert_ok(&saved);
+    let cli_source = cli(
+        workspace.path(),
+        &["get-mission-source".into(), mission_id.clone()],
+    );
+    assert_eq!(cli_source["source"], saved["source"]);
+    let mcp_rejected = mcp.call(
+        43,
+        &tool_name,
+        json!({
+            "operation":"publish_draft", "mission_id":mission_id,
+            "draft":saved["source"], "expected_current_revision":revision(&saved)
+        }),
+    );
+    let cli_rejected = cli(
+        workspace.path(),
+        &[
+            "publish-draft".into(),
+            mission_id.clone(),
+            saved["source"].to_string(),
+            revision(&saved).to_string(),
+        ],
+    );
+    assert_eq!(mcp_rejected["status"], "error");
+    assert_eq!(mcp_rejected["diagnostics"], cli_rejected["diagnostics"]);
+    assert_eq!(
+        cli(
+            workspace.path(),
+            &["get-mission-source".into(), mission_id.clone()]
+        )["revision"],
+        saved["revision"]
+    );
+    let mut complete = saved["source"].clone();
+    complete["waypoints"][0]["validation"] = json!([{"command":"cargo test"}]);
+    complete["waypoints"][0]["commit_checkpoint"] = json!({"message":"typed evidence"});
+    let published = cli(
+        workspace.path(),
+        &[
+            "publish-draft".into(),
+            mission_id.clone(),
+            complete.to_string(),
+            revision(&saved).to_string(),
+        ],
+    );
+    assert_ok(&published);
+    assert_eq!(published["source"]["waypoints"][0]["depends_on"], json!([]));
+    assert_ok(&mcp.call(
+        44,
+        &tool_name,
+        json!({"operation":"render_mission", "mission_id":mission_id}),
+    ));
+}
