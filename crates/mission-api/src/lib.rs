@@ -891,6 +891,15 @@ pub struct MissionLifecycle {
     store: MissionStore,
 }
 
+/// The API-owned identity allocated for a create operation and its outcome.
+///
+/// A rejected create retains this identity for callers that report the attempted
+/// mission, while no accepted record is written.
+pub struct CreateMissionResult {
+    pub mission_id: Uuid,
+    pub result: Result<AcceptedMission, MissionError>,
+}
+
 impl MissionLifecycle {
     pub fn open(workspace_root: &Path) -> Self {
         Self {
@@ -904,6 +913,17 @@ impl MissionLifecycle {
         objective: String,
         waypoints: Vec<DirectWaypoint>,
     ) -> Result<AcceptedMission, MissionError> {
+        self.create_with_identity(title, objective, waypoints)
+            .result
+    }
+
+    /// Creates a mission while retaining the API-allocated identity on failure.
+    pub fn create_with_identity(
+        &self,
+        title: String,
+        objective: String,
+        waypoints: Vec<DirectWaypoint>,
+    ) -> CreateMissionResult {
         let mission_id = Uuid::new_v4();
         let bundle = MissionBundle {
             manifest: BundleManifest {
@@ -924,7 +944,10 @@ impl MissionLifecycle {
             },
             waypoints: waypoints.into_iter().map(Self::fragment).collect(),
         };
-        self.store.import(mission_id, bundle, 0)
+        CreateMissionResult {
+            mission_id,
+            result: self.store.import(mission_id, bundle, 0),
+        }
     }
 
     pub fn edit_objective(

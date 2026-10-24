@@ -8,10 +8,9 @@ pub(super) fn create(
     objective: String,
     waypoints: Vec<DirectWaypoint>,
 ) -> StatusSnapshot {
-    finish(
-        None,
-        MissionLifecycle::open(workspace).create(title, objective, waypoints),
-    )
+    let create =
+        MissionLifecycle::open(workspace).create_with_identity(title, objective, waypoints);
+    finish(Some(create.mission_id), create.result)
 }
 
 pub(super) fn edit_objective(

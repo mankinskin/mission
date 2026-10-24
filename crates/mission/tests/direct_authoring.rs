@@ -146,6 +146,32 @@ fn invalid_operator_result_has_actionable_diagnostic_and_preserves_record() {
 }
 
 #[test]
+fn rejected_create_returns_its_allocated_id_without_an_accepted_record() {
+    let workspace = TempDir::new().unwrap();
+    let mut invalid_waypoint = waypoint();
+    invalid_waypoint.prompt.clear();
+    let rejected = execute(
+        workspace.path(),
+        Operation::CreateMission {
+            title: "Rejected".into(),
+            objective: "This create is intentionally invalid.".into(),
+            waypoints: vec![invalid_waypoint],
+        },
+    );
+
+    assert_eq!(rejected.status, "error");
+    let mission_id = rejected
+        .mission_id
+        .expect("rejected create must retain its API-allocated mission UUID");
+    assert!(uuid::Uuid::parse_str(&mission_id.to_string()).is_ok());
+    assert!(
+        MissionStore::open(workspace.path())
+            .get(mission_id)
+            .is_err()
+    );
+}
+
+#[test]
 fn direct_edits_cannot_override_ticket_or_child_authority() {
     for owner in ["ticket", "child"] {
         let workspace = TempDir::new().unwrap();

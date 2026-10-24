@@ -118,3 +118,21 @@ fn lifecycle_rejects_external_waypoint_mutation() {
     };
     assert_eq!(diagnostics[0].code, "externally-owned-waypoint");
 }
+
+#[test]
+fn rejected_create_retains_api_allocated_identity_without_a_record() {
+    let temp = TempDir::new().unwrap();
+    let lifecycle = MissionLifecycle::open(temp.path());
+    let mut invalid = waypoint("first", vec![]);
+    invalid.prompt.clear();
+
+    let create =
+        lifecycle.create_with_identity("Ownership".into(), "objective".into(), vec![invalid]);
+
+    assert!(create.result.is_err());
+    assert!(
+        MissionStore::open(temp.path())
+            .get(create.mission_id)
+            .is_err()
+    );
+}
