@@ -365,6 +365,7 @@ fn parse_roadmap(
                 format!("legacy-source: {source_path}"),
                 format!("legacy-roadmap: {roadmap_relative}"),
             ],
+            operator_results: vec![],
         },
         waypoints,
     };

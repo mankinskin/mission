@@ -11,13 +11,59 @@ use serde::Serialize;
 use ticket_api::storage::store::TicketStore;
 use uuid::Uuid;
 
+mod direct;
 mod migration;
 
+pub use direct::DirectWaypoint;
 pub use migration::{DossierMigrationRecord, DossierMigrationReport};
 
 /// Operations exposed identically by the CLI and MCP adapters.
 #[derive(Clone, Debug)]
 pub enum Operation {
+    CreateMission {
+        title: String,
+        objective: String,
+        waypoints: Vec<DirectWaypoint>,
+    },
+    EditMissionObjective {
+        mission_id: Uuid,
+        objective: String,
+        expected_current_revision: u64,
+    },
+    AddWaypoint {
+        mission_id: Uuid,
+        waypoint: DirectWaypoint,
+        expected_current_revision: u64,
+    },
+    EditWaypoint {
+        mission_id: Uuid,
+        waypoint: DirectWaypoint,
+        expected_current_revision: u64,
+    },
+    OrderWaypoints {
+        mission_id: Uuid,
+        execution_order: Vec<String>,
+        waypoint_dependencies: BTreeMap<String, Vec<String>>,
+        expected_current_revision: u64,
+    },
+    RecordProgress {
+        mission_id: Uuid,
+        waypoint_id: String,
+        state: WaypointState,
+        expected_current_revision: u64,
+    },
+    RecordValidationResult {
+        mission_id: Uuid,
+        result: OperatorResult,
+        expected_current_revision: u64,
+    },
+    ValidateMission {
+        mission_id: Uuid,
+    },
+    PublishMission {
+        mission_id: Uuid,
+        expected_current_revision: u64,
+    },
     Get {
         mission_id: Uuid,
     },
@@ -54,6 +100,8 @@ pub struct StatusSnapshot {
     pub revision: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mission_state: Option<WaypointState>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub publication_state: Option<PublicationState>,
     pub diagnostics: Vec<StatusDiagnostic>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rendered: Option<RenderedPreview>,
@@ -63,6 +111,14 @@ pub struct StatusSnapshot {
     pub migration_report: Option<DossierMigrationReport>,
     #[serde(default)]
     pub external_status_snapshot: BTreeMap<String, String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PublicationState {
+    NotPublished,
+    Current,
+    Drift,
 }
 
 /// Deterministic document bytes returned by render-preview.
@@ -85,29 +141,108 @@ pub struct StatusDiagnostic {
 /// Runs an operation. CLI and MCP adapters intentionally delegate here.
 pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
     match operation {
-        Operation::Get { mission_id } => {
+        Operation::CreateMission {
+            title,
+            objective,
+            waypoints,
+        } => direct::create(workspace_root, title, objective, waypoints),
+        Operation::EditMissionObjective {
+            mission_id,
+            objective,
+            expected_current_revision,
+        } => direct::update(
+            workspace_root,
+            mission_id,
+            expected_current_revision,
+            |bundle| {
+                bundle.manifest.objective = objective;
+                Ok(())
+            },
+        ),
+        Operation::AddWaypoint {
+            mission_id,
+            waypoint,
+            expected_current_revision,
+        } => direct::add_waypoint(
+            workspace_root,
+            mission_id,
+            waypoint,
+            expected_current_revision,
+        ),
+        Operation::EditWaypoint {
+            mission_id,
+            waypoint,
+            expected_current_revision,
+        } => direct::edit_waypoint(
+            workspace_root,
+            mission_id,
+            waypoint,
+            expected_current_revision,
+        ),
+        Operation::OrderWaypoints {
+            mission_id,
+            execution_order,
+            waypoint_dependencies,
+            expected_current_revision,
+        } => direct::update(
+            workspace_root,
+            mission_id,
+            expected_current_revision,
+            |bundle| {
+                direct::set_dependencies(bundle, waypoint_dependencies)?;
+                bundle.manifest.execution_order = execution_order;
+                Ok(())
+            },
+        ),
+        Operation::RecordProgress {
+            mission_id,
+            waypoint_id,
+            state,
+            expected_current_revision,
+        } => direct::record_progress(
+            workspace_root,
+            mission_id,
+            waypoint_id,
+            state,
+            expected_current_revision,
+        ),
+        Operation::RecordValidationResult {
+            mission_id,
+            result,
+            expected_current_revision,
+        } => direct::update(
+            workspace_root,
+            mission_id,
+            expected_current_revision,
+            |bundle| {
+                bundle.manifest.operator_results.push(result);
+                Ok(())
+            },
+        ),
+        Operation::ValidateMission { mission_id } => {
             let store = MissionStore::open(workspace_root);
             match store.get(mission_id).and_then(|accepted| {
-                let snapshot =
-                    ticket_snapshot(workspace_root, &store, mission_id, &accepted.bundle)?;
-                let states = snapshot_states(&snapshot)?;
-                let mission_state =
-                    store.derived_state_with_status_snapshot(mission_id, &states)?;
-                Ok((accepted, snapshot, mission_state))
+                validate_bundle(&accepted.bundle)
+                    .map_err(|d| MissionError::Validation(d.len(), d))?;
+                Ok(accepted)
             }) {
-                Ok((accepted, external_status_snapshot, mission_state)) => StatusSnapshot {
-                    status: "ok".into(),
-                    mission_id: Some(mission_id),
-                    revision: Some(accepted.bundle.manifest.revision),
-                    mission_state: Some(mission_state),
-                    diagnostics: vec![],
-                    rendered: None,
-                    accepted: Some(accepted),
-                    migration_report: None,
-                    external_status_snapshot,
-                },
+                Ok(accepted) => direct::finish(mission_id, Ok(accepted)),
                 Err(error) => failure(Some(mission_id), error),
             }
+        }
+        Operation::PublishMission {
+            mission_id,
+            expected_current_revision,
+        } => direct::publish(workspace_root, mission_id, expected_current_revision),
+        Operation::Get { mission_id } => {
+            let mut snapshot = inspect_mission(workspace_root, mission_id, true);
+            if snapshot.status != "error" {
+                snapshot.status = "ok".into();
+                if snapshot.publication_state == Some(PublicationState::NotPublished) {
+                    snapshot.diagnostics.clear();
+                }
+            }
+            snapshot
         }
         Operation::ValidatePreview { manifest_path } => match collect_bundle(&manifest_path) {
             Ok(bundle) => success(None, Some(bundle.manifest.revision)),
@@ -164,6 +299,7 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
                         mission_id: Some(mission_id),
                         revision: Some(accepted.bundle.manifest.revision),
                         mission_state: Some(mission_state),
+                        publication_state: None,
                         diagnostics: vec![],
                         rendered: Some(rendered),
                         accepted: None,
@@ -194,6 +330,7 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
                 mission_id: None,
                 revision: None,
                 mission_state: None,
+                publication_state: None,
                 diagnostics: vec![],
                 rendered: None,
                 accepted: None,
@@ -235,6 +372,7 @@ fn import_bundle(
             mission_id: Some(mission_id),
             revision: Some(accepted.bundle.manifest.revision),
             mission_state: Some(mission_state),
+            publication_state: None,
             diagnostics: vec![],
             rendered: None,
             accepted: None,
@@ -272,6 +410,7 @@ fn publish_bundle(
             mission_id: Some(mission_id),
             revision: Some(accepted.bundle.manifest.revision),
             mission_state: Some(mission_state),
+            publication_state: Some(PublicationState::Current),
             diagnostics: vec![],
             rendered: None,
             accepted: None,
@@ -497,6 +636,14 @@ pub(crate) fn snapshot_id(snapshot: &BTreeMap<String, String>) -> Result<String,
 }
 
 fn check_generated(workspace_root: &Path, mission_id: Uuid) -> StatusSnapshot {
+    inspect_mission(workspace_root, mission_id, false)
+}
+
+fn inspect_mission(
+    workspace_root: &Path,
+    mission_id: Uuid,
+    include_accepted: bool,
+) -> StatusSnapshot {
     let store = MissionStore::open(workspace_root);
     let result = store.get(mission_id).and_then(|accepted| {
         let snapshot = ticket_snapshot(workspace_root, &store, mission_id, &accepted.bundle)?;
@@ -538,9 +685,10 @@ fn check_generated(workspace_root: &Path, mission_id: Uuid) -> StatusSnapshot {
                 mission_id: Some(mission_id),
                 revision: Some(accepted.bundle.manifest.revision),
                 mission_state: Some(mission_state),
+                publication_state: Some(PublicationState::Current),
                 diagnostics,
                 rendered: None,
-                accepted: None,
+                accepted: include_accepted.then_some(accepted),
                 migration_report: None,
                 external_status_snapshot,
             }
@@ -550,9 +698,16 @@ fn check_generated(workspace_root: &Path, mission_id: Uuid) -> StatusSnapshot {
             mission_id: Some(mission_id),
             revision: Some(accepted.bundle.manifest.revision),
             mission_state: Some(mission_state),
+            publication_state: Some(
+                if generated_directory(workspace_root, mission_id).is_dir() {
+                    PublicationState::Drift
+                } else {
+                    PublicationState::NotPublished
+                },
+            ),
             diagnostics,
             rendered: None,
-            accepted: None,
+            accepted: include_accepted.then_some(accepted),
             migration_report: None,
             external_status_snapshot,
         },
@@ -585,6 +740,7 @@ fn success(mission_id: Option<Uuid>, revision: Option<u64>) -> StatusSnapshot {
         mission_id,
         revision,
         mission_state: None,
+        publication_state: None,
         diagnostics: vec![],
         rendered: None,
         accepted: None,
@@ -628,6 +784,7 @@ fn failure(mission_id: Option<Uuid>, error: MissionError) -> StatusSnapshot {
         mission_id,
         revision: None,
         mission_state: None,
+        publication_state: None,
         diagnostics,
         rendered: None,
         accepted: None,

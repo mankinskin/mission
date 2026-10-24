@@ -37,6 +37,7 @@ fn bundle() -> MissionBundle {
             requirements: vec![],
             validation_gates: vec![],
             notes: vec![],
+            operator_results: vec![],
         },
         waypoints: vec![
             waypoint("first", vec![], "First | waypoint"),

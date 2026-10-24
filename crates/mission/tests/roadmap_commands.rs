@@ -136,6 +136,77 @@ fn files(path: &Path) -> BTreeMap<String, Vec<u8>> {
 }
 
 #[test]
+fn direct_authoring_persists_evidence_and_rejects_stale_writes() {
+    let workspace = TempDir::new().unwrap();
+    let created = execute_cli(
+        workspace.path(),
+        Operation::CreateMission {
+            title: "Direct".into(),
+            objective: "Ship it.".into(),
+            waypoints: vec![mission::DirectWaypoint {
+                waypoint_id: "install".into(),
+                title: "Install".into(),
+                depends_on: vec![],
+                prompt: "Install into the isolated test directory.".into(),
+                validation: vec![mission::ValidationGate {
+                    command: "cargo test".into(),
+                    cwd: None,
+                }],
+                commit_checkpoint: mission::CommitCheckpoint {
+                    message: "Record fixture evidence".into(),
+                },
+                non_goals: vec![],
+            }],
+        },
+    );
+    let id = created.mission_id.unwrap();
+    assert_eq!(created.revision, Some(1));
+    assert_eq!(
+        execute_mcp(
+            workspace.path(),
+            Operation::EditMissionObjective {
+                mission_id: id,
+                objective: "Edited.".into(),
+                expected_current_revision: 1,
+            }
+        )
+        .revision,
+        Some(2)
+    );
+    assert_eq!(
+        execute_cli(
+            workspace.path(),
+            Operation::RecordValidationResult {
+                mission_id: id,
+                expected_current_revision: 2,
+                result: mission::OperatorResult {
+                    waypoint_id: "install".into(),
+                    outcome: "passed".into(),
+                    operator_command: "cargo test".into(),
+                    evidence_pointer: "test://run/1".into()
+                },
+            }
+        )
+        .revision,
+        Some(3)
+    );
+    let stale = execute_cli(
+        workspace.path(),
+        Operation::PublishMission {
+            mission_id: id,
+            expected_current_revision: 2,
+        },
+    );
+    assert_eq!(stale.status, "error");
+    let read_back = execute_mcp(workspace.path(), Operation::Get { mission_id: id });
+    assert_eq!(read_back.revision, Some(3));
+    assert_eq!(
+        read_back.accepted.unwrap().bundle.manifest.operator_results[0].evidence_pointer,
+        "test://run/1"
+    );
+}
+
+#[test]
 fn validate_preview_does_not_mutate() {
     let workspace = TempDir::new().unwrap();
     let manifest = write_bundle(workspace.path(), 1, "preview");

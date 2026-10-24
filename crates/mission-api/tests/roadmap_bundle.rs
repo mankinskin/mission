@@ -45,12 +45,43 @@ fn bundle(order: &[&str]) -> MissionBundle {
             }],
             validation_gates: vec![],
             notes: vec![],
+            operator_results: vec![],
         },
         waypoints: vec![waypoint("one", &[]), waypoint("two", &["one"])],
     }
 }
 fn codes(result: Result<(), Vec<Diagnostic>>) -> Vec<&'static str> {
     result.unwrap_err().into_iter().map(|d| d.code).collect()
+}
+
+#[test]
+fn operator_results_are_validated_by_native_import() {
+    let directory = tempdir().unwrap();
+    let store = MissionStore::init(directory.path()).unwrap();
+    let id = Uuid::new_v4();
+    let original = store.import(id, bundle(&["one", "two"]), 0).unwrap();
+    let valid = OperatorResult {
+        waypoint_id: "one".into(),
+        outcome: "passed".into(),
+        operator_command: "cargo test".into(),
+        evidence_pointer: "test://fixture/run".into(),
+    };
+    for field in ["waypoint", "outcome", "command", "pointer"] {
+        let mut changed = original.bundle.clone();
+        changed.manifest.revision = 2;
+        let mut result = valid.clone();
+        match field {
+            "waypoint" => result.waypoint_id = "missing".into(),
+            "outcome" => result.outcome = "unknown".into(),
+            "command" => result.operator_command = " ".into(),
+            "pointer" => result.evidence_pointer = "".into(),
+            _ => unreachable!(),
+        }
+        changed.manifest.operator_results.push(result);
+        let error = store.import(id, changed, 1).unwrap_err();
+        assert!(!error.diagnostics().unwrap().is_empty());
+        assert_eq!(store.get(id).unwrap(), original);
+    }
 }
 
 #[test]

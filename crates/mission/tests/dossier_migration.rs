@@ -104,6 +104,7 @@ fn completed_child_bundle() -> MissionBundle {
             requirements: vec![],
             validation_gates: vec![],
             notes: vec![],
+            operator_results: vec![],
         },
         waypoints: vec![WaypointFragment {
             waypoint_id: "child-work".into(),

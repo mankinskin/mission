@@ -13,6 +13,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
+mod operator_results;
+
 pub const SCHEMA_VERSION: u32 = 1;
 pub const RENDERER_VERSION: &str = "mission-api/1";
 
@@ -33,6 +35,18 @@ pub struct BundleManifest {
     pub validation_gates: Vec<ValidationGate>,
     #[serde(default)]
     pub notes: Vec<String>,
+    /// Operator-supplied evidence. Recording this data never executes it.
+    #[serde(default)]
+    pub operator_results: Vec<OperatorResult>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OperatorResult {
+    pub waypoint_id: String,
+    pub outcome: String,
+    pub operator_command: String,
+    pub evidence_pointer: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -345,6 +359,7 @@ pub fn validate_bundle(bundle: &MissionBundle) -> Result<(), Vec<Diagnostic>> {
         }
     }
 
+    diagnostics.extend(operator_results::validate(bundle));
     let mut requirement_ids = BTreeSet::new();
     for (index, requirement) in bundle.manifest.requirements.iter().enumerate() {
         if !valid_stable_id(&requirement.id) {
@@ -698,6 +713,7 @@ fn render_materialized_with_snapshot(
         &bundle.manifest.validation_gates,
     );
     render_string_section(&mut roadmap, "Notes", &bundle.manifest.notes);
+    operator_results::render(&mut roadmap, &bundle.manifest.operator_results, None);
     roadmap.push_str("## Roadmap Waypoints\n\n");
     let mut parts = BTreeMap::new();
     for (index, id) in bundle.manifest.execution_order.iter().enumerate() {
@@ -797,6 +813,11 @@ fn render_materialized_with_snapshot(
         if !part.ends_with('\n') {
             part.push('\n');
         }
+        operator_results::render(
+            &mut part,
+            &bundle.manifest.operator_results,
+            Some(&waypoint.waypoint_id),
+        );
         parts.insert(filename, part.into_bytes());
     }
     RenderedRoadmap {
@@ -1470,6 +1491,7 @@ mod tests {
                 requirements: vec![],
                 validation_gates: vec![],
                 notes: vec![],
+                operator_results: vec![],
             },
             waypoints: vec![
                 waypoint("first", vec![]),
