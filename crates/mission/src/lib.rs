@@ -150,14 +150,11 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
             mission_id,
             objective,
             expected_current_revision,
-        } => direct::update(
+        } => direct::edit_objective(
             workspace_root,
             mission_id,
+            objective,
             expected_current_revision,
-            |bundle| {
-                bundle.manifest.objective = objective;
-                Ok(())
-            },
         ),
         Operation::AddWaypoint {
             mission_id,
@@ -184,15 +181,12 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
             execution_order,
             waypoint_dependencies,
             expected_current_revision,
-        } => direct::update(
+        } => direct::order_waypoints(
             workspace_root,
             mission_id,
+            execution_order,
+            waypoint_dependencies,
             expected_current_revision,
-            |bundle| {
-                direct::set_dependencies(bundle, waypoint_dependencies)?;
-                bundle.manifest.execution_order = execution_order;
-                Ok(())
-            },
         ),
         Operation::RecordProgress {
             mission_id,
@@ -210,32 +204,19 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
             mission_id,
             result,
             expected_current_revision,
-        } => direct::update(
+        } => direct::record_result(
             workspace_root,
             mission_id,
+            result,
             expected_current_revision,
-            |bundle| {
-                bundle.manifest.operator_results.push(result);
-                Ok(())
-            },
         ),
-        Operation::ValidateMission { mission_id } => {
-            let store = MissionStore::open(workspace_root);
-            match store.get(mission_id).and_then(|accepted| {
-                validate_bundle(&accepted.bundle)
-                    .map_err(|d| MissionError::Validation(d.len(), d))?;
-                Ok(accepted)
-            }) {
-                Ok(accepted) => direct::finish(mission_id, Ok(accepted)),
-                Err(error) => failure(Some(mission_id), error),
-            }
-        }
+        Operation::ValidateMission { mission_id } => direct::validate(workspace_root, mission_id),
         Operation::PublishMission {
             mission_id,
             expected_current_revision,
         } => direct::publish(workspace_root, mission_id, expected_current_revision),
         Operation::Get { mission_id } => {
-            let mut snapshot = inspect_mission(workspace_root, mission_id, true);
+            let mut snapshot = direct::get(workspace_root, mission_id);
             if snapshot.status != "error" {
                 snapshot.status = "ok".into();
                 if snapshot.publication_state == Some(PublicationState::NotPublished) {
@@ -731,6 +712,23 @@ fn drift(path: &Path) -> StatusDiagnostic {
         pointer: String::new(),
         waypoint_id: None,
         message: "Generated document differs from the accepted mission projection.".into(),
+    }
+}
+
+fn finish(
+    requested_id: Option<Uuid>,
+    result: Result<AcceptedMission, MissionError>,
+) -> StatusSnapshot {
+    match result {
+        Ok(accepted) => {
+            let mission_id = requested_id.unwrap_or(accepted.mission_id);
+            let revision = accepted.bundle.manifest.revision;
+            StatusSnapshot {
+                accepted: Some(accepted),
+                ..success(Some(mission_id), Some(revision))
+            }
+        }
+        Err(error) => failure(requested_id, error),
     }
 }
 
