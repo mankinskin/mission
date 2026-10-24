@@ -124,6 +124,10 @@ enum CommandOperation {
         #[arg(long, default_value_t = false)]
         dry_run: bool,
     },
+    MigrateTypedStores {
+        #[arg(long = "root")]
+        roots: Vec<std::path::PathBuf>,
+    },
 }
 
 #[derive(Args)]
@@ -347,6 +351,7 @@ fn main() -> Result<ExitCode, HarnessError> {
                 dossier_path: dossier,
                 dry_run,
             },
+            CommandOperation::MigrateTypedStores { roots } => Operation::MigrateTypedStores { roots },
         };
         let snapshot = execute_cli(&command.workspace, operation);
         succeeded = snapshot.status == "ok";

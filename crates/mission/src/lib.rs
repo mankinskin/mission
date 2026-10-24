@@ -110,6 +110,7 @@ pub enum Operation {
         dossier_path: Option<PathBuf>,
         dry_run: bool,
     },
+    MigrateTypedStores { roots: Vec<PathBuf> },
 }
 
 /// A stable operation result suitable for either transport.
@@ -132,6 +133,8 @@ pub struct StatusSnapshot {
     pub source: Option<TypedDraft>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub migration_report: Option<DossierMigrationReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub typed_migration: Option<MigrationJournal>,
     #[serde(default)]
     pub external_status_snapshot: BTreeMap<String, String>,
 }
@@ -214,6 +217,7 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
                     accepted: None,
                     source: Some(source),
                     migration_report: None,
+                    typed_migration: None,
                     external_status_snapshot: BTreeMap::new(),
                 },
                 Err(error) => failure(Some(mission_id), error),
@@ -359,6 +363,7 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
                         accepted: None,
                         source: None,
                         migration_report: None,
+                        typed_migration: None,
                         external_status_snapshot,
                     }
                 }
@@ -391,10 +396,27 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
                 accepted: None,
                 source: None,
                 migration_report: Some(migration_report),
+                typed_migration: None,
                 external_status_snapshot: BTreeMap::new(),
             },
             Err(error) => failure(None, error),
         },
+        Operation::MigrateTypedStores { roots } => {
+            let roots = if roots.is_empty() { vec![workspace_root.to_path_buf()] } else { roots };
+            match MissionLifecycle::plan_migration(&roots).and_then(|mut journal| {
+                MissionLifecycle::apply_migration(&mut journal)?;
+                Ok(journal)
+            }) {
+                Ok(journal) => StatusSnapshot {
+                    status: if journal.records.iter().all(|record| matches!(record.state, MigrationState::Applied)) { "ok" } else { "error" }.into(),
+                    mission_id: None, revision: None, mission_state: None, publication_state: None,
+                    diagnostics: vec![], rendered: None, accepted: None, source: None,
+                    migration_report: None, typed_migration: Some(journal),
+                    external_status_snapshot: BTreeMap::new(),
+                },
+                Err(error) => failure(None, error),
+            }
+        }
     }
 }
 
@@ -421,6 +443,7 @@ fn typed_result(result: Result<TypedDraft, MissionError>) -> StatusSnapshot {
             accepted: None,
             source: Some(source),
             migration_report: None,
+            typed_migration: None,
             external_status_snapshot: BTreeMap::new(),
         },
         Err(error) => failure(None, error),
@@ -453,6 +476,7 @@ fn import_bundle(
             accepted: None,
             source: None,
             migration_report: None,
+            typed_migration: None,
             external_status_snapshot,
         },
         Err(error) => failure(Some(mission_id), error),
@@ -492,6 +516,7 @@ fn publish_bundle(
             accepted: None,
             source: None,
             migration_report: None,
+            typed_migration: None,
             external_status_snapshot,
         },
         Err(error) => failure(Some(mission_id), error),
@@ -768,6 +793,7 @@ fn inspect_mission(
                 accepted: include_accepted.then_some(accepted),
                 source: None,
                 migration_report: None,
+                typed_migration: None,
                 external_status_snapshot,
             }
         }
@@ -788,6 +814,7 @@ fn inspect_mission(
             accepted: include_accepted.then_some(accepted),
             source: None,
             migration_report: None,
+            typed_migration: None,
             external_status_snapshot,
         },
         Err(error) => failure(Some(mission_id), error),
@@ -842,6 +869,7 @@ fn success(mission_id: Option<Uuid>, revision: Option<u64>) -> StatusSnapshot {
         accepted: None,
         source: None,
         migration_report: None,
+        typed_migration: None,
         external_status_snapshot: BTreeMap::new(),
     }
 }
@@ -887,6 +915,7 @@ fn failure(mission_id: Option<Uuid>, error: MissionError) -> StatusSnapshot {
         accepted: None,
         source: None,
         migration_report: None,
+        typed_migration: None,
         external_status_snapshot: BTreeMap::new(),
     }
 }

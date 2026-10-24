@@ -271,7 +271,7 @@ impl MissionLifecycle {
         Ok(markdown)
     }
 
-    fn save_typed(
+    pub(crate) fn save_typed(
         &self,
         draft: &TypedDraft,
         expected: u64,
@@ -516,20 +516,6 @@ fn validate_typed(draft: &TypedDraft, publishing: bool) -> Result<(), MissionErr
                 "waypoint IDs must be safe path components.",
             ));
         }
-        for waypoint in &draft.waypoints {
-            let mut dependencies = BTreeSet::new();
-            for dependency in &waypoint.depends_on {
-                if dependency == &waypoint.waypoint_id
-                    || !ids.contains(dependency)
-                    || !dependencies.insert(dependency)
-                {
-                    return Err(typed_error(
-                        "invalid-dependency-reference",
-                        "dependencies must be unique references to other waypoints.",
-                    ));
-                }
-            }
-        }
         if !ids.insert(&waypoint.waypoint_id) || waypoint.part.waypoint_id != waypoint.waypoint_id {
             return Err(typed_error(
                 "invalid-part-reference",
@@ -569,6 +555,20 @@ fn validate_typed(draft: &TypedDraft, publishing: bool) -> Result<(), MissionErr
                 "invalid-validation-cwd",
                 "a supplied execution cwd must be nonblank.",
             ));
+        }
+    }
+    for waypoint in &draft.waypoints {
+        let mut dependencies = BTreeSet::new();
+        for dependency in &waypoint.depends_on {
+            if dependency == &waypoint.waypoint_id
+                || !ids.contains(dependency)
+                || !dependencies.insert(dependency)
+            {
+                return Err(typed_error(
+                    "invalid-dependency-reference",
+                    "dependencies must be unique references to other waypoints.",
+                ));
+            }
         }
     }
     Ok(())
