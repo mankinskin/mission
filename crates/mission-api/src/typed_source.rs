@@ -208,9 +208,11 @@ impl MissionLifecycle {
     pub fn get_mission_source(&self, mission_id: Uuid) -> Result<TypedDraft, MissionError> {
         let mission_dir = self.store.root.join(mission_id.to_string());
         let path = mission_dir.join("source.json");
-        if !path.is_file() {
+        if !mission_dir.exists() || !path.exists() {
             return Err(MissionError::NotFound(mission_id));
         }
+        ensure_safe_path(&self.store.root, &mission_dir)?;
+        ensure_safe_path(&self.store.root, &path)?;
         let source = serde_json::from_slice::<StoredSource>(&fs::read(path)?).map_err(|_| {
             typed_error(
                 "invalid-source-json",
@@ -226,17 +228,8 @@ impl MissionLifecycle {
                 ));
             }
             let part_path = mission_dir.join(&waypoint.part_file);
-            if part_path
-                .symlink_metadata()
-                .map_err(MissionError::Io)?
-                .file_type()
-                .is_symlink()
-            {
-                return Err(typed_error(
-                    "unsafe-part-path",
-                    "Part files must not be symlinks.",
-                ));
-            }
+            ensure_safe_path(&self.store.root, &mission_dir.join("parts"))?;
+            ensure_safe_path(&self.store.root, &part_path)?;
             let part = serde_json::from_slice(&fs::read(part_path)?).map_err(|_| {
                 typed_error("invalid-part-json", "Part files must be strict typed JSON.")
             })?;
@@ -281,6 +274,8 @@ impl MissionLifecycle {
         publish: bool,
     ) -> Result<(), MissionError> {
         validate_typed(draft, publish)?;
+        fs::create_dir_all(&self.store.root)?;
+        let _lock = TypedLock::acquire(&self.store.root, draft.mission_id)?;
         let mission_dir = self.store.root.join(draft.mission_id.to_string());
         let current = match self.get_mission_source(draft.mission_id) {
             Ok(source) => Some(source),
@@ -291,13 +286,11 @@ impl MissionLifecycle {
         if actual != expected {
             return Err(MissionError::StaleRevision { expected, actual });
         }
-        let temp = self
-            .store
-            .root
-            .join(format!(".{}.typed.tmp", draft.mission_id));
-        if temp.exists() {
-            fs::remove_dir_all(&temp)?;
-        }
+        let temp = self.store.root.join(format!(
+            ".{}.typed.{}.tmp",
+            draft.mission_id,
+            Uuid::new_v4()
+        ));
         fs::create_dir_all(temp.join("parts"))?;
         fs::create_dir_all(temp.join("history"))?;
         fs::write(
@@ -341,6 +334,8 @@ impl MissionLifecycle {
             )?;
             if publish {
                 fs::write(temp.join("mission.md"), self.render_typed(draft))?;
+            } else if temp.join("mission.md").exists() {
+                fs::remove_file(temp.join("mission.md"))?;
             }
         }
         let backup = self
@@ -360,7 +355,13 @@ impl MissionLifecycle {
             return Err(error.into());
         }
         if backup.exists() {
-            fs::remove_dir_all(backup)?;
+            if let Err(error) = fs::remove_dir_all(&backup) {
+                eprintln!(
+                    "mission-api: accepted typed revision {} but retained recoverable backup {}: {error}",
+                    draft.revision,
+                    backup.display()
+                );
+            }
         }
         Ok(())
     }
@@ -373,6 +374,57 @@ impl MissionLifecycle {
         }
         output
     }
+}
+
+struct TypedLock {
+    path: PathBuf,
+}
+
+impl TypedLock {
+    fn acquire(root: &Path, mission_id: Uuid) -> Result<Self, MissionError> {
+        let path = root.join(format!(".{mission_id}.typed.lock"));
+        loop {
+            match fs::create_dir(&path) {
+                Ok(()) => return Ok(Self { path }),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                    std::thread::yield_now();
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+    }
+}
+
+impl Drop for TypedLock {
+    fn drop(&mut self) {
+        if let Err(error) = fs::remove_dir(&self.path) {
+            eprintln!(
+                "mission-api: retained typed write lock {} after completed write: {error}",
+                self.path.display()
+            );
+        }
+    }
+}
+
+fn ensure_safe_path(root: &Path, path: &Path) -> Result<(), MissionError> {
+    let relative = path.strip_prefix(root).map_err(|_| {
+        typed_error(
+            "unsafe-part-path",
+            "managed paths must remain below the Mission root.",
+        )
+    })?;
+    let mut current = root.to_path_buf();
+    for component in relative.components() {
+        current.push(component);
+        let metadata = fs::symlink_metadata(&current).map_err(MissionError::Io)?;
+        if metadata.file_type().is_symlink() {
+            return Err(typed_error(
+                "unsafe-part-path",
+                "managed source paths and their ancestors must not be symlinks.",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn stored_source(draft: &TypedDraft) -> StoredSource {
@@ -438,6 +490,20 @@ fn validate_typed(draft: &TypedDraft, publishing: bool) -> Result<(), MissionErr
                 "invalid-waypoint-id",
                 "waypoint IDs must be safe path components.",
             ));
+        }
+        for waypoint in &draft.waypoints {
+            let mut dependencies = BTreeSet::new();
+            for dependency in &waypoint.depends_on {
+                if dependency == &waypoint.waypoint_id
+                    || !ids.contains(dependency)
+                    || !dependencies.insert(dependency)
+                {
+                    return Err(typed_error(
+                        "invalid-dependency-reference",
+                        "dependencies must be unique references to other waypoints.",
+                    ));
+                }
+            }
         }
         if !ids.insert(&waypoint.waypoint_id) || waypoint.part.waypoint_id != waypoint.waypoint_id {
             return Err(typed_error(

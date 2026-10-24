@@ -175,3 +175,50 @@ fn typed_nodes_round_trip_and_rejected_writes_preserve_the_source() {
         saved
     );
 }
+
+#[test]
+fn draft_save_removes_stale_projection_and_rejects_bad_dependencies() {
+    let directory = tempdir().unwrap();
+    let lifecycle = MissionLifecycle::open(directory.path());
+    let created = lifecycle
+        .create_draft("Typed".into(), "objective".into())
+        .unwrap();
+    let mut draft = created.clone();
+    draft.waypoints.push(waypoint());
+    let published = lifecycle
+        .publish_draft(created.mission_id, draft, 1)
+        .unwrap();
+    let root = directory
+        .path()
+        .join(".workflow-tools/mission/missions")
+        .join(created.mission_id.to_string());
+    assert!(root.join("mission.md").is_file());
+
+    let mut changed = published.clone();
+    changed.title = "Unpublished".into();
+    let saved = lifecycle
+        .save_draft(created.mission_id, changed, 2)
+        .unwrap();
+    assert_eq!(saved.revision, 3);
+    assert!(
+        !root.join("mission.md").exists(),
+        "a draft must not look published"
+    );
+
+    for dependency in ["missing", "save"] {
+        let mut invalid = saved.clone();
+        invalid.waypoints[0].depends_on = vec![dependency.into()];
+        assert!(
+            lifecycle
+                .save_draft(created.mission_id, invalid, 3)
+                .is_err()
+        );
+    }
+    let mut duplicate = saved.clone();
+    duplicate.waypoints[0].depends_on = vec!["save".into(), "save".into()];
+    assert!(
+        lifecycle
+            .save_draft(created.mission_id, duplicate, 3)
+            .is_err()
+    );
+}
