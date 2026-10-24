@@ -14,6 +14,8 @@ use thiserror::Error;
 use uuid::Uuid;
 
 mod operator_results;
+mod typed_source;
+pub use typed_source::*;
 
 pub const SCHEMA_VERSION: u32 = 1;
 pub const RENDERER_VERSION: &str = "mission-api/1";
