@@ -2,6 +2,7 @@ use mission_api::{
     Block, CommitCheckpoint, Document, Inline, MissionLifecycle, PartSource, TypedDraft,
     TypedWaypoint, ValidationGate,
 };
+use std::fs;
 use tempfile::tempdir;
 
 fn waypoint() -> TypedWaypoint {
@@ -221,4 +222,135 @@ fn draft_save_removes_stale_projection_and_rejects_bad_dependencies() {
             .save_draft(created.mission_id, duplicate, 3)
             .is_err()
     );
+}
+
+
+#[cfg(unix)]
+#[test]
+fn typed_source_rejects_a_symlinked_missions_ancestor() {
+    use std::os::unix::fs::symlink;
+
+    let directory = tempdir().unwrap();
+    let lifecycle = MissionLifecycle::open(directory.path());
+    let created = lifecycle
+        .create_draft("Typed".into(), "objective".into())
+        .unwrap();
+    let mut draft = created.clone();
+    draft.waypoints.push(waypoint());
+    let saved = lifecycle.save_draft(created.mission_id, draft, 1).unwrap();
+
+    let mission_root = directory
+        .path()
+        .join(".workflow-tools/mission/missions");
+    let outside = directory.path().join("outside-missions");
+    fs::rename(&mission_root, &outside).unwrap();
+    symlink(&outside, &mission_root).unwrap();
+
+    assert!(
+        outside.join(created.mission_id.to_string()).join("source.json").is_file(),
+        "the persisted source artifact was moved outside the managed root"
+    );
+    assert!(
+        lifecycle.get_mission_source(created.mission_id).is_err(),
+        "a symlinked managed ancestor must be rejected rather than read"
+    );
+    assert_eq!(saved.revision, 2);
+}
+
+#[cfg(unix)]
+#[test]
+fn typed_source_rejects_symlinked_managed_artifacts() {
+    use std::os::unix::fs::symlink;
+
+    for artifact in ["mission", "source", "parts", "part"] {
+        let directory = tempdir().unwrap();
+        let lifecycle = MissionLifecycle::open(directory.path());
+        let created = lifecycle
+            .create_draft("Typed".into(), "objective".into())
+            .unwrap();
+        let mut draft = created.clone();
+        draft.waypoints.push(waypoint());
+        let saved = lifecycle.save_draft(created.mission_id, draft, 1).unwrap();
+        let mission_dir = directory
+            .path()
+            .join(".workflow-tools/mission/missions")
+            .join(created.mission_id.to_string());
+        assert_eq!(lifecycle.get_mission_source(created.mission_id).unwrap(), saved);
+
+        let target = match artifact {
+            "mission" => mission_dir.clone(),
+            "source" => mission_dir.join("source.json"),
+            "parts" => mission_dir.join("parts"),
+            "part" => mission_dir.join("parts/save.json"),
+            _ => unreachable!(),
+        };
+        let outside = directory.path().join(format!("outside-{artifact}"));
+        fs::rename(&target, &outside).unwrap();
+        symlink(&outside, &target).unwrap();
+
+        assert!(
+            lifecycle.get_mission_source(created.mission_id).is_err(),
+            "a symlinked {artifact} managed artifact must be rejected"
+        );
+    }
+}
+
+#[test]
+fn concurrent_typed_writers_have_one_accept_and_one_stale_revision() {
+    use mission_api::MissionError;
+    use std::sync::{Arc, Barrier};
+
+    let directory = tempdir().unwrap();
+    let lifecycle = MissionLifecycle::open(directory.path());
+    let created = lifecycle
+        .create_draft("Typed".into(), "objective".into())
+        .unwrap();
+    let mut draft = created.clone();
+    draft.waypoints.push(waypoint());
+    let workspace = Arc::new(directory.path().to_path_buf());
+    let barrier = Arc::new(Barrier::new(2));
+    let mut writers = Vec::new();
+
+    for _ in 0..2 {
+        let workspace = Arc::clone(&workspace);
+        let barrier = Arc::clone(&barrier);
+        let draft = draft.clone();
+        let mission_id = created.mission_id;
+        writers.push(std::thread::spawn(move || {
+            barrier.wait();
+            MissionLifecycle::open(&workspace).save_draft(mission_id, draft, 1)
+        }));
+    }
+    let results: Vec<_> = writers
+        .into_iter()
+        .map(|writer| writer.join().unwrap())
+        .collect();
+
+    assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+    assert_eq!(
+        results
+            .iter()
+            .filter(|result| {
+                matches!(
+                    result,
+                    Err(MissionError::StaleRevision {
+                        expected: 1,
+                        actual: 2
+                    })
+                )
+            })
+            .count(),
+        1
+    );
+    let accepted = MissionLifecycle::open(&workspace)
+        .get_mission_source(created.mission_id)
+        .unwrap();
+    let mission_dir = workspace
+        .join(".workflow-tools/mission/missions")
+        .join(created.mission_id.to_string());
+    assert_eq!(accepted.revision, 2);
+    assert!(mission_dir.join("source.json").is_file());
+    assert!(mission_dir.join("history/revision-2.json").is_file());
+    assert!(mission_dir.join("parts/save.json").is_file());
+    assert!(!mission_dir.join("history/revision-3.json").exists());
 }

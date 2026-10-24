@@ -355,7 +355,7 @@ impl MissionLifecycle {
             return Err(error.into());
         }
         if backup.exists() {
-            if let Err(error) = fs::remove_dir_all(&backup) {
+            if let Err(error) = remove_typed_backup(&backup) {
                 eprintln!(
                     "mission-api: accepted typed revision {} but retained recoverable backup {}: {error}",
                     draft.revision,
@@ -375,6 +375,20 @@ impl MissionLifecycle {
         output
     }
 }
+
+fn remove_typed_backup(path: &Path) -> std::io::Result<()> {
+    #[cfg(test)]
+    if TYPED_BACKUP_CLEANUP_FAILURE.load(std::sync::atomic::Ordering::SeqCst) {
+        return Err(std::io::Error::other(
+            "injected typed backup cleanup failure",
+        ));
+    }
+    fs::remove_dir_all(path)
+}
+
+#[cfg(test)]
+static TYPED_BACKUP_CLEANUP_FAILURE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 struct TypedLock {
     path: PathBuf,
@@ -414,6 +428,13 @@ fn ensure_safe_path(root: &Path, path: &Path) -> Result<(), MissionError> {
         )
     })?;
     let mut current = root.to_path_buf();
+    let root_metadata = fs::symlink_metadata(&current).map_err(MissionError::Io)?;
+    if root_metadata.file_type().is_symlink() {
+        return Err(typed_error(
+            "unsafe-part-path",
+            "managed source paths and their ancestors must not be symlinks.",
+        ));
+    }
     for component in relative.components() {
         current.push(component);
         let metadata = fs::symlink_metadata(&current).map_err(MissionError::Io)?;
@@ -675,5 +696,42 @@ fn render_inlines(out: &mut String, inlines: &[Inline]) {
                 out.push(')');
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn accepted_write_survives_recoverable_backup_cleanup_failure() {
+        let directory = tempdir().unwrap();
+        let lifecycle = MissionLifecycle::open(directory.path());
+        let created = lifecycle
+            .create_draft("initial".into(), "objective".into())
+            .unwrap();
+        let mut replacement = created.clone();
+        replacement.title = "accepted replacement".into();
+
+        TYPED_BACKUP_CLEANUP_FAILURE.store(true, std::sync::atomic::Ordering::SeqCst);
+        let accepted = lifecycle
+            .save_draft(created.mission_id, replacement, 1)
+            .unwrap();
+        TYPED_BACKUP_CLEANUP_FAILURE.store(false, std::sync::atomic::Ordering::SeqCst);
+
+        assert_eq!(accepted.revision, 2);
+        assert_eq!(
+            lifecycle.get_mission_source(created.mission_id).unwrap(),
+            accepted
+        );
+        assert!(
+            directory
+                .path()
+                .join(".workflow-tools/mission/missions")
+                .join(format!(".{}.typed.backup", created.mission_id))
+                .is_dir(),
+            "the old revision remains recoverable after cleanup warning"
+        );
     }
 }
