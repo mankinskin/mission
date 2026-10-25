@@ -45,6 +45,10 @@ pub struct OwnershipRefs {
     #[serde(default)]
     #[schemars(with = "Option<String>")]
     pub child_mission_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ticket_uri: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub child_mission_uri: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -258,6 +262,16 @@ impl MissionLifecycle {
             waypoints,
         };
         validate_typed(&draft, false)?;
+        if draft.mission_id != mission_id {
+            return Err(typed_error("mission-id-mismatch", "stored source identity differs from its directory."));
+        }
+        if let Ok(accepted) = self.store.get(mission_id) {
+            if accepted.bundle.manifest.revision != draft.revision {
+                return Err(typed_error("authority-diverged", "accepted/source revisions differ; use an approved forward repair."));
+            }
+        } else if mission_dir.join("accepted.json").exists() {
+            self.store.get(mission_id)?;
+        }
         Ok(draft)
     }
 
@@ -278,96 +292,37 @@ impl MissionLifecycle {
         publish: bool,
     ) -> Result<(), MissionError> {
         validate_typed(draft, publish)?;
-        fs::create_dir_all(&self.store.root)?;
+        self.store.prepare_write()?;
         let _lock = TypedLock::acquire(&self.store.root, draft.mission_id)?;
-        let mission_dir = self.store.root.join(draft.mission_id.to_string());
         let current = match self.get_mission_source(draft.mission_id) {
             Ok(source) => Some(source),
             Err(MissionError::NotFound(_)) => None,
             Err(error) => return Err(error),
         };
-        let actual = current.as_ref().map_or(0, |source| source.revision);
+        let accepted = match self.store.get(draft.mission_id) {
+            Ok(accepted) => Some(accepted),
+            Err(MissionError::NotFound(_)) => None,
+            Err(error) => return Err(error),
+        };
+        let actual = accepted.as_ref().map_or_else(
+            || current.as_ref().map_or(0, |source| source.revision),
+            |accepted| accepted.bundle.manifest.revision,
+        );
         if actual != expected {
             return Err(MissionError::StaleRevision { expected, actual });
         }
-        let temp = self.store.root.join(format!(
-            ".{}.typed.{}.tmp",
-            draft.mission_id,
-            Uuid::new_v4()
-        ));
-        fs::create_dir_all(temp.join("parts"))?;
-        fs::create_dir_all(temp.join("history"))?;
-        fs::write(
-            temp.join("source.json"),
-            serde_json::to_vec_pretty(&stored_source(draft))?,
-        )?;
-        for waypoint in &draft.waypoints {
-            fs::write(
-                temp.join("parts")
-                    .join(format!("{}.json", waypoint.waypoint_id)),
-                serde_json::to_vec_pretty(&waypoint.part)?,
-            )?;
-        }
-        fs::write(
-            temp.join("history")
-                .join(format!("revision-{}.json", draft.revision)),
-            serde_json::to_vec_pretty(&stored_source(draft))?,
-        )?;
-        if publish {
-            fs::write(temp.join("mission.md"), self.render_typed(draft))?;
-        }
-        if mission_dir.exists() {
-            copy_directory(&mission_dir, &temp)?;
-            fs::write(
-                temp.join("source.json"),
-                serde_json::to_vec_pretty(&stored_source(draft))?,
-            )?;
-            fs::remove_dir_all(temp.join("parts"))?;
-            fs::create_dir_all(temp.join("parts"))?;
-            for waypoint in &draft.waypoints {
-                fs::write(
-                    temp.join("parts")
-                        .join(format!("{}.json", waypoint.waypoint_id)),
-                    serde_json::to_vec_pretty(&waypoint.part)?,
-                )?;
-            }
-            fs::write(
-                temp.join("history")
-                    .join(format!("revision-{}.json", draft.revision)),
-                serde_json::to_vec_pretty(&stored_source(draft))?,
-            )?;
-            if publish {
-                fs::write(temp.join("mission.md"), self.render_typed(draft))?;
-            } else if temp.join("mission.md").exists() {
-                fs::remove_file(temp.join("mission.md"))?;
-            }
-        }
-        let backup = self
-            .store
-            .root
-            .join(format!(".{}.typed.backup", draft.mission_id));
-        if backup.exists() {
-            fs::remove_dir_all(&backup)?;
-        }
-        if mission_dir.exists() {
-            fs::rename(&mission_dir, &backup)?;
-        }
-        if let Err(error) = fs::rename(&temp, &mission_dir) {
-            if backup.exists() {
-                fs::rename(&backup, &mission_dir)?;
-            }
-            return Err(error.into());
-        }
-        if backup.exists() {
-            if let Err(error) = remove_typed_backup(&backup) {
-                eprintln!(
-                    "mission-api: accepted typed revision {} but retained recoverable backup {}: {error}",
-                    draft.revision,
-                    backup.display()
-                );
-            }
-        }
-        Ok(())
+        let next = accepted_from_typed(draft, accepted.as_ref())?;
+        let rendered = if publish {
+            validate_bundle(&next.bundle)
+                .map_err(|errors| MissionError::Validation(errors.len(), errors))?;
+            self.store.validate_child_missions(draft.mission_id, &next.bundle)
+                .map_err(|errors| MissionError::Validation(errors.len(), errors))?;
+            Some(render(&next.bundle, draft.mission_id)
+                .map_err(|errors| MissionError::Validation(errors.len(), errors))?)
+        } else {
+            None
+        };
+        self.store.write_authority(&next, Some(draft), rendered.as_ref())
     }
 
     fn render_typed(&self, draft: &TypedDraft) -> String {
@@ -378,6 +333,190 @@ impl MissionLifecycle {
         }
         output
     }
+}
+
+fn accepted_from_typed(
+    draft: &TypedDraft,
+    previous: Option<&AcceptedMission>,
+) -> Result<AcceptedMission, MissionError> {
+    let mut bundle = previous.map(|value| value.bundle.clone()).unwrap_or_else(|| MissionBundle {
+        manifest: BundleManifest {
+            schema_version: SCHEMA_VERSION, revision: draft.revision,
+            title: draft.title.clone(), objective: draft.objective.clone(),
+            waypoint_files: vec![], execution_order: vec![], artifacts: vec![],
+            requirements: vec![], validation_gates: vec![], notes: vec![], operator_results: vec![],
+        },
+        waypoints: vec![],
+    });
+    if bundle.waypoints.iter().any(|old| {
+        !draft.waypoints.iter().any(|new| new.waypoint_id == old.waypoint_id)
+            && (old.state == Some(WaypointState::Completed)
+                || bundle.manifest.operator_results.iter().any(|result| result.waypoint_id == old.waypoint_id))
+    }) {
+        return Err(typed_error("retained-waypoint-required", "completed waypoints and result identities must be retained."));
+    }
+    let mut waypoints = Vec::new();
+    for input in &draft.waypoints {
+        let mut waypoint = bundle.waypoints.iter()
+            .find(|old| old.waypoint_id == input.waypoint_id).cloned()
+            .unwrap_or_else(|| MissionLifecycle::fragment(DirectWaypoint {
+                waypoint_id: input.waypoint_id.clone(), title: input.title.clone(),
+                prompt: input.prompt.clone(), depends_on: input.depends_on.clone(),
+                validation: input.validation.clone(), commit_checkpoint: input.commit_checkpoint.clone(),
+                non_goals: input.non_goals.clone(),
+            }));
+        waypoint.title = input.title.clone();
+        waypoint.prompt = input.prompt.clone();
+        waypoint.depends_on = input.depends_on.clone();
+        waypoint.validation = input.validation.clone();
+        waypoint.commit_checkpoint = input.commit_checkpoint.clone();
+        waypoint.non_goals = input.non_goals.clone();
+        waypoint.part_markdown.clear();
+        render_blocks(&mut waypoint.part_markdown, &input.part.document.blocks, 0);
+        let refs = &input.ownership_refs;
+        waypoint.ticket_ref = refs.ticket_uri.clone()
+            .or_else(|| refs.ticket_id.map(|id| format!("ce://default/ticket/{id}")));
+        waypoint.child_mission_ref = refs.child_mission_uri.clone()
+            .or_else(|| refs.child_mission_id.map(|id| format!("ce://default/mission/{id}")));
+        if let Some(reference) = &waypoint.ticket_ref {
+            waypoint.scope = Scope::TicketBacked { ticket_ref: reference.clone() };
+        } else if matches!(waypoint.scope, Scope::TicketBacked { .. }) {
+            waypoint.scope = Scope::SingleSession;
+        }
+        waypoints.push(waypoint);
+    }
+    bundle.manifest.revision = draft.revision;
+    bundle.manifest.title = draft.title.clone();
+    bundle.manifest.objective = draft.objective.clone();
+    bundle.manifest.execution_order = draft.waypoints.iter().map(|w| w.waypoint_id.clone()).collect();
+    bundle.waypoints = waypoints;
+    Ok(AcceptedMission {
+        mission_id: draft.mission_id,
+        label_mapping: LabelMapping {
+            revision: draft.revision,
+            labels: bundle.manifest.execution_order.iter().enumerate()
+                .map(|(i, id)| (format!("W{}", i + 1), id.clone())).collect(),
+        },
+        bundle,
+    })
+}
+
+impl MissionStore {
+    pub(super) fn prepare_write(&self) -> Result<(), MissionError> {
+        fs::create_dir_all(&self.root)?;
+        ensure_safe_path(&self.root, &self.root)?;
+        Ok(())
+    }
+
+    pub(super) fn source_for_legacy(&self, next: &AcceptedMission) -> Result<Option<TypedDraft>, MissionError> {
+        let directory = self.root.join(next.mission_id.to_string());
+        if !directory.join("source.json").exists() {
+            return Ok(None);
+        }
+        let lifecycle = MissionLifecycle { store: Self { root: self.root.clone() } };
+        let previous = lifecycle.get_mission_source(next.mission_id)?;
+        let old = self.get(next.mission_id)?;
+        let mut source = typed_migration::convert(next)?;
+        for waypoint in &mut source.waypoints {
+            if old.bundle.waypoints.iter().any(|w| w.waypoint_id == waypoint.waypoint_id
+                && next.bundle.waypoints.iter().any(|n| n.waypoint_id == w.waypoint_id && n.part_markdown == w.part_markdown))
+                && let Some(saved) = previous.waypoints.iter().find(|w| w.waypoint_id == waypoint.waypoint_id)
+            {
+                waypoint.part = saved.part.clone();
+            }
+        }
+        validate_typed(&source, false)?;
+        Ok(Some(source))
+    }
+
+    /// Stage all representations under the same lock and replace one directory.
+    pub(super) fn write_authority(
+        &self,
+        accepted: &AcceptedMission,
+        source: Option<&TypedDraft>,
+        rendered: Option<&RenderedRoadmap>,
+    ) -> Result<(), MissionError> {
+        let id = accepted.mission_id;
+        let directory = self.root.join(id.to_string());
+        let stage = self.root.join(format!(".{id}.typed.tmp"));
+        let backup = self.root.join(format!(".{id}.typed.backup"));
+        if stage.exists() || backup.exists() {
+            return Err(MissionError::PublicationRecovery {
+                mission_id: id, message: "prior staging or backup exists; inspect it before retrying".into(),
+            });
+        }
+        let result = (|| {
+            if directory.exists() { copy_directory(&directory, &stage)?; }
+            else { fs::create_dir(&stage)?; }
+            fs::create_dir_all(stage.join("history"))?;
+            let bytes = serde_json::to_vec_pretty(accepted)?;
+            fs::write(stage.join("accepted.json"), &bytes)?;
+            write_new(&stage.join("history").join(format!("revision-{}.json", accepted.bundle.manifest.revision)), &bytes)?;
+            if let Some(source) = source {
+                if stage.join("parts").exists() {
+                    fs::remove_dir_all(stage.join("parts"))?;
+                }
+                fs::create_dir_all(stage.join("parts"))?;
+                let bytes = serde_json::to_vec_pretty(&stored_source(source))?;
+                fs::write(stage.join("source.json"), &bytes)?;
+                write_new(&stage.join("history").join(format!("source-revision-{}.json", source.revision)), &bytes)?;
+                for waypoint in &source.waypoints {
+                    let path = stage.join("parts").join(format!("{}.json", waypoint.waypoint_id));
+                    fs::write(path, serde_json::to_vec_pretty(&waypoint.part)?)?;
+                }
+            }
+            if stage.join("mission.md").exists() { fs::remove_file(stage.join("mission.md"))?; }
+            if stage.join("generated").exists() { fs::remove_dir_all(stage.join("generated"))?; }
+            if let Some(rendered) = rendered {
+                fs::create_dir(stage.join("generated"))?;
+                fs::write(stage.join("generated/ROADMAP.md"), &rendered.roadmap)?;
+                for (name, bytes) in &rendered.parts { fs::write(stage.join("generated").join(name), bytes)?; }
+                if let Some(source) = source {
+                    let lifecycle = MissionLifecycle { store: Self { root: self.root.clone() } };
+                    fs::write(stage.join("mission.md"), lifecycle.render_typed(source))?;
+                }
+            }
+            Ok::<_, MissionError>(())
+        })();
+        if let Err(error) = result {
+            if stage.exists() { fs::remove_dir_all(&stage)?; }
+            return Err(error);
+        }
+        if directory.exists() { fs::rename(&directory, &backup)?; }
+        if let Err(error) = promote_authority(&stage, &directory) {
+            if backup.exists() && let Err(restore) = fs::rename(&backup, &directory) {
+                return Err(MissionError::PublicationRecovery {
+                    mission_id: id, message: format!("replacement failed ({error}); restore failed ({restore})"),
+                });
+            }
+            fs::remove_dir_all(&stage)?;
+            return Err(error.into());
+        }
+        if backup.exists() && let Err(error) = remove_typed_backup(&backup) {
+            eprintln!("mission-api: accepted revision {} but retained backup {}: {error}",
+                accepted.bundle.manifest.revision, backup.display());
+        }
+        Ok(())
+    }
+}
+
+fn write_new(path: &Path, bytes: &[u8]) -> Result<(), MissionError> {
+    use std::io::Write;
+    fs::OpenOptions::new().write(true).create_new(true).open(path)?.write_all(bytes)?;
+    Ok(())
+}
+
+fn promote_authority(stage: &Path, directory: &Path) -> std::io::Result<()> {
+    #[cfg(test)]
+    if PROMOTION_FAILURE.with(|failure| failure.get()) {
+        return Err(std::io::Error::other("injected authority promotion failure"));
+    }
+    fs::rename(stage, directory)
+}
+
+#[cfg(test)]
+thread_local! {
+    static PROMOTION_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 fn remove_typed_backup(path: &Path) -> std::io::Result<()> {
@@ -394,12 +533,12 @@ fn remove_typed_backup(path: &Path) -> std::io::Result<()> {
 static TYPED_BACKUP_CLEANUP_FAILURE: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
-struct TypedLock {
+pub(super) struct TypedLock {
     path: PathBuf,
 }
 
 impl TypedLock {
-    fn acquire(root: &Path, mission_id: Uuid) -> Result<Self, MissionError> {
+    pub(super) fn acquire(root: &Path, mission_id: Uuid) -> Result<Self, MissionError> {
         let path = root.join(format!(".{mission_id}.typed.lock"));
         loop {
             match fs::create_dir(&path) {

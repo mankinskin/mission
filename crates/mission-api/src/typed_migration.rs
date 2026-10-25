@@ -45,7 +45,7 @@ impl MissionLifecycle {
                 if MissionLifecycle::open(workspace).get_mission_source(mission_id).is_ok() {
                     continue;
                 }
-                let converted = convert(&accepted)?;
+                let converted = migration_source(&accepted)?;
                 records.push(MigrationRecord {
                     workspace: workspace.clone(), mission_id,
                     source_revision: accepted.bundle.manifest.revision,
@@ -68,16 +68,16 @@ impl MissionLifecycle {
             let store = MissionStore::open(&record.workspace);
             let current = match store.get(record.mission_id) {
                 Ok(value) => value,
-                Err(error) => { record.state = MigrationState::Failed; record.diagnostic = Some(error.to_string()); continue; }
+                Err(error) => { record.state = MigrationState::Failed; record.diagnostic = Some(describe_migration_error(&error)); continue; }
             };
             if current.bundle.manifest.revision != record.source_revision {
                 record.state = MigrationState::Failed;
                 record.diagnostic = Some("source revision changed; original CAS no longer applies".into());
                 continue;
             }
-            let source = match convert(&current) {
+            let source = match migration_source(&current) {
                 Ok(source) => source,
-                Err(error) => { record.state = MigrationState::Failed; record.diagnostic = Some(error.to_string()); continue; }
+                Err(error) => { record.state = MigrationState::Failed; record.diagnostic = Some(describe_migration_error(&error)); continue; }
             };
             if digest(&serde_json::to_vec(&source)?) != record.payload_digest {
                 record.state = MigrationState::Failed; record.diagnostic = Some("planned typed payload changed".into()); continue;
@@ -87,16 +87,13 @@ impl MissionLifecycle {
             if let Err(error) = copy_tree(&directory, &snapshot) {
                 record.state = MigrationState::Failed; record.diagnostic = Some(error.to_string()); continue;
             }
-            let mut next = current.bundle.clone();
-            next.manifest.revision += 1;
-            let result = store.import(record.mission_id, next, record.source_revision)
-                .and_then(|_| MissionLifecycle::open(&record.workspace).save_migrated(source));
+            let result = MissionLifecycle::open(&record.workspace)
+                .save_typed(&source, record.source_revision, false);
             match result {
                 Ok(()) => { record.state = MigrationState::Applied; }
                 Err(error) => {
-                    let _ = fs::remove_dir_all(&directory);
-                    let _ = fs::rename(&snapshot, &directory);
-                    record.state = MigrationState::Failed; record.diagnostic = Some(error.to_string());
+                    record.state = MigrationState::Failed;
+                    record.diagnostic = Some(describe_migration_error(&error));
                 }
             }
         }
@@ -130,26 +127,33 @@ impl MissionLifecycle {
         Ok(())
     }
 
-    fn save_migrated(&self, source: TypedDraft) -> Result<(), MissionError> {
-        // The accepted CAS was advanced first; source.json did not exist in a
-        // v1 record, so zero is the source-side CAS precondition.
-        self.save_typed(&source, 0, false)
-    }
 }
 
-fn convert(accepted: &AcceptedMission) -> Result<TypedDraft, MissionError> {
+fn migration_source(accepted: &AcceptedMission) -> Result<TypedDraft, MissionError> {
+    let mut source = convert(accepted)?;
+    source.revision = source.revision.checked_add(1)
+        .ok_or_else(|| migration_error("manifest", 0, "revision exhausted"))?;
+    Ok(source)
+}
+
+pub(super) fn convert(accepted: &AcceptedMission) -> Result<TypedDraft, MissionError> {
     Ok(TypedDraft {
         mission_id: accepted.mission_id, schema_version: TYPED_SOURCE_SCHEMA_VERSION,
-        revision: accepted.bundle.manifest.revision + 1,
+        revision: accepted.bundle.manifest.revision,
         title: accepted.bundle.manifest.title.clone(), objective: accepted.bundle.manifest.objective.clone(),
         waypoints: accepted.bundle.waypoints.iter().map(|w| Ok(TypedWaypoint {
             waypoint_id: w.waypoint_id.clone(), title: w.title.clone(), prompt: w.prompt.clone(),
-            part: PartSource { waypoint_id: w.waypoint_id.clone(), document: parse_markdown(&w.part_markdown)? },
+            part: PartSource { waypoint_id: w.waypoint_id.clone(), document: parse_markdown(&w.part_markdown, &w.waypoint_id)? },
             depends_on: w.depends_on.clone(), validation: w.validation.clone(),
             commit_checkpoint: w.commit_checkpoint.clone(), non_goals: w.non_goals.clone(),
             ownership_refs: OwnershipRefs {
                 ticket_id: w.ticket_ref.as_deref().and_then(|s| s.parse().ok()),
                 child_mission_id: w.child_mission_ref.as_deref().and_then(|s| s.parse().ok()),
+                ticket_uri: w.ticket_ref.clone().or_else(|| match &w.scope {
+                    Scope::TicketBacked { ticket_ref } => Some(ticket_ref.clone()),
+                    Scope::SingleSession => None,
+                }),
+                child_mission_uri: w.child_mission_ref.clone(),
             },
         })).collect::<Result<Vec<_>, MissionError>>()?,
     })
@@ -157,16 +161,32 @@ fn convert(accepted: &AcceptedMission) -> Result<TypedDraft, MissionError> {
 
 // This deliberately accepts only the W2 block vocabulary.  A non-empty line
 // is always represented as text, so no source bytes are silently discarded.
-fn parse_markdown(input: &str) -> Result<Document, MissionError> {
+fn parse_markdown(input: &str, waypoint_id: &str) -> Result<Document, MissionError> {
     let mut blocks = Vec::new();
-    let mut lines = input.lines().peekable();
-    while let Some(line) = lines.next() {
+    let mut lines = input.lines().enumerate().peekable();
+    while let Some((line_no, line)) = lines.next() {
         if line.trim().is_empty() { continue; }
+        if line.starts_with(' ') || line.starts_with('\t') {
+            return Err(migration_error(waypoint_id, line_no + 1, "indented content is not supported; use typed block structure"));
+        }
+        if line.starts_with("~~~") {
+            return Err(migration_error(waypoint_id, line_no + 1, "tilde code fences are not supported; use ``` fences"));
+        }
+        if line.starts_with('<') {
+            return Err(migration_error(waypoint_id, line_no + 1, "inline HTML blocks are not supported"));
+        }
+        if line.starts_with('[') && line.contains("]:") {
+            return Err(migration_error(waypoint_id, line_no + 1, "reference-style links are not supported"));
+        }
         if line.starts_with("```") {
             let language = line.trim_start_matches("```").to_string();
             let mut text = String::new(); let mut closed = false;
-            for value in lines.by_ref() { if value.starts_with("```") { closed = true; break; } text.push_str(value); text.push('\n'); }
-            if !closed { return Err(migration_error("unclosed fenced code block")); }
+            for (_, value) in lines.by_ref() {
+                if value.starts_with("```") { closed = true; break; }
+                text.push_str(value);
+                text.push('\n');
+            }
+            if !closed { return Err(migration_error(waypoint_id, line_no + 1, "unclosed fenced code block")); }
             blocks.push(Block::CodeFence { language, text: text.trim_end_matches('\n').into() }); continue;
         }
         if line == "---" || line == "***" { blocks.push(Block::ThematicBreak); continue; }
@@ -178,9 +198,12 @@ fn parse_markdown(input: &str) -> Result<Document, MissionError> {
         if line.starts_with('|') && line.ends_with('|') {
             let cells = |s: &str| s.trim_matches('|').split('|').map(|v| parse_inlines(v.trim())).collect::<Result<Vec<_>, _>>();
             let header = cells(line)?;
-            if lines.peek().is_some_and(|v| v.contains("---")) { lines.next(); }
+            if lines.peek().is_some_and(|(_, v)| v.contains("---")) { lines.next(); }
             let mut rows = Vec::new();
-            while lines.peek().is_some_and(|v| v.starts_with('|') && v.ends_with('|')) { rows.push(cells(lines.next().unwrap())?); }
+            while lines.peek().is_some_and(|(_, v)| v.starts_with('|') && v.ends_with('|')) {
+                let (_, row) = lines.next().unwrap();
+                rows.push(cells(row)?);
+            }
             blocks.push(Block::Table { header, rows }); continue;
         }
         if let Some(text) = line.strip_prefix("> ") { blocks.push(Block::Blockquote { blocks: vec![Block::Paragraph { inlines: parse_inlines(text)? }] }); continue; }
@@ -218,7 +241,27 @@ fn parse_inlines(input: &str) -> Result<Vec<Inline>, MissionError> {
     Ok(out)
 }
 
-fn migration_error(message: &str) -> MissionError { MissionError::Validation(1, vec![Diagnostic { code: "migration-parse", source: "part_markdown".into(), pointer: String::new(), waypoint_id: None, message: message.into() }]) }
+fn migration_error(waypoint_id: &str, line_number: usize, message: &str) -> MissionError {
+    MissionError::Validation(
+        1,
+        vec![Diagnostic {
+            code: "semantic_or_formatting",
+            source: "part_markdown".into(),
+            pointer: format!("/waypoints/{waypoint_id}/part_markdown/line/{line_number}"),
+            waypoint_id: Some(waypoint_id.into()),
+            message: message.into(),
+        }],
+    )
+}
+
+fn describe_migration_error(error: &MissionError) -> String {
+    if let MissionError::Validation(_, diagnostics) = error
+        && let Some(first) = diagnostics.first()
+    {
+        return format!("{} {} {}", first.code, first.pointer, first.message);
+    }
+    error.to_string()
+}
 fn digest(bytes: &[u8]) -> String { let mut h = 0xcbf29ce484222325u64; for b in bytes { h = (h ^ u64::from(*b)).wrapping_mul(0x100000001b3); } format!("{h:016x}") }
 fn copy_tree(source: &Path, destination: &Path) -> std::io::Result<()> {
     if destination.exists() { fs::remove_dir_all(destination)?; }

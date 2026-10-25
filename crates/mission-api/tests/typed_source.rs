@@ -1,6 +1,6 @@
 use mission_api::{
-    Block, CommitCheckpoint, Document, Inline, MissionLifecycle, PartSource, TypedDraft,
-    TypedWaypoint, ValidationGate,
+    Block, CommitCheckpoint, Document, Inline, MissionLifecycle, PartSource, TypedWaypoint,
+    ValidationGate,
 };
 use std::fs;
 use tempfile::tempdir;
@@ -30,6 +30,29 @@ fn waypoint() -> TypedWaypoint {
         ..Default::default()
     }
 }
+
+    #[test]
+    fn legacy_and_typed_writes_share_cas_and_preserve_independent_parts() {
+        let directory = tempdir().unwrap();
+        let lifecycle = MissionLifecycle::open(directory.path());
+        let created = lifecycle.create_draft("Typed".into(), "objective".into()).unwrap();
+        let mut draft = created.clone();
+        draft.waypoints.push(waypoint());
+        let published = lifecycle.publish_draft(created.mission_id, draft, 1).unwrap();
+        let root = directory.path().join(".workflow-tools/mission/missions")
+            .join(created.mission_id.to_string());
+        let history = fs::read(root.join("history/revision-2.json")).unwrap();
+        let updated = lifecycle.edit_objective(created.mission_id, "legacy edit".into(), 2).unwrap();
+        assert_eq!(updated.bundle.manifest.revision, 3);
+        let source = lifecycle.get_mission_source(created.mission_id).unwrap();
+        assert_eq!(source.revision, 3);
+        assert_eq!(source.objective, "legacy edit");
+        assert_eq!(source.waypoints[0].part, published.waypoints[0].part);
+        assert!(lifecycle.save_draft(created.mission_id, source.clone(), 2).is_err());
+        let saved = lifecycle.save_draft(created.mission_id, source, 3).unwrap();
+        assert_eq!(lifecycle.get(created.mission_id).unwrap().bundle.manifest.revision, saved.revision);
+        assert_eq!(fs::read(root.join("history/revision-2.json")).unwrap(), history);
+    }
 
 #[test]
 fn drafts_save_incomplete_then_publish_with_distinct_part_and_serial_edges() {
