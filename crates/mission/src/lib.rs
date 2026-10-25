@@ -2,6 +2,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    ffi::OsStr,
     fs,
     path::{Path, PathBuf},
 };
@@ -16,6 +17,99 @@ mod migration;
 
 pub use direct::DirectWaypoint;
 pub use migration::{DossierMigrationRecord, DossierMigrationReport};
+
+pub const MISSION_WORKSPACE_ENV: &str = "MISSION_WORKSPACE";
+
+/// Resolves a transport's launch root. Domain APIs receive only the returned
+/// explicit root and never consult process environment.
+pub fn resolve_workspace(
+    explicit_workspace: Option<&Path>,
+    configured_workspace: Option<&OsStr>,
+    cwd: &Path,
+) -> Result<(PathBuf, &'static str), String> {
+    if !cwd.is_absolute() {
+        return Err(format!("process cwd must be absolute: {}", cwd.display()));
+    }
+    let (selected, source) = if let Some(explicit) = explicit_workspace {
+        if explicit.as_os_str().is_empty() {
+            return Err("--workspace must not be empty".into());
+        }
+        (explicit, "explicit")
+    } else if let Some(configured) = configured_workspace {
+        if configured.is_empty() {
+            return Err(format!("{MISSION_WORKSPACE_ENV} must not be empty"));
+        }
+        (Path::new(configured), "configured")
+    } else {
+        (cwd, "cwd")
+    };
+    let path = if selected.is_absolute() {
+        selected.to_path_buf()
+    } else {
+        cwd.join(selected)
+    };
+    let path = normalize_absolute(&path)?;
+    validate_workspace_path(&path)?;
+    Ok((path, source))
+}
+
+fn normalize_absolute(path: &Path) -> Result<PathBuf, String> {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
+            std::path::Component::RootDir => normalized.push(component.as_os_str()),
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                if !normalized.pop() {
+                    return Err(format!(
+                        "workspace path escapes its filesystem root: {}",
+                        path.display()
+                    ));
+                }
+            }
+            std::path::Component::Normal(part) => normalized.push(part),
+        }
+    }
+    if !normalized.is_absolute() {
+        return Err(format!(
+            "workspace path must resolve to an absolute path: {}",
+            path.display()
+        ));
+    }
+    Ok(normalized)
+}
+
+fn validate_workspace_path(path: &Path) -> Result<(), String> {
+    let components: Vec<_> = path.components().collect();
+    let mut current = PathBuf::new();
+    for component in &components {
+        current.push(component.as_os_str());
+        match fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(format!(
+                    "workspace path must not contain symlinks: {}",
+                    current.display()
+                ));
+            }
+            Ok(metadata) if !metadata.is_dir() => {
+                return Err(format!(
+                    "workspace path ancestor is not a directory: {}",
+                    current.display()
+                ));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => break,
+            Err(error) => {
+                return Err(format!(
+                    "cannot inspect workspace path {}: {error}",
+                    current.display()
+                ));
+            }
+        }
+    }
+    Ok(())
+}
 
 /// Operations exposed identically by the CLI and MCP adapters.
 #[derive(Clone, Debug)]
@@ -110,7 +204,9 @@ pub enum Operation {
         dossier_path: Option<PathBuf>,
         dry_run: bool,
     },
-    MigrateTypedStores { roots: Vec<PathBuf> },
+    MigrateTypedStores {
+        roots: Vec<PathBuf>,
+    },
 }
 
 /// A stable operation result suitable for either transport.
@@ -402,16 +498,36 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
             Err(error) => failure(None, error),
         },
         Operation::MigrateTypedStores { roots } => {
-            let roots = if roots.is_empty() { vec![workspace_root.to_path_buf()] } else { roots };
+            let roots = if roots.is_empty() {
+                vec![workspace_root.to_path_buf()]
+            } else {
+                roots
+            };
             match MissionLifecycle::plan_migration(&roots).and_then(|mut journal| {
                 MissionLifecycle::apply_migration(&mut journal)?;
                 Ok(journal)
             }) {
                 Ok(journal) => StatusSnapshot {
-                    status: if journal.records.iter().all(|record| matches!(record.state, MigrationState::Applied)) { "ok" } else { "error" }.into(),
-                    mission_id: None, revision: None, mission_state: None, publication_state: None,
-                    diagnostics: vec![], rendered: None, accepted: None, source: None,
-                    migration_report: None, typed_migration: Some(journal),
+                    status: if journal
+                        .records
+                        .iter()
+                        .all(|record| matches!(record.state, MigrationState::Applied))
+                    {
+                        "ok"
+                    } else {
+                        "error"
+                    }
+                    .into(),
+                    mission_id: None,
+                    revision: None,
+                    mission_state: None,
+                    publication_state: None,
+                    diagnostics: vec![],
+                    rendered: None,
+                    accepted: None,
+                    source: None,
+                    migration_report: None,
+                    typed_migration: Some(journal),
                     external_status_snapshot: BTreeMap::new(),
                 },
                 Err(error) => failure(None, error),

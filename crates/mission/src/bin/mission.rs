@@ -1,6 +1,6 @@
 use mission::{
-    CommitCheckpoint, DirectWaypoint, Operation, OperatorResult, ValidationGate, WaypointState,
-    execute_cli,
+    CommitCheckpoint, DirectWaypoint, MISSION_WORKSPACE_ENV, Operation, OperatorResult,
+    ValidationGate, WaypointState, execute_cli, resolve_workspace,
 };
 use std::process::ExitCode;
 use transport_harness::{
@@ -12,8 +12,8 @@ use uuid::Uuid;
 #[derive(Parser)]
 #[command(name = "mission")]
 struct Command {
-    #[arg(long, default_value = ".")]
-    workspace: std::path::PathBuf,
+    #[arg(long)]
+    workspace: Option<std::path::PathBuf>,
     #[command(subcommand)]
     operation: CommandOperation,
 }
@@ -170,18 +170,26 @@ impl WaypointContent {
 }
 
 fn main() -> Result<ExitCode, HarnessError> {
-    if let Err(error) = Command::try_parse_from(std::env::args_os()) {
-        if matches!(
-            error.kind(),
-            ErrorKind::DisplayHelp
-                | ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
-                | ErrorKind::DisplayVersion
-        ) {
+    let launch = match Command::try_parse_from(std::env::args_os()) {
+        Ok(command) => command,
+        Err(error)
+            if matches!(
+                error.kind(),
+                ErrorKind::DisplayHelp
+                    | ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+                    | ErrorKind::DisplayVersion
+            ) =>
+        {
             print!("{error}");
             return Ok(ExitCode::SUCCESS);
         }
-        return Err(HarnessError::Arguments(error.to_string()));
-    }
+        Err(error) => return Err(HarnessError::Arguments(error.to_string())),
+    };
+    let cwd = std::env::current_dir().map_err(HarnessError::Io)?;
+    let configured = std::env::var_os(MISSION_WORKSPACE_ENV);
+    let (workspace, _) =
+        resolve_workspace(launch.workspace.as_deref(), configured.as_deref(), &cwd)
+            .map_err(HarnessError::Arguments)?;
 
     let mut succeeded = false;
     transport_harness::cli::run(|command: Command| {
@@ -351,9 +359,11 @@ fn main() -> Result<ExitCode, HarnessError> {
                 dossier_path: dossier,
                 dry_run,
             },
-            CommandOperation::MigrateTypedStores { roots } => Operation::MigrateTypedStores { roots },
+            CommandOperation::MigrateTypedStores { roots } => {
+                Operation::MigrateTypedStores { roots }
+            }
         };
-        let snapshot = execute_cli(&command.workspace, operation);
+        let snapshot = execute_cli(&workspace, operation);
         succeeded = snapshot.status == "ok";
         Output::json(snapshot)
     })?;

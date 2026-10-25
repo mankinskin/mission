@@ -7,6 +7,31 @@ The `mission` package provides the `mission` binary with feature `cli` and the
 [facade operations](crates/mission/src/lib.rs). No dossier, migration, or bundle
 file is required for direct authoring.
 
+### Selecting the workspace
+
+Both transports select their owning workspace in this order:
+
+1. `--workspace <path>` on the executable.
+2. The optional `MISSION_WORKSPACE` environment variable.
+3. The process working directory, preserving the historical default.
+
+Relative values resolve against the process working directory. An explicitly
+selected empty value or a path containing a symlink is rejected. A valid
+explicit `--workspace` takes precedence even if `MISSION_WORKSPACE` is empty;
+there is no fallback after a selected value is rejected. Domain API calls
+always receive an explicit resolved workspace and never read the environment.
+Read operations do not initialize a missing store.
+
+For a portable canonical launch from the meta-workspace root:
+
+```sh
+MISSION_WORKSPACE="$PWD/workflow-tools/mission" mission-mcp
+MISSION_WORKSPACE="$PWD/workflow-tools/mission" mission get MISSION_UUID
+```
+
+An explicit `--workspace` overrides this configuration. `mission-mcp` accepts
+the same `--workspace <path>` launch option.
+
 Create a nonempty Mission with inline waypoint content:
 
 ```sh
@@ -78,9 +103,11 @@ requires publication again; generated Markdown is never an authoring surface.
 
 ### MCP contract
 
-Start `mission-mcp` with its owning workspace as cwd. Initialize the real stdio
+Start `mission-mcp` with its owning workspace as cwd, or choose it with
+`--workspace`/`MISSION_WORKSPACE`. Initialize the real stdio
 JSON-RPC connection, send `notifications/initialized`, then call `tools/list`
-and `tools/call`. The executable has no `--help` probe.
+and `tools/call`. The executable's `--help` documents launch options; it does
+not replace the real MCP protocol checks.
 
 The `mission_operation` tool supports `create_mission`,
 `edit_mission_objective`, `add_waypoint`, `edit_waypoint`, `order_waypoints`,

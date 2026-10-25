@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use mission::{
-    CommitCheckpoint, DirectWaypoint, Operation, OperatorResult, TypedDraft, ValidationGate,
-    WaypointState, execute_mcp,
+    CommitCheckpoint, DirectWaypoint, MISSION_WORKSPACE_ENV, Operation, OperatorResult, TypedDraft,
+    ValidationGate, WaypointState, execute_mcp, resolve_workspace,
 };
 use rmcp::{
     ErrorData as McpError, ServerHandler,
@@ -13,7 +13,15 @@ use rmcp::{
 };
 use serde::Deserialize;
 use transport_harness::HarnessError;
+use transport_harness::cli::clap::{Parser, error::ErrorKind};
 use uuid::Uuid;
+
+#[derive(Parser)]
+#[command(name = "mission-mcp")]
+struct Launch {
+    #[arg(long)]
+    workspace: Option<PathBuf>,
+}
 
 #[derive(Clone)]
 struct MissionServer {
@@ -335,7 +343,25 @@ impl ServerHandler for MissionServer {
 }
 
 fn main() -> Result<(), HarnessError> {
-    transport_harness::mcp::run(MissionServer::new(
-        std::env::current_dir().map_err(HarnessError::Io)?,
-    ))
+    let launch = match Launch::try_parse_from(std::env::args_os()) {
+        Ok(launch) => launch,
+        Err(error)
+            if matches!(
+                error.kind(),
+                ErrorKind::DisplayHelp
+                    | ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+                    | ErrorKind::DisplayVersion
+            ) =>
+        {
+            print!("{error}");
+            return Ok(());
+        }
+        Err(error) => return Err(HarnessError::Arguments(error.to_string())),
+    };
+    let cwd = std::env::current_dir().map_err(HarnessError::Io)?;
+    let configured = std::env::var_os(MISSION_WORKSPACE_ENV);
+    let (workspace, _) =
+        resolve_workspace(launch.workspace.as_deref(), configured.as_deref(), &cwd)
+            .map_err(HarnessError::Arguments)?;
+    transport_harness::mcp::run(MissionServer::new(workspace))
 }

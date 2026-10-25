@@ -2,6 +2,7 @@ pub use serde_json::{Value, json};
 pub use std::process::Command;
 use std::{
     collections::BTreeMap,
+    ffi::OsStr,
     io::{BufRead, BufReader, Write},
     path::Path,
     process::{Child, ChildStdin, Stdio},
@@ -12,12 +13,17 @@ use std::{
 pub use tempfile::TempDir;
 
 pub fn cli(workspace: &Path, arguments: &[String]) -> Value {
-    let output = Command::new(env!("CARGO_BIN_EXE_mission"))
-        .arg("--workspace")
-        .arg(workspace)
-        .args(arguments)
-        .output()
-        .expect("mission CLI starts");
+    let cwd = std::env::current_dir().expect("test process cwd");
+    cli_launch(&cwd, Some(workspace), None, arguments)
+}
+
+pub fn cli_launch(
+    cwd: &Path,
+    explicit_workspace: Option<&Path>,
+    configured_workspace: Option<&OsStr>,
+    arguments: &[String],
+) -> Value {
+    let output = cli_output(cwd, explicit_workspace, configured_workspace, arguments);
     let snapshot: Value = serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
         panic!(
             "CLI JSON expected ({error}); stdout: {}; stderr: {}",
@@ -31,6 +37,26 @@ pub fn cli(workspace: &Path, arguments: &[String]) -> Value {
         "{snapshot}"
     );
     snapshot
+}
+
+pub fn cli_output(
+    cwd: &Path,
+    explicit_workspace: Option<&Path>,
+    configured_workspace: Option<&OsStr>,
+    arguments: &[String],
+) -> std::process::Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_mission"));
+    command.current_dir(cwd).env_remove("MISSION_WORKSPACE");
+    if let Some(workspace) = explicit_workspace {
+        command.arg("--workspace").arg(workspace);
+    }
+    if let Some(workspace) = configured_workspace {
+        command.env("MISSION_WORKSPACE", workspace);
+    }
+    command
+        .args(arguments)
+        .output()
+        .expect("mission CLI starts")
 }
 
 pub fn assert_ok(snapshot: &Value) {
@@ -49,8 +75,23 @@ pub struct Mcp {
 
 impl Mcp {
     pub fn start(workspace: &Path) -> Self {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_mission-mcp"))
-            .current_dir(workspace)
+        Self::start_with(workspace, None, None)
+    }
+
+    pub fn start_with(
+        cwd: &Path,
+        launch_workspace: Option<&Path>,
+        configured_workspace: Option<&OsStr>,
+    ) -> Self {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_mission-mcp"));
+        command.current_dir(cwd).env_remove("MISSION_WORKSPACE");
+        if let Some(workspace) = launch_workspace {
+            command.arg("--workspace").arg(workspace);
+        }
+        if let Some(workspace) = configured_workspace {
+            command.env("MISSION_WORKSPACE", workspace);
+        }
+        let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())

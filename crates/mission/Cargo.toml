@@ -7,7 +7,7 @@ description = "Public Mission facade with CLI and MCP transports"
 [features]
 default = []
 cli = ["dep:clap", "dep:transport-harness", "transport-harness/cli"]
-mcp = ["dep:rmcp", "dep:schemars", "dep:transport-harness", "transport-harness/mcp"]
+mcp = ["dep:clap", "dep:rmcp", "dep:schemars", "dep:transport-harness", "transport-harness/mcp"]
 
 [[bin]]
 name = "mission"
