@@ -310,7 +310,7 @@ fn publish_failure_preserves_previous_file_set() {
         workspace
             .path()
             .join(".workflow-tools/mission/missions")
-            .join(format!(".{mission_id}.publish.tmp")),
+            .join(format!(".{mission_id}.typed.tmp")),
     )
     .unwrap();
 

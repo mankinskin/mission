@@ -60,32 +60,32 @@ pub struct PartSource {
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct StoredSource {
-    mission_id: Uuid,
-    schema_version: u32,
-    revision: u64,
-    title: String,
-    objective: String,
-    waypoints: Vec<StoredWaypoint>,
+pub(super) struct StoredSource {
+    pub(super) mission_id: Uuid,
+    pub(super) schema_version: u32,
+    pub(super) revision: u64,
+    pub(super) title: String,
+    pub(super) objective: String,
+    pub(super) waypoints: Vec<StoredWaypoint>,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct StoredWaypoint {
-    waypoint_id: String,
-    title: String,
-    prompt: String,
-    part_file: String,
+pub(super) struct StoredWaypoint {
+    pub(super) waypoint_id: String,
+    pub(super) title: String,
+    pub(super) prompt: String,
+    pub(super) part_file: String,
     #[serde(default)]
-    depends_on: Vec<String>,
+    pub(super) depends_on: Vec<String>,
     #[serde(default)]
-    validation: Vec<ValidationGate>,
+    pub(super) validation: Vec<ValidationGate>,
     #[serde(default)]
-    commit_checkpoint: CommitCheckpoint,
+    pub(super) commit_checkpoint: CommitCheckpoint,
     #[serde(default)]
-    non_goals: Vec<String>,
+    pub(super) non_goals: Vec<String>,
     #[serde(default)]
-    ownership_refs: OwnershipRefs,
+    pub(super) ownership_refs: OwnershipRefs,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -214,6 +214,25 @@ impl MissionLifecycle {
     }
 
     pub fn get_mission_source(&self, mission_id: Uuid) -> Result<TypedDraft, MissionError> {
+        let draft = self.get_mission_source_unchecked(mission_id)?;
+        let mission_dir = self.store.root.join(mission_id.to_string());
+        if let Ok(accepted) = self.store.get(mission_id) {
+            if accepted.bundle.manifest.revision != draft.revision {
+                return Err(typed_error(
+                    "authority-diverged",
+                    "accepted/source revisions differ; use an approved forward repair.",
+                ));
+            }
+        } else if mission_dir.join("accepted.json").exists() {
+            self.store.get(mission_id)?;
+        }
+        Ok(draft)
+    }
+
+    pub(super) fn get_mission_source_unchecked(
+        &self,
+        mission_id: Uuid,
+    ) -> Result<TypedDraft, MissionError> {
         let mission_dir = self.store.root.join(mission_id.to_string());
         let path = mission_dir.join("source.json");
         if !mission_dir.exists() || !path.exists() {
@@ -263,14 +282,10 @@ impl MissionLifecycle {
         };
         validate_typed(&draft, false)?;
         if draft.mission_id != mission_id {
-            return Err(typed_error("mission-id-mismatch", "stored source identity differs from its directory."));
-        }
-        if let Ok(accepted) = self.store.get(mission_id) {
-            if accepted.bundle.manifest.revision != draft.revision {
-                return Err(typed_error("authority-diverged", "accepted/source revisions differ; use an approved forward repair."));
-            }
-        } else if mission_dir.join("accepted.json").exists() {
-            self.store.get(mission_id)?;
+            return Err(typed_error(
+                "mission-id-mismatch",
+                "stored source identity differs from its directory.",
+            ));
         }
         Ok(draft)
     }
@@ -315,17 +330,21 @@ impl MissionLifecycle {
         let rendered = if publish {
             validate_bundle(&next.bundle)
                 .map_err(|errors| MissionError::Validation(errors.len(), errors))?;
-            self.store.validate_child_missions(draft.mission_id, &next.bundle)
+            self.store
+                .validate_child_missions(draft.mission_id, &next.bundle)
                 .map_err(|errors| MissionError::Validation(errors.len(), errors))?;
-            Some(render(&next.bundle, draft.mission_id)
-                .map_err(|errors| MissionError::Validation(errors.len(), errors))?)
+            Some(
+                render(&next.bundle, draft.mission_id)
+                    .map_err(|errors| MissionError::Validation(errors.len(), errors))?,
+            )
         } else {
             None
         };
-        self.store.write_authority(&next, Some(draft), rendered.as_ref())
+        self.store
+            .write_authority(&next, Some(draft), rendered.as_ref())
     }
 
-    fn render_typed(&self, draft: &TypedDraft) -> String {
+    pub(super) fn render_typed(&self, draft: &TypedDraft) -> String {
         let mut output = format!("# {}\n\n{}\n", draft.title, draft.objective);
         for waypoint in &draft.waypoints {
             output.push_str(&format!("\n## {}\n\n", waypoint.title));
@@ -335,36 +354,63 @@ impl MissionLifecycle {
     }
 }
 
-fn accepted_from_typed(
+pub(super) fn accepted_from_typed(
     draft: &TypedDraft,
     previous: Option<&AcceptedMission>,
 ) -> Result<AcceptedMission, MissionError> {
-    let mut bundle = previous.map(|value| value.bundle.clone()).unwrap_or_else(|| MissionBundle {
-        manifest: BundleManifest {
-            schema_version: SCHEMA_VERSION, revision: draft.revision,
-            title: draft.title.clone(), objective: draft.objective.clone(),
-            waypoint_files: vec![], execution_order: vec![], artifacts: vec![],
-            requirements: vec![], validation_gates: vec![], notes: vec![], operator_results: vec![],
-        },
-        waypoints: vec![],
-    });
+    let mut bundle = previous
+        .map(|value| value.bundle.clone())
+        .unwrap_or_else(|| MissionBundle {
+            manifest: BundleManifest {
+                schema_version: SCHEMA_VERSION,
+                revision: draft.revision,
+                title: draft.title.clone(),
+                objective: draft.objective.clone(),
+                waypoint_files: vec![],
+                execution_order: vec![],
+                artifacts: vec![],
+                requirements: vec![],
+                validation_gates: vec![],
+                notes: vec![],
+                operator_results: vec![],
+            },
+            waypoints: vec![],
+        });
     if bundle.waypoints.iter().any(|old| {
-        !draft.waypoints.iter().any(|new| new.waypoint_id == old.waypoint_id)
+        !draft
+            .waypoints
+            .iter()
+            .any(|new| new.waypoint_id == old.waypoint_id)
             && (old.state == Some(WaypointState::Completed)
-                || bundle.manifest.operator_results.iter().any(|result| result.waypoint_id == old.waypoint_id))
+                || bundle
+                    .manifest
+                    .operator_results
+                    .iter()
+                    .any(|result| result.waypoint_id == old.waypoint_id))
     }) {
-        return Err(typed_error("retained-waypoint-required", "completed waypoints and result identities must be retained."));
+        return Err(typed_error(
+            "retained-waypoint-required",
+            "completed waypoints and result identities must be retained.",
+        ));
     }
     let mut waypoints = Vec::new();
     for input in &draft.waypoints {
-        let mut waypoint = bundle.waypoints.iter()
-            .find(|old| old.waypoint_id == input.waypoint_id).cloned()
-            .unwrap_or_else(|| MissionLifecycle::fragment(DirectWaypoint {
-                waypoint_id: input.waypoint_id.clone(), title: input.title.clone(),
-                prompt: input.prompt.clone(), depends_on: input.depends_on.clone(),
-                validation: input.validation.clone(), commit_checkpoint: input.commit_checkpoint.clone(),
-                non_goals: input.non_goals.clone(),
-            }));
+        let mut waypoint = bundle
+            .waypoints
+            .iter()
+            .find(|old| old.waypoint_id == input.waypoint_id)
+            .cloned()
+            .unwrap_or_else(|| {
+                MissionLifecycle::fragment(DirectWaypoint {
+                    waypoint_id: input.waypoint_id.clone(),
+                    title: input.title.clone(),
+                    prompt: input.prompt.clone(),
+                    depends_on: input.depends_on.clone(),
+                    validation: input.validation.clone(),
+                    commit_checkpoint: input.commit_checkpoint.clone(),
+                    non_goals: input.non_goals.clone(),
+                })
+            });
         waypoint.title = input.title.clone();
         waypoint.prompt = input.prompt.clone();
         waypoint.depends_on = input.depends_on.clone();
@@ -374,12 +420,18 @@ fn accepted_from_typed(
         waypoint.part_markdown.clear();
         render_blocks(&mut waypoint.part_markdown, &input.part.document.blocks, 0);
         let refs = &input.ownership_refs;
-        waypoint.ticket_ref = refs.ticket_uri.clone()
+        waypoint.ticket_ref = refs
+            .ticket_uri
+            .clone()
             .or_else(|| refs.ticket_id.map(|id| format!("ce://default/ticket/{id}")));
-        waypoint.child_mission_ref = refs.child_mission_uri.clone()
-            .or_else(|| refs.child_mission_id.map(|id| format!("ce://default/mission/{id}")));
+        waypoint.child_mission_ref = refs.child_mission_uri.clone().or_else(|| {
+            refs.child_mission_id
+                .map(|id| format!("ce://default/mission/{id}"))
+        });
         if let Some(reference) = &waypoint.ticket_ref {
-            waypoint.scope = Scope::TicketBacked { ticket_ref: reference.clone() };
+            waypoint.scope = Scope::TicketBacked {
+                ticket_ref: reference.clone(),
+            };
         } else if matches!(waypoint.scope, Scope::TicketBacked { .. }) {
             waypoint.scope = Scope::SingleSession;
         }
@@ -388,14 +440,23 @@ fn accepted_from_typed(
     bundle.manifest.revision = draft.revision;
     bundle.manifest.title = draft.title.clone();
     bundle.manifest.objective = draft.objective.clone();
-    bundle.manifest.execution_order = draft.waypoints.iter().map(|w| w.waypoint_id.clone()).collect();
+    bundle.manifest.execution_order = draft
+        .waypoints
+        .iter()
+        .map(|w| w.waypoint_id.clone())
+        .collect();
     bundle.waypoints = waypoints;
     Ok(AcceptedMission {
         mission_id: draft.mission_id,
         label_mapping: LabelMapping {
             revision: draft.revision,
-            labels: bundle.manifest.execution_order.iter().enumerate()
-                .map(|(i, id)| (format!("W{}", i + 1), id.clone())).collect(),
+            labels: bundle
+                .manifest
+                .execution_order
+                .iter()
+                .enumerate()
+                .map(|(i, id)| (format!("W{}", i + 1), id.clone()))
+                .collect(),
         },
         bundle,
     })
@@ -408,19 +469,32 @@ impl MissionStore {
         Ok(())
     }
 
-    pub(super) fn source_for_legacy(&self, next: &AcceptedMission) -> Result<Option<TypedDraft>, MissionError> {
+    pub(super) fn source_for_legacy(
+        &self,
+        next: &AcceptedMission,
+    ) -> Result<Option<TypedDraft>, MissionError> {
         let directory = self.root.join(next.mission_id.to_string());
         if !directory.join("source.json").exists() {
             return Ok(None);
         }
-        let lifecycle = MissionLifecycle { store: Self { root: self.root.clone() } };
+        let lifecycle = MissionLifecycle {
+            store: Self {
+                root: self.root.clone(),
+            },
+        };
         let previous = lifecycle.get_mission_source(next.mission_id)?;
         let old = self.get(next.mission_id)?;
         let mut source = typed_migration::convert(next)?;
         for waypoint in &mut source.waypoints {
-            if old.bundle.waypoints.iter().any(|w| w.waypoint_id == waypoint.waypoint_id
-                && next.bundle.waypoints.iter().any(|n| n.waypoint_id == w.waypoint_id && n.part_markdown == w.part_markdown))
-                && let Some(saved) = previous.waypoints.iter().find(|w| w.waypoint_id == waypoint.waypoint_id)
+            if old.bundle.waypoints.iter().any(|w| {
+                w.waypoint_id == waypoint.waypoint_id
+                    && next.bundle.waypoints.iter().any(|n| {
+                        n.waypoint_id == w.waypoint_id && n.part_markdown == w.part_markdown
+                    })
+            }) && let Some(saved) = previous
+                .waypoints
+                .iter()
+                .find(|w| w.waypoint_id == waypoint.waypoint_id)
             {
                 waypoint.part = saved.part.clone();
             }
@@ -436,22 +510,52 @@ impl MissionStore {
         source: Option<&TypedDraft>,
         rendered: Option<&RenderedRoadmap>,
     ) -> Result<(), MissionError> {
+        self.write_authority_inner(accepted, source, rendered, false)
+    }
+
+    pub(super) fn write_authority_for_repair(
+        &self,
+        accepted: &AcceptedMission,
+        source: Option<&TypedDraft>,
+        rendered: Option<&RenderedRoadmap>,
+        replace_source: bool,
+    ) -> Result<(), MissionError> {
+        self.write_authority_inner(accepted, source, rendered, replace_source)
+    }
+
+    fn write_authority_inner(
+        &self,
+        accepted: &AcceptedMission,
+        source: Option<&TypedDraft>,
+        rendered: Option<&RenderedRoadmap>,
+        replace_source: bool,
+    ) -> Result<(), MissionError> {
         let id = accepted.mission_id;
         let directory = self.root.join(id.to_string());
         let stage = self.root.join(format!(".{id}.typed.tmp"));
         let backup = self.root.join(format!(".{id}.typed.backup"));
         if stage.exists() || backup.exists() {
             return Err(MissionError::PublicationRecovery {
-                mission_id: id, message: "prior staging or backup exists; inspect it before retrying".into(),
+                mission_id: id,
+                message: "prior staging or backup exists; inspect it before retrying".into(),
             });
         }
         let result = (|| {
-            if directory.exists() { copy_directory(&directory, &stage)?; }
-            else { fs::create_dir(&stage)?; }
+            if directory.exists() {
+                copy_directory(&directory, &stage)?;
+            } else {
+                fs::create_dir(&stage)?;
+            }
             fs::create_dir_all(stage.join("history"))?;
             let bytes = serde_json::to_vec_pretty(accepted)?;
             fs::write(stage.join("accepted.json"), &bytes)?;
-            write_new(&stage.join("history").join(format!("revision-{}.json", accepted.bundle.manifest.revision)), &bytes)?;
+            write_new(
+                &stage.join("history").join(format!(
+                    "revision-{}.json",
+                    accepted.bundle.manifest.revision
+                )),
+                &bytes,
+            )?;
             if let Some(source) = source {
                 if stage.join("parts").exists() {
                     fs::remove_dir_all(stage.join("parts"))?;
@@ -459,42 +563,101 @@ impl MissionStore {
                 fs::create_dir_all(stage.join("parts"))?;
                 let bytes = serde_json::to_vec_pretty(&stored_source(source))?;
                 fs::write(stage.join("source.json"), &bytes)?;
-                write_new(&stage.join("history").join(format!("source-revision-{}.json", source.revision)), &bytes)?;
+                write_new(
+                    &stage
+                        .join("history")
+                        .join(format!("source-revision-{}.json", source.revision)),
+                    &bytes,
+                )?;
                 for waypoint in &source.waypoints {
-                    let path = stage.join("parts").join(format!("{}.json", waypoint.waypoint_id));
+                    let path = stage
+                        .join("parts")
+                        .join(format!("{}.json", waypoint.waypoint_id));
                     fs::write(path, serde_json::to_vec_pretty(&waypoint.part)?)?;
                 }
+            } else if replace_source {
+                if stage.join("source.json").exists() {
+                    fs::remove_file(stage.join("source.json"))?;
+                }
+                if stage.join("parts").exists() {
+                    fs::remove_dir_all(stage.join("parts"))?;
+                }
             }
-            if stage.join("mission.md").exists() { fs::remove_file(stage.join("mission.md"))?; }
-            if stage.join("generated").exists() { fs::remove_dir_all(stage.join("generated"))?; }
+            if stage.join("mission.md").exists() {
+                fs::remove_file(stage.join("mission.md"))?;
+            }
+            if stage.join("generated").exists() {
+                fs::remove_dir_all(stage.join("generated"))?;
+            }
             if let Some(rendered) = rendered {
                 fs::create_dir(stage.join("generated"))?;
                 fs::write(stage.join("generated/ROADMAP.md"), &rendered.roadmap)?;
-                for (name, bytes) in &rendered.parts { fs::write(stage.join("generated").join(name), bytes)?; }
+                for (name, bytes) in &rendered.parts {
+                    fs::write(stage.join("generated").join(name), bytes)?;
+                }
                 if let Some(source) = source {
-                    let lifecycle = MissionLifecycle { store: Self { root: self.root.clone() } };
+                    let lifecycle = MissionLifecycle {
+                        store: Self {
+                            root: self.root.clone(),
+                        },
+                    };
                     fs::write(stage.join("mission.md"), lifecycle.render_typed(source))?;
                 }
             }
             Ok::<_, MissionError>(())
         })();
         if let Err(error) = result {
-            if stage.exists() { fs::remove_dir_all(&stage)?; }
+            if stage.exists() {
+                fs::remove_dir_all(&stage)?;
+            }
             return Err(error);
         }
-        if directory.exists() { fs::rename(&directory, &backup)?; }
+        if let Err(error) = sync_tree(&stage) {
+            if stage.exists() {
+                fs::remove_dir_all(&stage)?;
+            }
+            return Err(error);
+        }
+        if directory.exists() {
+            fs::rename(&directory, &backup)?;
+            if let Err(error) = fs::File::open(&self.root).and_then(|root| root.sync_all()) {
+                if let Err(restore) = fs::rename(&backup, &directory) {
+                    return Err(MissionError::PublicationRecovery {
+                        mission_id: id,
+                        message: format!(
+                            "could not sync backup rename ({error}); restore failed ({restore})"
+                        ),
+                    });
+                }
+                return Err(error.into());
+            }
+        }
         if let Err(error) = promote_authority(&stage, &directory) {
-            if backup.exists() && let Err(restore) = fs::rename(&backup, &directory) {
+            if backup.exists()
+                && let Err(restore) = fs::rename(&backup, &directory)
+            {
                 return Err(MissionError::PublicationRecovery {
-                    mission_id: id, message: format!("replacement failed ({error}); restore failed ({restore})"),
+                    mission_id: id,
+                    message: format!("replacement failed ({error}); restore failed ({restore})"),
                 });
             }
             fs::remove_dir_all(&stage)?;
             return Err(error.into());
         }
-        if backup.exists() && let Err(error) = remove_typed_backup(&backup) {
-            eprintln!("mission-api: accepted revision {} but retained backup {}: {error}",
-                accepted.bundle.manifest.revision, backup.display());
+        if let Err(error) = fs::File::open(&self.root).and_then(|root| root.sync_all()) {
+            return Err(MissionError::PublicationRecovery {
+                mission_id: id,
+                message: format!("authority promoted but directory sync failed: {error}"),
+            });
+        }
+        if backup.exists()
+            && let Err(error) = remove_typed_backup(&backup)
+        {
+            eprintln!(
+                "mission-api: accepted revision {} but retained backup {}: {error}",
+                accepted.bundle.manifest.revision,
+                backup.display()
+            );
         }
         Ok(())
     }
@@ -502,14 +665,31 @@ impl MissionStore {
 
 fn write_new(path: &Path, bytes: &[u8]) -> Result<(), MissionError> {
     use std::io::Write;
-    fs::OpenOptions::new().write(true).create_new(true).open(path)?.write_all(bytes)?;
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)?
+        .write_all(bytes)?;
+    Ok(())
+}
+
+fn sync_tree(path: &Path) -> Result<(), MissionError> {
+    let metadata = fs::symlink_metadata(path)?;
+    if metadata.is_dir() {
+        for entry in fs::read_dir(path)? {
+            sync_tree(&entry?.path())?;
+        }
+    }
+    fs::File::open(path)?.sync_all()?;
     Ok(())
 }
 
 fn promote_authority(stage: &Path, directory: &Path) -> std::io::Result<()> {
     #[cfg(test)]
     if PROMOTION_FAILURE.with(|failure| failure.get()) {
-        return Err(std::io::Error::other("injected authority promotion failure"));
+        return Err(std::io::Error::other(
+            "injected authority promotion failure",
+        ));
     }
     fs::rename(stage, directory)
 }
@@ -517,21 +697,19 @@ fn promote_authority(stage: &Path, directory: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 thread_local! {
     static PROMOTION_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static TYPED_BACKUP_CLEANUP_FAILURE: std::cell::Cell<bool> =
+        const { std::cell::Cell::new(false) };
 }
 
 fn remove_typed_backup(path: &Path) -> std::io::Result<()> {
     #[cfg(test)]
-    if TYPED_BACKUP_CLEANUP_FAILURE.load(std::sync::atomic::Ordering::SeqCst) {
+    if TYPED_BACKUP_CLEANUP_FAILURE.with(std::cell::Cell::get) {
         return Err(std::io::Error::other(
             "injected typed backup cleanup failure",
         ));
     }
     fs::remove_dir_all(path)
 }
-
-#[cfg(test)]
-static TYPED_BACKUP_CLEANUP_FAILURE: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
 
 pub(super) struct TypedLock {
     path: PathBuf,
@@ -591,7 +769,7 @@ fn ensure_safe_path(root: &Path, path: &Path) -> Result<(), MissionError> {
     Ok(())
 }
 
-fn stored_source(draft: &TypedDraft) -> StoredSource {
+pub(super) fn stored_source(draft: &TypedDraft) -> StoredSource {
     StoredSource {
         mission_id: draft.mission_id,
         schema_version: draft.schema_version,
@@ -629,11 +807,14 @@ fn typed_error(code: &'static str, message: &str) -> MissionError {
     )
 }
 
-fn validate_typed(draft: &TypedDraft, publishing: bool) -> Result<(), MissionError> {
+pub(super) fn validate_typed(draft: &TypedDraft, publishing: bool) -> Result<(), MissionError> {
     if draft.schema_version != TYPED_SOURCE_SCHEMA_VERSION {
         return Err(typed_error(
             "invalid-schema-version",
-            "source schema_version must be 2.",
+            &format!(
+                "source schema_version must be {}.",
+                TYPED_SOURCE_SCHEMA_VERSION
+            ),
         ));
     }
     let mut ids = BTreeSet::new();
@@ -857,11 +1038,11 @@ mod tests {
         let mut replacement = created.clone();
         replacement.title = "accepted replacement".into();
 
-        TYPED_BACKUP_CLEANUP_FAILURE.store(true, std::sync::atomic::Ordering::SeqCst);
+        TYPED_BACKUP_CLEANUP_FAILURE.with(|failure| failure.set(true));
         let accepted = lifecycle
             .save_draft(created.mission_id, replacement, 1)
             .unwrap();
-        TYPED_BACKUP_CLEANUP_FAILURE.store(false, std::sync::atomic::Ordering::SeqCst);
+        TYPED_BACKUP_CLEANUP_FAILURE.with(|failure| failure.set(false));
 
         assert_eq!(accepted.revision, 2);
         assert_eq!(

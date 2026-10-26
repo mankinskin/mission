@@ -1,6 +1,6 @@
 use mission::{
     CommitCheckpoint, DirectWaypoint, MISSION_WORKSPACE_ENV, Operation, OperatorResult,
-    ValidationGate, WaypointState, execute_cli, resolve_workspace,
+    RepairRequest, ValidationGate, WaypointState, execute_cli, resolve_workspace,
 };
 use std::process::ExitCode;
 use transport_harness::{
@@ -127,6 +127,28 @@ enum CommandOperation {
     MigrateTypedStores {
         #[arg(long = "root")]
         roots: Vec<std::path::PathBuf>,
+    },
+    RepairPreview {
+        #[arg(long, required = true)]
+        records: String,
+    },
+    RepairApply {
+        #[arg(long, required = true)]
+        records: String,
+        #[arg(long, required = true)]
+        proposal_id: String,
+    },
+    RepairJournal {
+        #[arg(long)]
+        journal_id: Uuid,
+    },
+    RepairResume {
+        #[arg(long)]
+        journal_id: Uuid,
+    },
+    RepairRollback {
+        #[arg(long)]
+        journal_id: Uuid,
     },
 }
 
@@ -361,6 +383,25 @@ fn main() -> Result<ExitCode, HarnessError> {
             },
             CommandOperation::MigrateTypedStores { roots } => {
                 Operation::MigrateTypedStores { roots }
+            }
+            CommandOperation::RepairPreview { records } => Operation::RepairPreview {
+                request: serde_json::from_str::<RepairRequest>(&records)
+                    .map_err(|error| HarnessError::Arguments(error.to_string()))?,
+            },
+            CommandOperation::RepairApply {
+                records,
+                proposal_id,
+            } => Operation::RepairApply {
+                request: serde_json::from_str::<RepairRequest>(&records)
+                    .map_err(|error| HarnessError::Arguments(error.to_string()))?,
+                proposal_id,
+            },
+            CommandOperation::RepairJournal { journal_id } => {
+                Operation::RepairJournal { journal_id }
+            }
+            CommandOperation::RepairResume { journal_id } => Operation::RepairResume { journal_id },
+            CommandOperation::RepairRollback { journal_id } => {
+                Operation::RepairRollback { journal_id }
             }
         };
         let snapshot = execute_cli(&workspace, operation);

@@ -101,6 +101,41 @@ accepted content, local/derived progress, evidence, and checked
 `publication_state`: `not-published`, `current`, or `drift`. A content write
 requires publication again; generated Markdown is never an authoring surface.
 
+### Journaled canonical repair
+
+Repair is an explicit recovery operation for an accepted Mission whose typed
+source or derived data has diverged. It never runs implicitly as part of
+reading or authoring. The CLI uses the selected `--workspace` as the repair
+root. Its required `--records` argument is the complete strict `RepairRequest`
+JSON envelope with `source_root`, `records`, and `policy`; it is not a bare
+array. The envelope's `source_root` must resolve to the same root as
+`--workspace`.
+
+Each record contains `mission_id`, `expected_revision`, `accepted_sha256`,
+`source_sha256`, and `payload_fingerprint`. A first, read-only preview with
+empty hash fields reports the observed values and blockers. Re-run preview
+with those exact observed values, inspect every candidate and blocker, and
+apply only the returned proposal identity:
+
+```sh
+mission --workspace /absolute/workspace repair-preview \
+  --records '{"source_root":"/absolute/workspace","records":[{"mission_id":"MISSION_UUID","expected_revision":4,"accepted_sha256":"OBSERVED_ACCEPTED_SHA256","source_sha256":"OBSERVED_SOURCE_SHA256","payload_fingerprint":"OBSERVED_PAYLOAD_FINGERPRINT"}],"policy":"forward-authoritative-repair"}'
+mission --workspace /absolute/workspace repair-apply \
+  --records '{"source_root":"/absolute/workspace","records":[{"mission_id":"MISSION_UUID","expected_revision":4,"accepted_sha256":"OBSERVED_ACCEPTED_SHA256","source_sha256":"OBSERVED_SOURCE_SHA256","payload_fingerprint":"OBSERVED_PAYLOAD_FINGERPRINT"}],"policy":"forward-authoritative-repair"}' \
+  --proposal-id sha256:PREVIEW_ID
+mission --workspace /absolute/workspace repair-journal --journal-id JOURNAL_UUID
+mission --workspace /absolute/workspace repair-resume --journal-id JOURNAL_UUID
+mission --workspace /absolute/workspace repair-rollback --journal-id JOURNAL_UUID
+```
+
+Preview fingerprints every regular file under each selected Mission, including
+history, Parts, projections, and provenance. Apply rechecks that fingerprint
+under the Mission write lock, persists its journal and recovery snapshot
+before writing a forward revision, and stops on drift. A fully conformant
+selection is a no-op and creates neither journal nor revision. Resume and
+rollback require the actual journal UUID and the same workspace; rollback
+appends a compensation revision rather than restoring the old tree.
+
 ### MCP contract
 
 Start `mission-mcp` with its owning workspace as cwd, or choose it with
@@ -124,6 +159,11 @@ Progress uses `waypoint_id` and `state` (`pending`, `in-progress`, `completed`,
 or `blocked`); evidence uses `waypoint_id`, `outcome`, `operator_command`,
 and `evidence_pointer`. Inspect both JSON-RPC errors and returned Mission
 `status`/`diagnostics`; a completed transport call is not domain success.
+Repair operations are `repair_preview` and `repair_apply`, with a structured
+`repair_request` containing `source_root`, `policy`, and the same `records`
+array used by the CLI. Apply also requires the exact `proposal_id` returned by
+preview. `repair_journal`, `repair_resume`, and `repair_rollback` take the
+actual `journal_id`.
 
 ### Validation
 

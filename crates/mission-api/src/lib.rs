@@ -15,8 +15,10 @@ use thiserror::Error;
 use uuid::Uuid;
 
 mod operator_results;
+mod repair;
 mod typed_migration;
 mod typed_source;
+pub use repair::*;
 pub use typed_migration::*;
 pub use typed_source::*;
 
@@ -285,14 +287,13 @@ pub fn validate_bundle(bundle: &MissionBundle) -> Result<(), Vec<Diagnostic>> {
                 .iter()
                 .any(|gate| gate.command.trim().is_empty())
             || waypoint.commit_checkpoint.message.trim().is_empty()
-            || waypoint.part_markdown.trim().is_empty()
         {
             diagnostics.push(diag(
                 "missing-required-content",
                 Path::new(&source),
                 "/prompt",
                 Some(&waypoint.waypoint_id),
-                "Waypoints require a title, session package, prompt, validation command, commit checkpoint, and Part content.",
+                "Waypoints require a title, session package, prompt, validation command, and commit checkpoint.",
             ));
         }
         let ticket_backed =
@@ -659,7 +660,7 @@ pub struct AcceptedMission {
     pub label_mapping: LabelMapping,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RenderedRoadmap {
     pub roadmap: Vec<u8>,
     pub parts: BTreeMap<String, Vec<u8>>,
@@ -1612,9 +1613,10 @@ fn copy_directory(source: &Path, destination: &Path) -> Result<(), MissionError>
         let entry = entry?;
         let target = destination.join(entry.file_name());
         if entry.file_type()?.is_symlink() {
-            return Err(MissionError::Io(std::io::Error::other(
-                format!("refusing symlink in Mission payload: {}", entry.path().display())
-            )));
+            return Err(MissionError::Io(std::io::Error::other(format!(
+                "refusing symlink in Mission payload: {}",
+                entry.path().display()
+            ))));
         } else if entry.file_type()?.is_dir() {
             copy_directory(&entry.path(), &target)?;
         } else {
@@ -1674,6 +1676,18 @@ mod tests {
             ],
         }
     }
+
+    #[test]
+    fn published_waypoints_may_have_empty_parts_when_other_required_content_is_present() {
+        let mut bundle = roadmap(1);
+        bundle.waypoints[0].part_markdown.clear();
+
+        assert!(
+            validate_bundle(&bundle).is_ok(),
+            "Part content is optional; required waypoint metadata and validation gates remain enforced"
+        );
+    }
+
     #[test]
     fn store_readback_preserves_manifest_and_history_mapping() {
         let directory = tempfile::tempdir().unwrap();

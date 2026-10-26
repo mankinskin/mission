@@ -207,6 +207,22 @@ pub enum Operation {
     MigrateTypedStores {
         roots: Vec<PathBuf>,
     },
+    RepairPreview {
+        request: RepairRequest,
+    },
+    RepairApply {
+        request: RepairRequest,
+        proposal_id: String,
+    },
+    RepairJournal {
+        journal_id: Uuid,
+    },
+    RepairResume {
+        journal_id: Uuid,
+    },
+    RepairRollback {
+        journal_id: Uuid,
+    },
 }
 
 /// A stable operation result suitable for either transport.
@@ -231,6 +247,8 @@ pub struct StatusSnapshot {
     pub migration_report: Option<DossierMigrationReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub typed_migration: Option<MigrationJournal>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repair: Option<RepairResponse>,
     #[serde(default)]
     pub external_status_snapshot: BTreeMap<String, String>,
 }
@@ -314,6 +332,7 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
                     source: Some(source),
                     migration_report: None,
                     typed_migration: None,
+                    repair: None,
                     external_status_snapshot: BTreeMap::new(),
                 },
                 Err(error) => failure(Some(mission_id), error),
@@ -460,6 +479,7 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
                         source: None,
                         migration_report: None,
                         typed_migration: None,
+                        repair: None,
                         external_status_snapshot,
                     }
                 }
@@ -493,6 +513,7 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
                 source: None,
                 migration_report: Some(migration_report),
                 typed_migration: None,
+                repair: None,
                 external_status_snapshot: BTreeMap::new(),
             },
             Err(error) => failure(None, error),
@@ -528,11 +549,69 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
                     source: None,
                     migration_report: None,
                     typed_migration: Some(journal),
+                    repair: None,
                     external_status_snapshot: BTreeMap::new(),
                 },
                 Err(error) => failure(None, error),
             }
         }
+        Operation::RepairPreview { request } => repair_result(
+            MissionLifecycle::open(workspace_root).repair_preview(workspace_root, request),
+        ),
+        Operation::RepairApply {
+            request,
+            proposal_id,
+        } => repair_result(MissionLifecycle::open(workspace_root).repair_apply(
+            workspace_root,
+            request,
+            &proposal_id,
+        )),
+        Operation::RepairJournal { journal_id } => repair_result(
+            MissionLifecycle::open(workspace_root)
+                .repair_journal(workspace_root, journal_id)
+                .map(|journal| response_from_journal(&journal)),
+        ),
+        Operation::RepairResume { journal_id } => repair_result(
+            MissionLifecycle::open(workspace_root).repair_resume(workspace_root, journal_id),
+        ),
+        Operation::RepairRollback { journal_id } => repair_result(
+            MissionLifecycle::open(workspace_root).repair_rollback(workspace_root, journal_id),
+        ),
+    }
+}
+
+fn repair_result(result: Result<RepairResponse, MissionError>) -> StatusSnapshot {
+    match result {
+        Ok(repair) => StatusSnapshot {
+            status: if repair.status == "blocked" || repair.status == "partial" {
+                "error".into()
+            } else {
+                "ok".into()
+            },
+            mission_id: None,
+            revision: None,
+            mission_state: None,
+            publication_state: None,
+            diagnostics: repair
+                .diagnostics
+                .iter()
+                .map(|message| StatusDiagnostic {
+                    code: "repair-operation".into(),
+                    source: "repair".into(),
+                    pointer: String::new(),
+                    waypoint_id: None,
+                    message: message.clone(),
+                })
+                .collect(),
+            rendered: None,
+            accepted: None,
+            source: None,
+            migration_report: None,
+            typed_migration: None,
+            repair: Some(repair),
+            external_status_snapshot: BTreeMap::new(),
+        },
+        Err(error) => failure(None, error),
     }
 }
 
@@ -560,6 +639,7 @@ fn typed_result(result: Result<TypedDraft, MissionError>) -> StatusSnapshot {
             source: Some(source),
             migration_report: None,
             typed_migration: None,
+            repair: None,
             external_status_snapshot: BTreeMap::new(),
         },
         Err(error) => failure(None, error),
@@ -593,6 +673,7 @@ fn import_bundle(
             source: None,
             migration_report: None,
             typed_migration: None,
+            repair: None,
             external_status_snapshot,
         },
         Err(error) => failure(Some(mission_id), error),
@@ -633,6 +714,7 @@ fn publish_bundle(
             source: None,
             migration_report: None,
             typed_migration: None,
+            repair: None,
             external_status_snapshot,
         },
         Err(error) => failure(Some(mission_id), error),
@@ -910,6 +992,7 @@ fn inspect_mission(
                 source: None,
                 migration_report: None,
                 typed_migration: None,
+                repair: None,
                 external_status_snapshot,
             }
         }
@@ -931,6 +1014,7 @@ fn inspect_mission(
             source: None,
             migration_report: None,
             typed_migration: None,
+            repair: None,
             external_status_snapshot,
         },
         Err(error) => failure(Some(mission_id), error),
@@ -986,6 +1070,7 @@ fn success(mission_id: Option<Uuid>, revision: Option<u64>) -> StatusSnapshot {
         source: None,
         migration_report: None,
         typed_migration: None,
+        repair: None,
         external_status_snapshot: BTreeMap::new(),
     }
 }
@@ -1032,6 +1117,7 @@ fn failure(mission_id: Option<Uuid>, error: MissionError) -> StatusSnapshot {
         source: None,
         migration_report: None,
         typed_migration: None,
+        repair: None,
         external_status_snapshot: BTreeMap::new(),
     }
 }
