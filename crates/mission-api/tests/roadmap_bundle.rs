@@ -42,6 +42,7 @@ fn bundle(order: &[&str]) -> MissionBundle {
                 id: "mission-one".into(),
                 text: "one".into(),
                 deferred: false,
+                canonical_criteria: vec![],
             }],
             validation_gates: vec![],
             notes: vec![],

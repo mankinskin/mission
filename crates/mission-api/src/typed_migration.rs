@@ -59,11 +59,20 @@ impl MissionLifecycle {
                     continue;
                 };
                 let accepted = store.get(mission_id)?;
-                if MissionLifecycle::open(workspace)
-                    .get_mission_source(mission_id)
-                    .is_ok()
-                {
-                    continue;
+                let diagnostics = validate_manifest_shape(
+                    &accepted.bundle.manifest, Path::new("accepted.json"),
+                );
+                if !diagnostics.is_empty() {
+                    return Err(MissionError::Validation(diagnostics.len(), diagnostics));
+                }
+                match MissionLifecycle::open(workspace).get_mission_source(mission_id) {
+                    Ok(_) => continue,
+                    Err(error) if fs::symlink_metadata(entry.path().join("source.json")).is_ok() => {
+                        // Existing but unreadable sources are not legacy records.
+                        return Err(error);
+                    }
+                    Err(MissionError::NotFound(_)) => {}
+                    Err(error) => return Err(error),
                 }
                 let converted = migration_source(&accepted)?;
                 records.push(MigrationRecord {
@@ -111,6 +120,15 @@ impl MissionLifecycle {
                 record.state = MigrationState::Failed;
                 record.diagnostic =
                     Some("source revision changed; original CAS no longer applies".into());
+                continue;
+            }
+            if fs::symlink_metadata(
+                store.root.join(record.mission_id.to_string()).join("source.json"),
+            ).is_ok() {
+                record.state = MigrationState::Failed;
+                record.diagnostic = Some(
+                    "typed source appeared after planning; preserve it and replan explicitly".into(),
+                );
                 continue;
             }
             let source = match migration_source(&current) {
@@ -193,6 +211,10 @@ fn migration_source(accepted: &AcceptedMission) -> Result<TypedDraft, MissionErr
 }
 
 pub(super) fn convert(accepted: &AcceptedMission) -> Result<TypedDraft, MissionError> {
+    let diagnostics = validate_manifest_shape(&accepted.bundle.manifest, Path::new("accepted.json"));
+    if !diagnostics.is_empty() {
+        return Err(MissionError::Validation(diagnostics.len(), diagnostics));
+    }
     Ok(TypedDraft {
         mission_id: accepted.mission_id,
         schema_version: TYPED_SOURCE_SCHEMA_VERSION,

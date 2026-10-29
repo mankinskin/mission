@@ -17,6 +17,9 @@ sha2 = "0.10"
 thiserror = "2"
 fs4 = "0.11"
 uuid = { version = "1", features = ["serde", "v4"] }
+spec-api = { path = "../../../spec/crates/spec-api" }
+ticket-api = { path = "../../../ticket/crates/ticket-api" }
+toml = "0.8"
 
 [dev-dependencies]
 tempfile = "3"

@@ -530,6 +530,7 @@ impl MissionStore {
         replace_source: bool,
     ) -> Result<(), MissionError> {
         let id = accepted.mission_id;
+        self.validate_requirement_references(&accepted.bundle)?;
         self.validate_artifact_references(id, &accepted.bundle)?;
         let provenance = MissionArtifactProvenance::for_write(accepted, source, rendered);
         provenance

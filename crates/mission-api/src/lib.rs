@@ -18,6 +18,7 @@ mod operator_results;
 mod artifact_contract;
 mod repair;
 mod review_entry;
+mod schema_renderers;
 mod typed_migration;
 mod typed_source;
 pub use repair::*;
@@ -27,9 +28,10 @@ pub use artifact_contract::{
 };
 pub use typed_migration::*;
 pub use typed_source::*;
+pub use schema_renderers::*;
 
 pub const SCHEMA_VERSION: u32 = 1;
-pub const RENDERER_VERSION: &str = "mission-api/2";
+pub const RENDERER_VERSION: &str = "mission-api/3";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -69,6 +71,9 @@ pub struct Requirement {
     pub text: String,
     #[serde(default)]
     pub deferred: bool,
+    /// References only; specification criteria remain authoritative in Spec.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub canonical_criteria: Vec<CriterionReference>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -263,6 +268,7 @@ pub fn collect_bundle(manifest_path: &Path) -> Result<MissionBundle, MissionErro
 
 pub fn validate_bundle(bundle: &MissionBundle) -> Result<(), Vec<Diagnostic>> {
     let mut diagnostics = validate_manifest_shape(&bundle.manifest, Path::new("manifest.json"));
+    diagnostics.extend(schema_renderers::validate_requirement_shapes(&bundle.manifest.requirements));
     let mut ids = BTreeSet::new();
     let mut waypoint_by_id = BTreeMap::new();
     for (index, waypoint) in bundle.waypoints.iter().enumerate() {
@@ -757,7 +763,7 @@ fn render_materialized_with_consumer(
         "# {}\n\n<!-- mission: {mission_id}; revision: {}; renderer: {RENDERER_VERSION}{snapshot_provenance} -->\n\n## Objective\n\n{}\n\n",
         escape(&bundle.manifest.title),
         bundle.manifest.revision,
-        bundle.manifest.objective
+        schema_renderers::markdown_text(&bundle.manifest.objective)
     );
     render_artifact_section(
         &mut roadmap,
@@ -766,14 +772,9 @@ fn render_materialized_with_consumer(
         generated_directory.map(|path| path.join("ROADMAP.md")).as_deref(),
     );
     if !bundle.manifest.requirements.is_empty() {
-        roadmap.push_str("## Requirements\n\n| ID | Requirement | Deferred |\n|---|---|---|\n");
+        roadmap.push_str("## Requirements\n\n| ID | Requirement | Deferred | Canonical criteria |\n|---|---|---|---|\n");
         for requirement in &bundle.manifest.requirements {
-            roadmap.push_str(&format!(
-                "| `{}` | {} | {} |\n",
-                escape(&requirement.id),
-                escape(&requirement.text),
-                requirement.deferred
-            ));
+            roadmap.push_str(&render_requirement_row(requirement));
         }
         roadmap.push('\n');
     }
@@ -982,7 +983,7 @@ fn mode_label(mode: &WaypointMode) -> &'static str {
 }
 
 fn escape(value: &str) -> String {
-    value.replace('|', "\\|").replace('\n', "<br>")
+    schema_renderers::markdown_text(value)
 }
 
 pub struct MissionStore {

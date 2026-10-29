@@ -7,6 +7,97 @@ The `mission` package provides the `mission` binary with feature `cli` and the
 [facade operations](crates/mission/src/lib.rs). No dossier, migration, or bundle
 file is required for direct authoring.
 
+### Bounded schema and read-only entity composition
+
+`mission-api::SharedEntity` is a validated, read-only intersection, **not** a
+replacement entity store or a new Ticket format:
+
+| Field | Meaning and allowed values |
+|---|---|
+| `schema_version` | Shared projection version, integer `1` only. |
+| `source_schema` | `mission-bundle-v1`, `mission-source-v2`, or `ticket-unversioned`; never inferred/coerced from unknown versions. |
+| `id` | Non-nil UUID: `AcceptedMission.mission_id`, `TypedDraft.mission_id`, or the existing `TicketManifest.id`. |
+| `title` | Nonblank string: Mission title or Ticket's typed string `extra.title`. No normalization or domain write occurs. |
+
+These are the only demonstrated common identity/typed-attribute semantics.
+Native bundle schema `1`, typed Mission source `2`, and Part source `1` keep
+their separate meanings. Ticket's existing `EntityManifest` has no native
+schema-version/revision field; `ticket-unversioned` does not invent one.
+Mission revisions, objective, progress, Ticket states/types/plan revisions,
+timestamps, and arbitrary extras remain domain-owned. Incomplete drafts can
+remain incomplete in their domain; a blank title cannot be projected as a
+validated shared entity.
+
+Use `SharedEntity::from_mission`, `from_typed_mission`, `from_ticket`, or strict
+`from_json`. Unknown keys, wrong types, malformed identities and unsupported
+versions fail. `SharedSchemaError` retains the exact input bytes, including
+unknown data, alongside a diagnostic. No projection write-back or implicit
+migration exists. For native Mission v1 → typed source v2, use the existing
+`MissionLifecycle::{plan_migration,apply_migration,read_migration,resume_migration,rollback_migration}`
+journal workflow. Planning rejects unsupported native manifests and existing
+unreadable/unsupported typed sources; applying refuses a source that appeared
+after planning. Failures never replace that source with a guessed v2 record.
+Successful conversion preserves UUIDs, Requirement links and immutable native
+history, and advances the existing shared CAS revision. No Ticket/Spec migration
+or historical repair is performed.
+
+Native bundle Requirements can add reference-only `canonical_criteria`:
+
+```json
+{
+  "id": "mission-schema",
+  "text": "Use the specification's schema contract",
+  "deferred": false,
+  "canonical_criteria": [{
+    "specification_id": "b2c52f3b-5061-441e-9c7b-dc8dc8d8eec8",
+    "criterion_id": "mission-shared-schema-version-validation"
+  }]
+}
+```
+
+This is the reference shape, not an assertion that the illustrative criterion
+is present in that Spec. Requirement IDs keep their existing stable lowercase
+slug rules and are independent of display order. `CriterionReference` carries a
+typed specification UUID and `CriterionId`, an opaque nonblank Spec-owned ID
+(not restricted to Mission slug syntax). Empty reference lists remain valid
+for legacy requirements; no links or criteria are fabricated. Duplicate links,
+nil specification UUIDs and blank criterion IDs fail validation.
+
+`reference.resolve(explicit_workspace_root)` reads only
+`.workflow-tools/spec/specs/<specification_id>/spec.toml` in that workspace.
+It checks the manifest UUID and exactly one matching canonical criterion:
+`acceptance_criteria[].id` for unversioned Specs, or `criteria[].criterion_id`
+for Spec format `2`, using Spec's existing typed models. Malformed arrays,
+unsupported explicit Spec formats, dangling IDs, IDs belonging only to another
+Spec/root, and symlink redirection fail. No index/ancestor/other-workspace
+fallback or store initialization occurs. All Mission authority writes enforce
+resolution before replacement; failed updates preserve source, history and
+generated output. References use the owning workspace's existing local
+`ce://default/spec/<uuid>` convention; cross-workspace resolution is not added.
+Criterion IDs remain separate typed data, not a new URI/criteria authority.
+
+Pure embeddable renderers accept the existing typed entities:
+`render_mission_entity`, `render_roadmap_entity`, `render_ticket_entity`,
+`render_specification_entity`, `render_criterion_entity`, and
+`render_requirement_entity`. Resolve a criterion first, then render it with
+its reference; mismatched Spec/criterion identities fail. Returned strings can
+be concatenated in caller-selected order. Requirement blocks/rows carry
+canonical Spec links plus criterion IDs, never copied authoritative criterion
+statements. The native roadmap reuses `render_requirement_row` and
+`render_criterion_reference`. Text fields escape HTML and Markdown punctuation
+deterministically; authored Part Markdown retains its existing document
+semantics. Rendering does not save projections or mutate Mission, Ticket,
+Spec, criterion, test, or lifecycle state.
+Renderer `mission-api/3` identifies the updated escaping and canonical-reference
+output. Older generated bytes can report drift; they are never rewritten by
+these read-only APIs.
+
+Acceptance gate (from the meta-workspace):
+
+```sh
+cargo test --manifest-path workflow-tools/Cargo.toml --locked -p mission-api --test schema_requirement_renderer_contract
+```
+
 ### Selecting the workspace
 
 Both transports select their owning workspace in this order:
@@ -131,7 +222,7 @@ containing the README, roadmap and Parts. An absent external-status snapshot and
 the empty snapshot have the same explicit empty representation, so typed
 publication and subsequent verification agree byte-for-byte. Transport success
 does not imply acceptance of historical review rows.
-The projection renderer is `mission-api/2`; older generated output reports drift
+The projection renderer is `mission-api/3`; older generated output reports drift
 until explicitly republished through the owning Mission operation.
 
 `check-generated` reports `generated-changed`, `generated-missing`,
