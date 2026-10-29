@@ -101,6 +101,29 @@ accepted content, local/derived progress, evidence, and checked
 `publication_state`: `not-published`, `current`, or `drift`. A content write
 requires publication again; generated Markdown is never an authoring surface.
 
+### Generated review entry and verification
+
+Start at `generated/README.md` in the selected Mission directory. It links the
+roadmap, every generated Part and declared evidence, and distinguishes promises,
+delivery and verification from unknown product facts. Workspace file artifacts
+are resolved from the workspace root and linked relative to this entry;
+canonical `ce://` references remain canonical. Outside-workspace references and
+symlink escapes are explicitly unavailable, never absolute file links.
+
+Publication, repair fingerprints and verification share one generated inventory
+containing the README, roadmap and Parts. An absent external-status snapshot and
+the empty snapshot have the same explicit empty representation, so typed
+publication and subsequent verification agree byte-for-byte. Transport success
+does not imply acceptance of historical review rows.
+The projection renderer is `mission-api/2`; older generated output reports drift
+until explicitly republished through the owning Mission operation.
+
+`check-generated` reports `generated-changed`, `generated-missing`,
+`generated-extra`, `generated-dangling` and `generated-destination-invalid`
+separately. The latter includes redirected generated files or destinations
+outside the owning workspace. Checks are read-only; regenerate through the
+owning publication operation rather than editing projections.
+
 ### Journaled canonical repair
 
 Repair is an explicit recovery operation for an accepted Mission whose typed

@@ -16,6 +16,7 @@ use uuid::Uuid;
 
 mod operator_results;
 mod repair;
+mod review_entry;
 mod typed_migration;
 mod typed_source;
 pub use repair::*;
@@ -23,7 +24,7 @@ pub use typed_migration::*;
 pub use typed_source::*;
 
 pub const SCHEMA_VERSION: u32 = 1;
-pub const RENDERER_VERSION: &str = "mission-api/1";
+pub const RENDERER_VERSION: &str = "mission-api/2";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -662,8 +663,30 @@ pub struct AcceptedMission {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RenderedRoadmap {
+    pub readme: Vec<u8>,
     pub roadmap: Vec<u8>,
     pub parts: BTreeMap<String, Vec<u8>>,
+}
+
+impl RenderedRoadmap {
+    /// The complete generated inventory shared by publication and verification.
+    pub fn files(&self) -> impl Iterator<Item = (&str, &[u8])> {
+        [
+            ("README.md", self.readme.as_slice()),
+            ("ROADMAP.md", self.roadmap.as_slice()),
+        ]
+        .into_iter()
+        .chain(
+            self.parts
+                .iter()
+                .map(|(name, bytes)| (name.as_str(), bytes.as_slice())),
+        )
+    }
+
+    /// Compare the complete inventory and review-entry destinations without writes.
+    pub fn check_generated(&self, generated: &Path) -> Result<Vec<Diagnostic>, MissionError> {
+        review_entry::check_generated(self, generated)
+    }
 }
 
 /// Render byte-stable Markdown without reading or mutating a mission store.
@@ -706,9 +729,11 @@ fn render_materialized_with_snapshot(
     mission_id: Uuid,
     snapshot_id: Option<&str>,
 ) -> RenderedRoadmap {
-    let snapshot_provenance = snapshot_id
-        .map(|id| format!("; external-status-snapshot: {id}"))
-        .unwrap_or_default();
+    let snapshot_id = snapshot_id.filter(|id| *id != "ticket-status-v1:{}");
+    let snapshot_provenance = format!(
+        "; external-status-snapshot: {}",
+        snapshot_id.unwrap_or("ticket-status-v1:{}")
+    );
     let mut roadmap = format!(
         "# {}\n\n<!-- mission: {mission_id}; revision: {}; renderer: {RENDERER_VERSION}{snapshot_provenance} -->\n\n## Objective\n\n{}\n\n",
         escape(&bundle.manifest.title),
@@ -842,6 +867,7 @@ fn render_materialized_with_snapshot(
         parts.insert(filename, part.into_bytes());
     }
     RenderedRoadmap {
+        readme: review_entry::render(bundle, mission_id, snapshot_id, None),
         roadmap: roadmap.into_bytes(),
         parts,
     }
@@ -1151,6 +1177,24 @@ impl MissionLifecycle {
 }
 
 impl MissionStore {
+    fn render_projection(
+        &self,
+        bundle: &MissionBundle,
+        mission_id: Uuid,
+        snapshot_id: Option<&str>,
+    ) -> Result<RenderedRoadmap, MissionError> {
+        let mut rendered = render_with_snapshot(bundle, mission_id, snapshot_id)
+            .map_err(|errors| MissionError::Validation(errors.len(), errors))?;
+        rendered.readme = review_entry::render(
+            bundle,
+            mission_id,
+            snapshot_id.filter(|id| *id != "ticket-status-v1:{}"),
+            // Store layout is <workspace>/.workflow-tools/mission/missions.
+            self.root.ancestors().nth(3),
+        );
+        Ok(rendered)
+    }
+
     fn at_workspace(workspace_root: &Path) -> Self {
         let root = workspace_root
             .join(".workflow-tools")
@@ -1322,8 +1366,7 @@ impl MissionStore {
                 snapshot_id,
             )?
         } else {
-            render(&bundle, mission_id)
-                .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?
+            self.render_projection(&bundle, mission_id, None)?
         };
         let accepted = AcceptedMission {
             mission_id,
@@ -1389,11 +1432,7 @@ impl MissionStore {
             .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
         let mut bundle = source_bundle.clone();
         self.materialize_accepted_bundle(mission_id, &mut bundle, ticket_states)?;
-        Ok(render_materialized_with_snapshot(
-            &bundle,
-            mission_id,
-            Some(snapshot_id),
-        ))
+        self.render_projection(&bundle, mission_id, Some(snapshot_id))
     }
 
     fn materialize_accepted_bundle(

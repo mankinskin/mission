@@ -789,12 +789,12 @@ impl MissionLifecycle {
             response.disposition = Some("already_conformant".into());
             return (response, None);
         }
-        let rendered = match render(&next.bundle, request.mission_id) {
+        let rendered = match self.store.render_projection(&next.bundle, request.mission_id, None) {
             Ok(rendered) => rendered,
             Err(errors) => {
                 response
                     .blockers
-                    .push(format!("render-failed: {}", errors.len()));
+                    .push(format!("render-failed: {errors}"));
                 return (response, None);
             }
         };
@@ -1054,8 +1054,7 @@ impl MissionLifecycle {
                 "compensation source history already exists.",
             ));
         }
-        let rendered = render(&restored.bundle, mission_id)
-            .map_err(|errors| MissionError::Validation(errors.len(), errors))?;
+        let rendered = self.store.render_projection(&restored.bundle, mission_id, None)?;
         let projected = projected_rollback_fingerprint(
             &current_files,
             &restored,
@@ -1383,8 +1382,7 @@ fn projected_fingerprint(
             sha256(&serde_json::to_vec_pretty(&waypoint.part)?),
         );
     }
-    after.insert("generated/ROADMAP.md".into(), sha256(&rendered.roadmap));
-    for (name, bytes) in &rendered.parts {
+    for (name, bytes) in rendered.files() {
         after.insert(format!("generated/{name}"), sha256(bytes));
     }
     after.insert(
@@ -1433,8 +1431,7 @@ fn projected_rollback_fingerprint(
             sha256(lifecycle.render_typed(source).as_bytes()),
         );
     }
-    after.insert("generated/ROADMAP.md".into(), sha256(&rendered.roadmap));
-    for (name, bytes) in &rendered.parts {
+    for (name, bytes) in rendered.files() {
         after.insert(format!("generated/{name}"), sha256(bytes));
     }
     Ok(after)

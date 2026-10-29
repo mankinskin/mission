@@ -334,8 +334,7 @@ impl MissionLifecycle {
                 .validate_child_missions(draft.mission_id, &next.bundle)
                 .map_err(|errors| MissionError::Validation(errors.len(), errors))?;
             Some(
-                render(&next.bundle, draft.mission_id)
-                    .map_err(|errors| MissionError::Validation(errors.len(), errors))?,
+                self.store.render_projection(&next.bundle, draft.mission_id, None)?,
             )
         } else {
             None
@@ -591,8 +590,7 @@ impl MissionStore {
             }
             if let Some(rendered) = rendered {
                 fs::create_dir(stage.join("generated"))?;
-                fs::write(stage.join("generated/ROADMAP.md"), &rendered.roadmap)?;
-                for (name, bytes) in &rendered.parts {
+                for (name, bytes) in rendered.files() {
                     fs::write(stage.join("generated").join(name), bytes)?;
                 }
                 if let Some(source) = source {

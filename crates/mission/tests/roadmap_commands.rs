@@ -358,7 +358,7 @@ fn check_generated_detects_document_drift() {
     let result = execute_mcp(workspace.path(), Operation::CheckGenerated { mission_id });
 
     assert_eq!(result.status, "drift");
-    assert_eq!(result.diagnostics[0].code, "generated-drift");
+    assert_eq!(result.diagnostics[0].code, "generated-changed");
     assert_eq!(fs::read_to_string(roadmap).unwrap(), "manual edit");
 }
 

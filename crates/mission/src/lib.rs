@@ -952,28 +952,17 @@ fn inspect_mission(
         let rendered = store.render_with_status_snapshot(mission_id, &states, &snapshot_id)?;
         let mission_state = store.derived_state_with_status_snapshot(mission_id, &states)?;
         let generated = generated_directory(workspace_root, mission_id);
-        let mut expected = rendered.parts;
-        expected.insert("ROADMAP.md".into(), rendered.roadmap);
-        let mut diagnostics = Vec::new();
-        for (name, bytes) in &expected {
-            let path = generated.join(name);
-            match fs::read(&path) {
-                Ok(actual) if actual == *bytes => {}
-                Ok(_) => diagnostics.push(drift(&path)),
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    diagnostics.push(drift(&path));
-                }
-                Err(error) => return Err(MissionError::Io(error)),
-            }
-        }
-        if generated.is_dir() {
-            for entry in fs::read_dir(&generated)? {
-                let entry = entry?;
-                if !expected.contains_key(&entry.file_name().to_string_lossy().to_string()) {
-                    diagnostics.push(drift(&entry.path()));
-                }
-            }
-        }
+        let diagnostics = rendered
+            .check_generated(&generated)?
+            .into_iter()
+            .map(|diagnostic| StatusDiagnostic {
+                code: diagnostic.code.into(),
+                source: diagnostic.source,
+                pointer: diagnostic.pointer,
+                waypoint_id: diagnostic.waypoint_id,
+                message: diagnostic.message,
+            })
+            .collect::<Vec<_>>();
         Ok((accepted, diagnostics, snapshot, mission_state))
     });
     match result {
@@ -1028,16 +1017,6 @@ fn generated_directory(workspace_root: &Path, mission_id: Uuid) -> PathBuf {
         .join("missions")
         .join(mission_id.to_string())
         .join("generated")
-}
-
-fn drift(path: &Path) -> StatusDiagnostic {
-    StatusDiagnostic {
-        code: "generated-drift".into(),
-        source: path.display().to_string(),
-        pointer: String::new(),
-        waypoint_id: None,
-        message: "Generated document differs from the accepted mission projection.".into(),
-    }
 }
 
 fn finish(
