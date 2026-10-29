@@ -200,6 +200,15 @@ pub enum Operation {
     CheckGenerated {
         mission_id: Uuid,
     },
+    GetOutputContract { mission_id: Uuid },
+    GetApprovalEvent { mission_id: Uuid, revision: u64 },
+    RecordApprovalEvent { mission_id: Uuid, json: String },
+    PublishWithInputs {
+        mission_id: Uuid,
+        manifest_path: PathBuf,
+        expected_current_revision: u64,
+        inputs: MissionOutputInputs,
+    },
     MigrateDossiers {
         dossier_path: Option<PathBuf>,
         dry_run: bool,
@@ -249,8 +258,17 @@ pub struct StatusSnapshot {
     pub typed_migration: Option<MigrationJournal>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub repair: Option<RepairResponse>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_record: Option<OutputRecord>,
     #[serde(default)]
     pub external_status_snapshot: BTreeMap<String, String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", content = "record", rename_all = "kebab-case")]
+pub enum OutputRecord {
+    Contract { contract: MissionOutputContract, binding: String },
+    ApprovalEvent(MissionApprovalEvent),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -333,6 +351,7 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
                     migration_report: None,
                     typed_migration: None,
                     repair: None,
+                    output_record: None,
                     external_status_snapshot: BTreeMap::new(),
                 },
                 Err(error) => failure(Some(mission_id), error),
@@ -480,6 +499,7 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
                         migration_report: None,
                         typed_migration: None,
                         repair: None,
+                        output_record: None,
                         external_status_snapshot,
                     }
                 }
@@ -497,6 +517,27 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
             expected_current_revision,
         ),
         Operation::CheckGenerated { mission_id } => check_generated(workspace_root, mission_id),
+        Operation::GetOutputContract { mission_id } => output_result(
+            mission_id,
+            (|| {
+                let store = MissionStore::open(workspace_root);
+                Ok(OutputRecord::Contract {
+                    contract: store.output_contract(mission_id)?,
+                    binding: store.output_contract_binding(mission_id)?,
+                })
+            })(),
+        ),
+        Operation::GetApprovalEvent { mission_id, revision } => output_result(
+            mission_id,
+            MissionStore::open(workspace_root).approval_event(mission_id, revision).map(OutputRecord::ApprovalEvent),
+        ),
+        Operation::RecordApprovalEvent { mission_id, json } => output_result(
+            mission_id,
+            MissionStore::open(workspace_root).record_approval_event_json(mission_id, json.as_bytes()).map(OutputRecord::ApprovalEvent),
+        ),
+        Operation::PublishWithInputs { mission_id, manifest_path, expected_current_revision, inputs } => {
+            publish_bundle_with_inputs(workspace_root, mission_id, &manifest_path, expected_current_revision, Some(&inputs))
+        }
         Operation::MigrateDossiers {
             dossier_path,
             dry_run,
@@ -514,6 +555,7 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
                 migration_report: Some(migration_report),
                 typed_migration: None,
                 repair: None,
+                output_record: None,
                 external_status_snapshot: BTreeMap::new(),
             },
             Err(error) => failure(None, error),
@@ -550,6 +592,7 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
                     migration_report: None,
                     typed_migration: Some(journal),
                     repair: None,
+                    output_record: None,
                     external_status_snapshot: BTreeMap::new(),
                 },
                 Err(error) => failure(None, error),
@@ -577,6 +620,21 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
         Operation::RepairRollback { journal_id } => repair_result(
             MissionLifecycle::open(workspace_root).repair_rollback(workspace_root, journal_id),
         ),
+    }
+}
+
+fn output_result(mission_id: Uuid, result: Result<OutputRecord, MissionError>) -> StatusSnapshot {
+    match result {
+        Ok(record) => {
+            let revision = match &record {
+                OutputRecord::Contract { contract, .. } => contract.revision,
+                OutputRecord::ApprovalEvent(event) => event.reaction.revision,
+            };
+            let mut snapshot = success(Some(mission_id), Some(revision));
+            snapshot.output_record = Some(record);
+            snapshot
+        }
+        Err(error) => failure(Some(mission_id), error),
     }
 }
 
@@ -609,6 +667,7 @@ fn repair_result(result: Result<RepairResponse, MissionError>) -> StatusSnapshot
             migration_report: None,
             typed_migration: None,
             repair: Some(repair),
+            output_record: None,
             external_status_snapshot: BTreeMap::new(),
         },
         Err(error) => failure(None, error),
@@ -640,6 +699,7 @@ fn typed_result(result: Result<TypedDraft, MissionError>) -> StatusSnapshot {
             migration_report: None,
             typed_migration: None,
             repair: None,
+            output_record: None,
             external_status_snapshot: BTreeMap::new(),
         },
         Err(error) => failure(None, error),
@@ -674,6 +734,7 @@ fn import_bundle(
             migration_report: None,
             typed_migration: None,
             repair: None,
+            output_record: None,
             external_status_snapshot,
         },
         Err(error) => failure(Some(mission_id), error),
@@ -686,17 +747,27 @@ fn publish_bundle(
     manifest_path: &Path,
     expected_current_revision: u64,
 ) -> StatusSnapshot {
+    publish_bundle_with_inputs(workspace_root, mission_id, manifest_path, expected_current_revision, None)
+}
+
+fn publish_bundle_with_inputs(
+    workspace_root: &Path,
+    mission_id: Uuid,
+    manifest_path: &Path,
+    expected_current_revision: u64,
+    inputs: Option<&MissionOutputInputs>,
+) -> StatusSnapshot {
     let store = MissionStore::open(workspace_root);
     let result = collect_bundle(manifest_path).and_then(|bundle| {
         let snapshot = ticket_snapshot(workspace_root, &store, mission_id, &bundle)?;
         let states = snapshot_states(&snapshot)?;
         let snapshot_id = snapshot_id(&snapshot)?;
-        let accepted = store.publish_with_status_snapshot(
+        let accepted = store.publish_with_inputs(
             mission_id,
             bundle,
             expected_current_revision,
-            &states,
-            &snapshot_id,
+            inputs.unwrap_or(&MissionOutputInputs::default()),
+            Some((&states, &snapshot_id)),
         )?;
         let mission_state = store.derived_state_with_status_snapshot(mission_id, &states)?;
         Ok((accepted, snapshot, mission_state))
@@ -715,6 +786,7 @@ fn publish_bundle(
             migration_report: None,
             typed_migration: None,
             repair: None,
+            output_record: None,
             external_status_snapshot,
         },
         Err(error) => failure(Some(mission_id), error),
@@ -932,7 +1004,7 @@ fn inspect_mission(
         let rendered = store.render_with_status_snapshot(mission_id, &states, &snapshot_id)?;
         let mission_state = store.derived_state_with_status_snapshot(mission_id, &states)?;
         let generated = generated_directory(workspace_root, mission_id);
-        let diagnostics = rendered
+        let mut diagnostics = rendered
             .check_generated(&generated)?
             .into_iter()
             .map(|diagnostic| StatusDiagnostic {
@@ -943,6 +1015,15 @@ fn inspect_mission(
                 message: diagnostic.message,
             })
             .collect::<Vec<_>>();
+        if let Err(error) = store.verify_output_history(mission_id) {
+            diagnostics.push(StatusDiagnostic {
+                code: "mission-output-history-invalid".into(),
+                source: generated.parent().unwrap_or(&generated).display().to_string(),
+                pointer: String::new(),
+                waypoint_id: None,
+                message: error.to_string(),
+            });
+        }
         Ok((accepted, diagnostics, snapshot, mission_state))
     });
     match result {
@@ -962,6 +1043,7 @@ fn inspect_mission(
                 migration_report: None,
                 typed_migration: None,
                 repair: None,
+                output_record: None,
                 external_status_snapshot,
             }
         }
@@ -984,6 +1066,7 @@ fn inspect_mission(
             migration_report: None,
             typed_migration: None,
             repair: None,
+            output_record: None,
             external_status_snapshot,
         },
         Err(error) => failure(Some(mission_id), error),
@@ -1030,6 +1113,7 @@ fn success(mission_id: Option<Uuid>, revision: Option<u64>) -> StatusSnapshot {
         migration_report: None,
         typed_migration: None,
         repair: None,
+        output_record: None,
         external_status_snapshot: BTreeMap::new(),
     }
 }
@@ -1077,6 +1161,7 @@ fn failure(mission_id: Option<Uuid>, error: MissionError) -> StatusSnapshot {
         migration_report: None,
         typed_migration: None,
         repair: None,
+        output_record: None,
         external_status_snapshot: BTreeMap::new(),
     }
 }

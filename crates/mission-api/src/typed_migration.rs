@@ -178,22 +178,38 @@ impl MissionLifecycle {
         Self::apply_migration(journal)
     }
 
-    /// Restores only records this journal applied and refuses drifted records.
+    /// Compensates only records this journal applied, preserving every revision.
     pub fn rollback_migration(journal: &mut MigrationJournal) -> Result<(), MissionError> {
         for record in &mut journal.records {
             if record.state != MigrationState::Applied {
                 continue;
             }
             let store = MissionStore::open(&record.workspace);
+            store.prepare_write()?;
+            let _lock = typed_source::TypedLock::acquire(&store.root, record.mission_id)?;
             let current = store.get(record.mission_id)?;
             if current.bundle.manifest.revision != record.source_revision + 1 {
                 record.diagnostic = Some("migration target drifted; refusing rollback".into());
                 continue;
             }
-            let directory = store.root.join(record.mission_id.to_string());
             let snapshot = record.snapshot.join(journal.id.to_string());
-            fs::remove_dir_all(&directory)?;
-            fs::rename(snapshot, directory)?;
+            let mut restored: AcceptedMission =
+                serde_json::from_slice(&fs::read(snapshot.join("accepted.json"))?)?;
+            if restored.mission_id != record.mission_id
+                || restored.bundle.manifest.revision != record.source_revision
+                || snapshot.join("source.json").exists()
+            {
+                return Err(migration_error("snapshot", 0, "Original native snapshot identity mismatch."));
+            }
+            restored.bundle.manifest.revision = current.bundle.manifest.revision
+                .checked_add(1).ok_or_else(|| migration_error("revision", 0, "revision exhausted"))?;
+            restored.label_mapping.revision = restored.bundle.manifest.revision;
+            let rendered = if snapshot.join("generated").is_dir() {
+                Some(store.render_projection(&restored.bundle, record.mission_id, None)?)
+            } else {
+                None
+            };
+            store.write_authority_for_repair(&restored, None, rendered.as_ref(), true)?;
             record.state = MigrationState::RolledBack;
         }
         persist(journal)?;

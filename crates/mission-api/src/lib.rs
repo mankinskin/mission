@@ -15,6 +15,8 @@ use thiserror::Error;
 use uuid::Uuid;
 
 mod operator_results;
+mod output_history;
+pub use output_history::*;
 mod artifact_contract;
 mod repair;
 mod review_entry;
@@ -33,7 +35,7 @@ pub use typed_source::*;
 pub use schema_renderers::*;
 
 pub const SCHEMA_VERSION: u32 = 1;
-pub const RENDERER_VERSION: &str = "mission-api/4";
+pub const RENDERER_VERSION: &str = "mission-api/5";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -773,7 +775,7 @@ fn render_with_consumer(
             rendered.roadmap.extend_from_slice(
                 format!("\n## Linked entities: `{id}`\n\n{content}").as_bytes(),
             );
-            let filename = format!("{:02}-{id}.md", index + 1);
+            let filename = format!("waypoints/{:02}-{id}.md", index + 1);
             if let Some(part) = rendered.parts.get_mut(&filename) {
                 part.extend_from_slice(format!("\n## Linked entities\n\n{content}").as_bytes());
             }
@@ -829,7 +831,7 @@ fn render_materialized_with_consumer(
             .find(|waypoint| waypoint.waypoint_id == *id)
             .expect("validated order contains waypoint");
         let label = format!("W{}", index + 1);
-        let filename = format!("{:02}-{}.md", index + 1, waypoint.waypoint_id);
+        let filename = format!("waypoints/{:02}-{}.md", index + 1, waypoint.waypoint_id);
         let dependencies = if waypoint.depends_on.is_empty() {
             "None".to_string()
         } else {
@@ -936,6 +938,17 @@ fn render_materialized_with_consumer(
         );
         parts.insert(filename, part.into_bytes());
     }
+    let mut map = String::from("# Current waypoint Parts\n\n");
+    for name in parts.keys() {
+        let name = name.strip_prefix("waypoints/").unwrap_or(name);
+        map.push_str(&format!("- [{name}]({name})\n"));
+    }
+    parts.insert("waypoints/README.md".into(), map.into_bytes());
+    // A pure preview cannot know which archives actually exist.
+    parts.insert(
+        "HISTORY.md".into(),
+        b"# Mission output history\n\nPreview only: archive availability is unknown. Store-backed publication and verification use preserved states; this preview does not establish historical availability.\n".to_vec(),
+    );
     RenderedRoadmap {
         readme: review_entry::render(
             bundle,
@@ -1300,7 +1313,7 @@ impl MissionStore {
             .join("missions")
             .join(mission_id.to_string())
             .join("generated");
-        let rendered = render_with_consumer(
+        let mut rendered = render_with_consumer(
             bundle,
             mission_id,
             snapshot_id,
@@ -1308,6 +1321,10 @@ impl MissionStore {
             Some(&generated_directory),
         )
             .map_err(|errors| MissionError::Validation(errors.len(), errors))?;
+        rendered.parts.insert(
+            "HISTORY.md".into(),
+            output_history::history(Some(&self.root.join(mission_id.to_string())), bundle.manifest.revision)?,
+        );
         Ok(rendered)
     }
 
@@ -1420,7 +1437,19 @@ impl MissionStore {
         bundle: MissionBundle,
         expected_current_revision: u64,
     ) -> Result<AcceptedMission, MissionError> {
-        self.publish_inner(mission_id, bundle, expected_current_revision, None)
+        self.publish_inner(mission_id, bundle, expected_current_revision, None, None)
+    }
+
+    /// Publish request material and generated output in the same whole-state transaction.
+    pub fn publish_with_inputs(
+        &self,
+        mission_id: Uuid,
+        bundle: MissionBundle,
+        expected_current_revision: u64,
+        inputs: &MissionOutputInputs,
+        status_snapshot: Option<(&BTreeMap<String, WaypointState>, &str)>,
+    ) -> Result<AcceptedMission, MissionError> {
+        self.publish_inner(mission_id, bundle, expected_current_revision, status_snapshot, Some(inputs))
     }
 
     pub fn publish_with_status_snapshot(
@@ -1436,6 +1465,7 @@ impl MissionStore {
             bundle,
             expected_current_revision,
             Some((ticket_states, snapshot_id)),
+            None,
         )
     }
 
@@ -1445,6 +1475,7 @@ impl MissionStore {
         bundle: MissionBundle,
         expected_current_revision: u64,
         status_snapshot: Option<(&BTreeMap<String, WaypointState>, &str)>,
+        inputs: Option<&MissionOutputInputs>,
     ) -> Result<AcceptedMission, MissionError> {
         validate_bundle(&bundle)
             .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
@@ -1499,7 +1530,7 @@ impl MissionStore {
             bundle,
         };
         let source = self.source_for_legacy(&accepted)?;
-        self.write_authority(&accepted, source.as_ref(), Some(&rendered))?;
+        self.write_authority_with_inputs(&accepted, source.as_ref(), Some(&rendered), inputs)?;
         self.get(mission_id)
     }
 

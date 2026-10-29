@@ -526,7 +526,17 @@ impl MissionStore {
         source: Option<&TypedDraft>,
         rendered: Option<&RenderedRoadmap>,
     ) -> Result<(), MissionError> {
-        self.write_authority_inner(accepted, source, rendered, false)
+        self.write_authority_inner(accepted, source, rendered, false, None)
+    }
+
+    pub(super) fn write_authority_with_inputs(
+        &self,
+        accepted: &AcceptedMission,
+        source: Option<&TypedDraft>,
+        rendered: Option<&RenderedRoadmap>,
+        inputs: Option<&MissionOutputInputs>,
+    ) -> Result<(), MissionError> {
+        self.write_authority_inner(accepted, source, rendered, false, inputs)
     }
 
     pub(super) fn write_authority_for_repair(
@@ -536,7 +546,7 @@ impl MissionStore {
         rendered: Option<&RenderedRoadmap>,
         replace_source: bool,
     ) -> Result<(), MissionError> {
-        self.write_authority_inner(accepted, source, rendered, replace_source)
+        self.write_authority_inner(accepted, source, rendered, replace_source, None)
     }
 
     fn write_authority_inner(
@@ -545,6 +555,7 @@ impl MissionStore {
         source: Option<&TypedDraft>,
         rendered: Option<&RenderedRoadmap>,
         replace_source: bool,
+        inputs: Option<&MissionOutputInputs>,
     ) -> Result<(), MissionError> {
         let id = accepted.mission_id;
         self.validate_requirement_references(&accepted.bundle)?;
@@ -558,6 +569,9 @@ impl MissionStore {
             .validate()
             .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
         let directory = self.root.join(id.to_string());
+        if directory.join("history/events").exists() {
+            self.validate_preserved_events(id)?;
+        }
         let stage = self.root.join(format!(".{id}.typed.tmp"));
         let backup = self.root.join(format!(".{id}.typed.backup"));
         if stage.exists() || backup.exists() {
@@ -618,7 +632,11 @@ impl MissionStore {
             if let Some(rendered) = rendered {
                 fs::create_dir(stage.join("generated"))?;
                 for (name, bytes) in rendered.files() {
-                    fs::write(stage.join("generated").join(name), bytes)?;
+                    let path = stage.join("generated").join(name);
+                    if let Some(parent) = path.parent() {
+                        fs::create_dir_all(parent)?;
+                    }
+                    fs::write(path, bytes)?;
                 }
                 if let Some(source) = source {
                     let lifecycle = MissionLifecycle {
@@ -639,6 +657,11 @@ impl MissionStore {
                 &serde_json::to_vec_pretty(&provenance)?,
             )?;
             super::artifact_contract::validate_file_outputs(&provenance, &stage, false)?;
+            fs::write(stage.join("artifact-provenance.json"), serde_json::to_vec_pretty(&provenance)?)?;
+            if let Some(inputs) = inputs {
+                super::output_history::write_inputs(&stage, inputs)?;
+            }
+            super::output_history::capture(&stage, accepted)?;
             Ok::<_, MissionError>(())
         })();
         if let Err(error) = result {
@@ -776,7 +799,7 @@ impl Drop for TypedLock {
     }
 }
 
-fn ensure_safe_path(root: &Path, path: &Path) -> Result<(), MissionError> {
+pub(super) fn ensure_safe_path(root: &Path, path: &Path) -> Result<(), MissionError> {
     let relative = path.strip_prefix(root).map_err(|_| {
         typed_error(
             "unsafe-part-path",

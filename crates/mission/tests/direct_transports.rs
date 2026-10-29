@@ -1,6 +1,85 @@
 #[path = "support/direct_transports.rs"]
 mod support;
 use support::*;
+
+#[test]
+fn output_contract_and_separate_reaction_round_trip_between_cli_and_mcp() {
+    let workspace = TempDir::new().unwrap();
+    let created = cli(workspace.path(), &[
+        "create-mission".into(), "History transport".into(), "Preserve states".into(),
+        json!([waypoint()]).to_string(),
+    ]);
+    assert_ok(&created);
+    let id = created["mission_id"].as_str().unwrap().to_owned();
+    let created = cli(workspace.path(), &[
+        "publish-mission".into(), id.clone(), revision(&created).to_string(),
+    ]);
+    assert_ok(&created);
+    let contract = cli(workspace.path(), &["get-output-contract".into(), id.clone()]);
+    assert_ok(&contract);
+    assert_eq!(contract["output_record"]["kind"], "contract");
+    let request = json!({
+        "revision": revision(&created),
+        "decision": "changes-requested",
+        "signature": contract["output_record"]["record"]["binding"],
+        "actor": "synthetic requester",
+        "actor_source": "transport fixture",
+        "metadata": {"channel": "review"}
+    });
+    let mut mcp = Mcp::start(workspace.path());
+    mcp.initialize();
+    let event = mcp.call(2, "mission_operation", json!({
+        "operation": "record-approval-event", "mission_id": id,
+        "approval_event_json": request.to_string()
+    }));
+    assert_ok(&event);
+    let read = cli(workspace.path(), &["get-approval-event".into(), id.clone(), revision(&created).to_string()]);
+    assert_ok(&read);
+    assert_eq!(event["output_record"], read["output_record"]);
+    assert_eq!(read["output_record"]["record"]["decision"], "changes-requested");
+    let replay = mcp.call(3, "mission_operation", json!({
+        "operation": "record-approval-event", "mission_id": id,
+        "approval_event_json": request.to_string()
+    }));
+    assert_ne!(replay["status"], "ok");
+    let checked = cli(workspace.path(), &["check-generated".into(), id.clone()]);
+    assert_ok(&checked);
+    assert_eq!(revision(&checked), revision(&created));
+    let mcp_contract = mcp.call(4, "mission_operation", json!({
+        "operation": "get-output-contract", "mission_id": id
+    }));
+    assert_eq!(mcp_contract["output_record"], contract["output_record"]);
+    let store = mission::MissionStore::open(workspace.path());
+    let uuid = uuid::Uuid::parse_str(&id).unwrap();
+    let mut bundle = store.get(uuid).unwrap().bundle;
+    bundle.manifest.revision += 1;
+    bundle.manifest.waypoint_files = vec!["fragment.json".into()];
+    let manifest = workspace.path().join("bundle.json");
+    std::fs::write(workspace.path().join("fragment.json"), serde_json::to_vec(&bundle.waypoints[0]).unwrap()).unwrap();
+    std::fs::write(&manifest, serde_json::to_vec(&bundle.manifest).unwrap()).unwrap();
+    let published = cli(workspace.path(), &[
+        "publish-with-inputs".into(), id.clone(), manifest.display().to_string(),
+        revision(&created).to_string(),
+        json!({"merged_request": "Merged request", "continuations": {"one.md": "First"}}).to_string(),
+    ]);
+    assert_ok(&published);
+    bundle.manifest.revision += 1;
+    std::fs::write(&manifest, serde_json::to_vec(&bundle.manifest).unwrap()).unwrap();
+    let published = mcp.call(5, "mission_operation", json!({
+        "operation": "publish-with-inputs", "mission_id": id,
+        "manifest_path": manifest,
+        "expected_current_revision": revision(&published),
+        "output_inputs": {"merged_request": "Updated merged request", "continuations": {"two.md": "Second"}}
+    }));
+    assert_ok(&published);
+    store.verify_output_history(uuid).unwrap();
+    let directory = workspace.path().join(".workflow-tools/mission/missions").join(&id);
+    assert_eq!(std::fs::read(directory.join("inputs/one.md")).unwrap(), b"First");
+    assert_eq!(std::fs::read(directory.join("inputs/two.md")).unwrap(), b"Second");
+    assert_eq!(std::fs::read(directory.join("REQUEST.md")).unwrap(), b"Updated merged request");
+    assert!(store.approval_event(uuid, revision(&published)).is_err());
+}
+
 #[test]
 fn cli_create_mcp_edit_and_cli_publish_use_real_transports() {
     let workspace = TempDir::new().expect("workspace");

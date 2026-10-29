@@ -82,6 +82,12 @@ struct MissionOperationInput {
     proposal_id: Option<String>,
     #[serde(default)]
     journal_id: Option<String>,
+    #[serde(default)]
+    output_inputs: Option<mission::MissionOutputInputs>,
+    #[serde(default)]
+    approval_event_json: Option<String>,
+    #[serde(default)]
+    revision: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema)]
@@ -148,7 +154,7 @@ impl MissionServer {
 impl MissionServer {
     #[tool(
         name = "mission_operation",
-        description = "Run typed create_draft, save_draft, publish_draft, get_mission_source, or render_mission with API-owned IDs and managed source references; or run legacy create_mission, edit_mission_objective, add_waypoint, edit_waypoint, order_waypoints, record_progress, record_validation_result, validate_mission, or publish_mission directly by stored ID. Draft input is inline typed source, never a client path or manifest. Existing get, validate-preview, import, render-preview, publish, check-generated and migrate-dossiers remain supported. Journaled repair adds repair_preview/repair_apply with repair_request, plus repair_journal/repair_resume/repair_rollback with journal_id. Return a structured Mission status snapshot."
+        description = "Run typed create_draft, save_draft, publish_draft, get_mission_source, or render_mission with API-owned IDs and managed source references; or run legacy create_mission, edit_mission_objective, add_waypoint, edit_waypoint, order_waypoints, record_progress, record_validation_result, validate_mission, or publish_mission directly by stored ID. Draft input is inline typed source, never a client path or manifest. Existing get, validate-preview, import, render-preview, publish, check-generated and migrate-dossiers remain supported. Journaled repair adds repair_preview/repair_apply with repair_request, plus repair_journal/repair_resume/repair_rollback with journal_id. publish-with-inputs adds output_inputs (merged_request and create-new continuations). get-output-contract validates the full BOM; record-approval-event consumes strict approval_event_json (approve or changes-requested, current revision, signature digest link, actor and actor_source); get-approval-event reads by revision. Reactions are not cryptographic authentication, Mission mutation, execution authorization or product acceptance. Return a structured Mission status snapshot."
     )]
     async fn operation(
         &self,
@@ -333,6 +339,23 @@ impl MissionServer {
                 },
                 "check-generated" => Operation::CheckGenerated {
                     mission_id: required_id()?,
+                },
+                "get-output-contract" => Operation::GetOutputContract { mission_id: required_id()? },
+                "get-approval-event" => Operation::GetApprovalEvent {
+                    mission_id: required_id()?,
+                    revision: input.revision.ok_or_else(|| McpError::invalid_params("revision is required", None))?,
+                },
+                "record-approval-event" => Operation::RecordApprovalEvent {
+                    mission_id: required_id()?,
+                    json: required(&input.approval_event_json, "approval_event_json")?,
+                },
+                "publish-with-inputs" => Operation::PublishWithInputs {
+                    mission_id: required_id()?,
+                    manifest_path: required_manifest()?,
+                    expected_current_revision: input.expected_current_revision.ok_or_else(
+                        || McpError::invalid_params("expected_current_revision is required", None),
+                    )?,
+                    inputs: input.output_inputs.clone().ok_or_else(|| McpError::invalid_params("output_inputs is required", None))?,
                 },
                 "migrate-dossiers" => Operation::MigrateDossiers {
                     dossier_path: input.dossier_path.clone(),

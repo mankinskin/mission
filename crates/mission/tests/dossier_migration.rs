@@ -143,6 +143,9 @@ fn migration_is_idempotent() {
     );
     let source_before = fs::read(dossier.join("ROADMAP.md")).unwrap();
     let part_before = fs::read(dossier.join("01-first.md")).unwrap();
+    fs::create_dir(dossier.join("inputs")).unwrap();
+    fs::write(dossier.join("REQUEST.md"), "Merged request").unwrap();
+    fs::write(dossier.join("inputs/one.md"), "Independent input").unwrap();
 
     let dry_run = execute_cli(
         workspace.path(),
@@ -167,6 +170,10 @@ fn migration_is_idempotent() {
     let report = result.migration_report.unwrap();
     assert_eq!(report.migrated, 1, "{:?}", report.records);
     let mission_id = report.records[0].mission_id.unwrap();
+    let directory = workspace.path().join(".workflow-tools/mission/missions").join(mission_id.to_string());
+    assert_eq!(fs::read(directory.join("REQUEST.md")).unwrap(), b"Merged request");
+    assert_eq!(fs::read(directory.join("inputs/one.md")).unwrap(), b"Independent input");
+    MissionStore::open(workspace.path()).verify_output_history(mission_id).unwrap();
     let accepted = MissionStore::open(workspace.path())
         .get(mission_id)
         .unwrap();

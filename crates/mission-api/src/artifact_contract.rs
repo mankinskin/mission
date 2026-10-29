@@ -769,7 +769,9 @@ fn known_file_contract(
     }
     if path
         .strip_prefix("generated/")
-        .is_some_and(|name| matches!(name, "README.md" | "ROADMAP.md") || valid_part_filename(name))
+        .is_some_and(|name| matches!(name, "README.md" | "ROADMAP.md" | "HISTORY.md" | "waypoints/README.md")
+            || name.strip_prefix("waypoints/").is_some_and(valid_part_filename)
+            || valid_part_filename(name))
     {
         return Some((
             MissionFileRole::Generated,

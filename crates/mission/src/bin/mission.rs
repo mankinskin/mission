@@ -118,6 +118,18 @@ enum CommandOperation {
     CheckGenerated {
         mission_id: Uuid,
     },
+    /// Validate and read the complete pre-reaction output inventory.
+    GetOutputContract { mission_id: Uuid },
+    GetApprovalEvent { mission_id: Uuid, revision: u64 },
+    /// Record one reaction JSON object; signature is a digest link, not authentication.
+    RecordApprovalEvent { mission_id: Uuid, json: String },
+    /// Publish with a JSON object containing merged_request and independent continuations.
+    PublishWithInputs {
+        mission_id: Uuid,
+        manifest: std::path::PathBuf,
+        expected_current_revision: u64,
+        inputs: String,
+    },
     MigrateDossiers {
         #[arg(long)]
         dossier: Option<std::path::PathBuf>,
@@ -377,6 +389,16 @@ fn main() -> Result<ExitCode, HarnessError> {
             CommandOperation::CheckGenerated { mission_id } => {
                 Operation::CheckGenerated { mission_id }
             }
+            CommandOperation::GetOutputContract { mission_id } => Operation::GetOutputContract { mission_id },
+            CommandOperation::GetApprovalEvent { mission_id, revision } => Operation::GetApprovalEvent { mission_id, revision },
+            CommandOperation::RecordApprovalEvent { mission_id, json } => Operation::RecordApprovalEvent { mission_id, json },
+            CommandOperation::PublishWithInputs { mission_id, manifest, expected_current_revision, inputs } => Operation::PublishWithInputs {
+                mission_id,
+                manifest_path: manifest,
+                expected_current_revision,
+                inputs: serde_json::from_str(&inputs)
+                    .map_err(|error| HarnessError::Arguments(error.to_string()))?,
+            },
             CommandOperation::MigrateDossiers { dossier, dry_run } => Operation::MigrateDossiers {
                 dossier_path: dossier,
                 dry_run,

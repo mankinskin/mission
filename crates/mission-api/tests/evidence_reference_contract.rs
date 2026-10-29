@@ -50,9 +50,9 @@ fn publication_classifies_parts_beyond_two_digit_labels() {
     let record = provenance(workspace.path(), published.mission_id, published.revision);
     assert!(record.validate().is_ok());
     for name in [
-        "generated/99-step-99.md",
-        "generated/100-step-100.md",
-        "generated/101-step-101.md",
+        "generated/waypoints/99-step-99.md",
+        "generated/waypoints/100-step-100.md",
+        "generated/waypoints/101-step-101.md",
     ] {
         assert!(
             record

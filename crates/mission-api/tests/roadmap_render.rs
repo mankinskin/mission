@@ -56,14 +56,14 @@ fn render_is_byte_deterministic() {
 #[test]
 fn render_escapes_pipes_and_resolves_links() {
     let output = String::from_utf8(render(&bundle(), Uuid::nil()).unwrap().roadmap).unwrap();
-    assert!(output.contains("A \\| B") && output.contains("(01-first.md)"));
+    assert!(output.contains("A \\| B") && output.contains("(waypoints/01-first.md)"));
 }
 #[test]
 fn render_parts_follow_execution_order() {
     let output = render(&bundle(), Uuid::nil()).unwrap();
-    assert_eq!(output.parts.keys().next().unwrap(), "01-first.md");
+    assert_eq!(output.parts.keys().find(|name| name.starts_with("waypoints/")).unwrap(), "waypoints/01-first.md");
     assert!(
-        String::from_utf8(output.parts["01-first.md"].clone())
+        String::from_utf8(output.parts["waypoints/01-first.md"].clone())
             .unwrap()
             .contains("Next: [02-second.md](02-second.md)")
     );
@@ -75,7 +75,7 @@ fn render_contains_waypoint_contract_and_validation_details() {
     value.waypoints[0].child_mission_ref = Some(format!("ce://workspace/mission/{}", Uuid::nil()));
     let output = render(&value, Uuid::nil()).unwrap();
     let roadmap = String::from_utf8(output.roadmap).unwrap();
-    let first_part = String::from_utf8(output.parts["01-first.md"].clone()).unwrap();
+    let first_part = String::from_utf8(output.parts["waypoints/01-first.md"].clone()).unwrap();
     assert!(roadmap.contains("execution-side-effect"));
     assert!(roadmap.contains("go \\| now"));
     assert!(first_part.contains("## Waypoint Details"));

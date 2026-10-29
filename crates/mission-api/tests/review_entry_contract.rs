@@ -107,12 +107,17 @@ fn published_and_verified_inventory_match_with_empty_status_and_readme() {
     for (name, bytes) in rendered.files() {
         assert_eq!(fs::read(generated.join(name)).unwrap(), bytes);
     }
-    let actual = fs::read_dir(&generated).unwrap().count();
+    let actual = fs::read_dir(&generated).unwrap().map(|entry| {
+        let entry = entry.unwrap();
+        if entry.file_type().unwrap().is_dir() {
+            fs::read_dir(entry.path()).unwrap().count()
+        } else { 1 }
+    }).sum::<usize>();
     assert_eq!(actual, rendered.files().count());
     assert!(rendered.check_generated(&generated).unwrap().is_empty());
     let readme = String::from_utf8(rendered.readme).unwrap();
     assert!(readme.contains("External status: `{}`"));
-    assert!(readme.contains("[W1](01-first.md)"));
+    assert!(readme.contains("[W1](waypoints/01-first.md)"));
     assert!(readme.contains("(../../../../../docs/evidence.md)"));
     assert!(readme.contains("(ce://default/spec/example)"));
     assert!(readme.contains("historical review acceptance are unknown"));
@@ -149,7 +154,7 @@ fn rendering_invalidated_artifacts_is_explicitly_unavailable_in_every_projection
     let readme = String::from_utf8_lossy(&rendered.readme);
     assert!(readme.contains("ce://default/unknown/id: unavailable"));
     assert!(!readme.contains("](ce://default/unknown/id)"));
-    let part = String::from_utf8_lossy(&rendered.parts["01-first.md"]);
+    let part = String::from_utf8_lossy(&rendered.parts["waypoints/01-first.md"]);
     assert!(part.contains("unsupported://reference: unavailable"));
 }
 
@@ -231,7 +236,7 @@ fn typed_publication_verifies_identically_and_detects_real_output_drift() {
         assert_eq!(fs::read(generated.join(name)).unwrap(), bytes);
     }
     assert!(rendered.check_generated(&generated).unwrap().is_empty());
-    fs::write(generated.join("01-typed.md"), "real drift").unwrap();
+    fs::write(generated.join("waypoints/01-typed.md"), "real drift").unwrap();
     assert_eq!(codes(&rendered, &generated), vec!["generated-changed"]);
 }
 
@@ -277,7 +282,7 @@ fn changed_missing_extra_and_dangling_are_distinct_and_read_only() {
     let accepted_path = generated.parent().unwrap().join("accepted.json");
     let accepted = fs::read(&accepted_path).unwrap();
     fs::write(generated.join("ROADMAP.md"), "changed").unwrap();
-    fs::remove_file(generated.join("01-first.md")).unwrap();
+    fs::remove_file(generated.join("waypoints/01-first.md")).unwrap();
     fs::write(generated.join("extra.md"), "extra").unwrap();
     fs::remove_file(workspace.path().join("docs/evidence.md")).unwrap();
     let result = codes(&rendered, &generated);
@@ -297,8 +302,8 @@ fn changed_missing_extra_and_dangling_are_distinct_and_read_only() {
 fn missing_readme_and_directory_instead_of_part_are_distinct() {
     let (_workspace, store, id, generated) = published();
     fs::remove_file(generated.join("README.md")).unwrap();
-    fs::remove_file(generated.join("01-first.md")).unwrap();
-    fs::create_dir(generated.join("01-first.md")).unwrap();
+    fs::remove_file(generated.join("waypoints/01-first.md")).unwrap();
+    fs::create_dir(generated.join("waypoints/01-first.md")).unwrap();
     let result = codes(&projection(&store, id), &generated);
     assert!(result.contains(&"generated-missing"));
     assert!(result.contains(&"generated-destination-invalid"));
@@ -312,7 +317,7 @@ fn broken_and_redirected_symlinks_are_not_valid_generated_files() {
     let outside = tempfile::tempdir().unwrap();
     fs::write(outside.path().join("roadmap.md"), "external").unwrap();
     fs::remove_file(generated.join("ROADMAP.md")).unwrap();
-    fs::remove_file(generated.join("01-first.md")).unwrap();
+    fs::remove_file(generated.join("waypoints/01-first.md")).unwrap();
     symlink(
         outside.path().join("roadmap.md"),
         generated.join("ROADMAP.md"),
@@ -320,7 +325,7 @@ fn broken_and_redirected_symlinks_are_not_valid_generated_files() {
     .unwrap();
     symlink(
         outside.path().join("missing.md"),
-        generated.join("01-first.md"),
+        generated.join("waypoints/01-first.md"),
     )
     .unwrap();
     let result = codes(&projection(&store, id), &generated);

@@ -1394,6 +1394,7 @@ fn projected_fingerprint(
         format!("history/provenance-revision-{revision}.json"),
         sha256(&serde_json::to_vec_pretty(&provenance)?),
     );
+    extend_output_state(&mut after, accepted, Some(source), rendered, lifecycle)?;
     Ok(after)
 }
 
@@ -1445,7 +1446,27 @@ fn projected_rollback_fingerprint(
         format!("history/provenance-revision-{revision}.json"),
         sha256(&serde_json::to_vec_pretty(&provenance)?),
     );
+    extend_output_state(&mut after, accepted, source, rendered, lifecycle)?;
     Ok(after)
+}
+
+fn extend_output_state(
+    after: &mut BTreeMap<String, String>,
+    accepted: &AcceptedMission,
+    source: Option<&TypedDraft>,
+    rendered: &RenderedRoadmap,
+    lifecycle: &MissionLifecycle,
+) -> Result<(), MissionError> {
+    let directory = lifecycle.store.root.join(accepted.mission_id.to_string());
+    let projected = super::output_history::projected_state(
+        &directory, accepted, source, rendered, source.map(|source| lifecycle.render_typed(source)),
+    )?;
+    for (name, bytes) in projected {
+        let digest = sha256(&bytes);
+        after.insert(name.clone(), digest.clone());
+        after.insert(format!("history/states/revision-{}/{name}", accepted.bundle.manifest.revision), digest);
+    }
+    Ok(())
 }
 
 fn copy_tree(source: &Path, destination: &Path) -> Result<(), MissionError> {

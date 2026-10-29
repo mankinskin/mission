@@ -57,10 +57,10 @@ pub(super) fn render(
         label(&bundle.manifest.objective),
     );
     for (index, id) in bundle.manifest.execution_order.iter().enumerate() {
-        let name = format!("{:02}-{id}.md", index + 1);
+        let name = format!("waypoints/{:02}-{id}.md", index + 1);
         output.push_str(&format!("- [W{}]({})\n", index + 1, encode_path(&name)));
     }
-    output.push_str("\n## Declared evidence\n\n");
+    output.push_str("\n- [Waypoint map](waypoints/README.md)\n- [Whole-state history](HISTORY.md)\n- [Pre-approval contract](../output-contract.json)\n\n## Declared evidence\n\n");
     let references: BTreeSet<&str> = bundle
         .manifest
         .artifacts
@@ -146,6 +146,13 @@ pub(super) fn check_generated(
     let mut published_readme = None;
     for (name, bytes) in &expected {
         let path = generated.join(name);
+        if let Some(parent) = path.parent()
+            && parent != generated
+            && fs::symlink_metadata(parent).is_ok_and(|metadata| metadata.file_type().is_symlink())
+        {
+            diagnostics.push(issue("generated-destination-invalid", parent, "Generated subdirectories must not be symbolic links."));
+            continue;
+        }
         match fs::symlink_metadata(&path) {
             Ok(metadata) if metadata.file_type().is_symlink() => {
                 let code = match path.canonicalize() {
@@ -187,23 +194,7 @@ pub(super) fn check_generated(
             Err(error) => return Err(error.into()),
         }
     }
-    match fs::read_dir(generated) {
-        Ok(entries) => {
-            let mut entries = entries.collect::<Result<Vec<_>, _>>()?;
-            entries.sort_by_key(|entry| entry.file_name());
-            for entry in entries {
-                if !expected.contains_key(entry.file_name().to_string_lossy().as_ref()) {
-                    diagnostics.push(issue(
-                        "generated-extra",
-                        &entry.path(),
-                        "File is not in the accepted generated inventory.",
-                    ));
-                }
-            }
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error.into()),
-    }
+    check_extra_files(generated, generated, &expected, &mut diagnostics)?;
     // Filesystem changes can invalidate links still present in the published entry.
     for target in String::from_utf8_lossy(published_readme.as_deref().unwrap_or(&rendered.readme))
         .split("](")
@@ -230,6 +221,38 @@ pub(super) fn check_generated(
         }
     }
     Ok(diagnostics)
+}
+
+fn check_extra_files(
+    generated: &Path,
+    directory: &Path,
+    expected: &BTreeMap<&str, &[u8]>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Result<(), MissionError> {
+    match fs::read_dir(directory) {
+        Ok(entries) => {
+            let mut entries = entries.collect::<Result<Vec<_>, _>>()?;
+            entries.sort_by_key(|entry| entry.file_name());
+            for entry in entries {
+                let path = entry.path();
+                let name = path.strip_prefix(generated)
+                    .map_err(|error| std::io::Error::other(error.to_string()))?
+                    .to_string_lossy().replace('\\', "/");
+                if entry.file_type()?.is_dir() && expected.keys().any(|key| key.starts_with(&format!("{name}/"))) {
+                    check_extra_files(generated, &path, expected, diagnostics)?;
+                } else if !expected.contains_key(name.as_str()) {
+                    diagnostics.push(issue(
+                        "generated-extra",
+                        &entry.path(),
+                        "File is not in the accepted generated inventory.",
+                    ));
+                }
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
+    Ok(())
 }
 
 fn decode_path(value: &str) -> Result<String, MissionError> {

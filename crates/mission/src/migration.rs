@@ -6,7 +6,7 @@ use std::{
 
 use mission_api::{
     BundleManifest, CommitCheckpoint, MissionBundle, MissionError, MissionStore, SCHEMA_VERSION,
-    Scope, ValidationGate, WaypointFragment, WaypointMode, WaypointState, validate_bundle,
+    MissionOutputInputs, Scope, ValidationGate, WaypointFragment, WaypointMode, WaypointState, validate_bundle,
 };
 use serde::Serialize;
 use uuid::Uuid;
@@ -130,6 +130,7 @@ fn migrate_one(
     }
 
     let mut bundle = parse_roadmap(workspace_root, dossier, &roadmap_path, source_path, 1)?;
+    let inputs = dossier_inputs(dossier)?;
     for historical_path in historical_roadmap_paths(dossier)? {
         let relative_path = historical_path
             .strip_prefix(workspace_root)
@@ -196,9 +197,49 @@ fn migrate_one(
     }
 
     store
-        .publish_with_status_snapshot(mission_id, bundle, 0, &states, &snapshot_id)
+        .publish_with_inputs(mission_id, bundle, 0, &inputs, Some((&states, &snapshot_id)))
         .map_err(|error| format!("Could not publish the migrated mission: {error}"))?;
     Ok(("migrated", None))
+}
+
+fn dossier_inputs(dossier: &Path) -> Result<MissionOutputInputs, String> {
+    fn read(path: &Path) -> Result<String, String> {
+        let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+        if !metadata.is_file() || metadata.file_type().is_symlink() {
+            return Err(format!("Request input must be a regular file: {}", path.display()));
+        }
+        fs::read_to_string(path).map_err(|error| error.to_string())
+    }
+    fn collect(root: &Path, directory: &Path, inputs: &mut BTreeMap<String, String>) -> Result<(), String> {
+        for entry in fs::read_dir(directory).map_err(|error| error.to_string())? {
+            let entry = entry.map_err(|error| error.to_string())?;
+            let path = entry.path();
+            let kind = entry.file_type().map_err(|error| error.to_string())?;
+            if kind.is_symlink() {
+                return Err(format!("Request inputs must not contain links: {}", path.display()));
+            }
+            if kind.is_dir() {
+                collect(root, &path, inputs)?;
+            } else {
+                let name = path.strip_prefix(root).map_err(|error| error.to_string())?
+                    .to_string_lossy().replace('\\', "/");
+                inputs.insert(name, read(&path)?);
+            }
+        }
+        Ok(())
+    }
+    let mut inputs = MissionOutputInputs::default();
+    if dossier.join("REQUEST.md").exists() {
+        inputs.merged_request = Some(read(&dossier.join("REQUEST.md"))?);
+    }
+    let root = dossier.join("inputs");
+    if root.exists() {
+        if fs::symlink_metadata(&root).map_err(|error| error.to_string())?.file_type().is_symlink() {
+            return Err("Dossier inputs/ must not be a symbolic link.".into());
+        }
+        collect(&root, &root, &mut inputs.continuations)?;
+    }
+    Ok(inputs)
 }
 
 fn historical_roadmap_paths(dossier: &Path) -> Result<Vec<PathBuf>, String> {

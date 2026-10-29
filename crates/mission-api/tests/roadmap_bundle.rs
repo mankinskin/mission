@@ -131,8 +131,8 @@ fn revision_numbers_waypoints_contiguously() {
 fn stable_waypoint_ids_survive_reorder() {
     let mut first = bundle(&["one", "two"]);
     let rendered_first = render(&first, Uuid::nil()).unwrap();
-    assert!(rendered_first.parts.contains_key("01-one.md"));
-    assert!(rendered_first.parts.contains_key("02-two.md"));
+    assert!(rendered_first.parts.contains_key("waypoints/01-one.md"));
+    assert!(rendered_first.parts.contains_key("waypoints/02-two.md"));
 
     first.manifest.revision = 2;
     first.manifest.execution_order = vec!["two".into(), "one".into()];

@@ -123,16 +123,22 @@ fn publish(root: &Path, mission_id: Uuid, manifest: PathBuf, expected: u64) {
 }
 
 fn files(path: &Path) -> BTreeMap<String, Vec<u8>> {
-    fs::read_dir(path)
-        .unwrap()
-        .map(|entry| {
+    fn visit(root: &Path, path: &Path, files: &mut BTreeMap<String, Vec<u8>>) {
+        for entry in fs::read_dir(path).unwrap() {
             let entry = entry.unwrap();
-            (
-                entry.file_name().to_string_lossy().to_string(),
-                fs::read(entry.path()).unwrap(),
-            )
-        })
-        .collect()
+            if entry.file_type().unwrap().is_dir() {
+                visit(root, &entry.path(), files);
+            } else {
+                files.insert(
+                    entry.path().strip_prefix(root).unwrap().to_string_lossy().to_string(),
+                    fs::read(entry.path()).unwrap(),
+                );
+            }
+        }
+    }
+    let mut result = BTreeMap::new();
+    visit(path, path, &mut result);
+    result
 }
 
 #[test]
@@ -250,7 +256,7 @@ fn render_preview_returns_documents_without_mutating_store() {
     let snapshot = execute_mcp(workspace.path(), Operation::RenderPreview { mission_id });
     let preview = snapshot.rendered.unwrap();
     assert!(preview.roadmap.contains("Roadmap preview"));
-    assert!(preview.parts.contains_key("01-first.md"));
+    assert!(preview.parts.contains_key("waypoints/01-first.md"));
     assert!(!mission_root.join("generated").exists());
     assert_eq!(
         serde_json::from_slice::<serde_json::Value>(
@@ -338,8 +344,8 @@ fn publish_failure_preserves_previous_file_set() {
     .unwrap();
     assert_eq!(accepted["bundle"]["manifest"]["revision"], 1);
     assert!(generated.join("ROADMAP.md").is_file());
-    assert!(generated.join("01-first.md").is_file());
-    assert!(generated.join("02-second.md").is_file());
+    assert!(generated.join("waypoints/01-first.md").is_file());
+    assert!(generated.join("waypoints/02-second.md").is_file());
 }
 
 #[test]

@@ -526,7 +526,7 @@ fn generation_reads_current_ticket_specification_criterion_and_execution_content
         )
     );
     assert!(
-        String::from_utf8(rendered.parts["01-verify.md"].clone())
+        String::from_utf8(rendered.parts["waypoints/01-verify.md"].clone())
             .unwrap()
             .contains("Updated Ticket")
     );
