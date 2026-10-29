@@ -214,7 +214,7 @@ fn contract_bytes(
         mission_id: accepted.mission_id,
         revision,
         revision_label: format!("revision-{revision}"),
-        renderer: RENDERER_VERSION.into(),
+        renderer: outcome_plan::renderer_version(&accepted.bundle).into(),
         producer: "mission-api".into(),
         purpose: "whole-state pre-approval inventory".into(),
         files: files

@@ -15,6 +15,8 @@ use thiserror::Error;
 use uuid::Uuid;
 
 mod operator_results;
+mod outcome_plan;
+pub use outcome_plan::*;
 mod output_history;
 pub use output_history::*;
 mod artifact_contract;
@@ -34,7 +36,9 @@ pub use typed_migration::*;
 pub use typed_source::*;
 pub use schema_renderers::*;
 
+/// Legacy native authoring version; v2 requires explicit authored outcome plans.
 pub const SCHEMA_VERSION: u32 = 1;
+/// Legacy renderer retained byte-for-byte; native v2 uses mission-api/6.
 pub const RENDERER_VERSION: &str = "mission-api/5";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -91,6 +95,8 @@ pub struct ValidationGate {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WaypointFragment {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome_plan: Option<WaypointOutcomePlan>,
     #[serde(alias = "id")]
     pub waypoint_id: String,
     pub title: String,
@@ -278,6 +284,13 @@ pub fn validate_bundle(bundle: &MissionBundle) -> Result<(), Vec<Diagnostic>> {
     let mut ids = BTreeSet::new();
     let mut waypoint_by_id = BTreeMap::new();
     for (index, waypoint) in bundle.waypoints.iter().enumerate() {
+        if let Err(diagnostic) = outcome_plan::validate_outcome_plan(
+            waypoint.outcome_plan.as_ref(),
+            bundle.manifest.schema_version == OUTCOME_BUNDLE_SCHEMA_VERSION,
+            &waypoint.waypoint_id,
+        ) {
+            diagnostics.push(diagnostic);
+        }
         if let Err(diagnostic) = waypoint.relationships.validate() {
             diagnostics.push(diagnostic);
         }
@@ -540,13 +553,13 @@ pub fn validate_bundle(bundle: &MissionBundle) -> Result<(), Vec<Diagnostic>> {
 
 fn validate_manifest_shape(manifest: &BundleManifest, path: &Path) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
-    if manifest.schema_version != SCHEMA_VERSION {
+    if !matches!(manifest.schema_version, SCHEMA_VERSION | OUTCOME_BUNDLE_SCHEMA_VERSION) {
         diagnostics.push(diag(
             "unsupported-schema-version",
             path,
             "/schema_version",
             None,
-            "Only schema_version 1 is supported.",
+            "Only native schema_version 1 (legacy) and 2 (planned outcomes) are supported.",
         ));
     }
     if manifest.revision == 0
@@ -791,13 +804,14 @@ fn render_materialized_with_consumer(
     workspace: Option<&Path>,
     generated_directory: Option<&Path>,
 ) -> RenderedRoadmap {
+    let renderer = outcome_plan::renderer_version(bundle);
     let snapshot_id = snapshot_id.filter(|id| *id != "ticket-status-v1:{}");
     let snapshot_provenance = format!(
         "; external-status-snapshot: {}",
         snapshot_id.unwrap_or("ticket-status-v1:{}")
     );
     let mut roadmap = format!(
-        "# {}\n\n<!-- mission: {mission_id}; revision: {}; renderer: {RENDERER_VERSION}{snapshot_provenance} -->\n\n## Objective\n\n{}\n\n",
+        "# {}\n\n<!-- mission: {mission_id}; revision: {}; renderer: {renderer}{snapshot_provenance} -->\n\n## Objective\n\n{}\n\n",
         escape(&bundle.manifest.title),
         bundle.manifest.revision,
         schema_renderers::markdown_text(&bundle.manifest.objective)
@@ -880,6 +894,7 @@ fn render_materialized_with_consumer(
             &format!("{label} Validation"),
             &waypoint.validation,
         );
+        outcome_plan::render_outcome_plan(&mut roadmap, waypoint.outcome_plan.as_ref());
         let previous = index.checked_sub(1).map(|previous| {
             format!(
                 "{:02}-{}.md",
@@ -901,7 +916,7 @@ fn render_materialized_with_consumer(
             (None, None) => String::new(),
         };
         let mut part = format!(
-            "# {label}. {} (`{}`)\n\n<!-- mission: {mission_id}; revision: {}; renderer: {RENDERER_VERSION}{snapshot_provenance} -->\n\n{navigation}\n\n",
+            "# {label}. {} (`{}`)\n\n<!-- mission: {mission_id}; revision: {}; renderer: {renderer}{snapshot_provenance} -->\n\n{navigation}\n\n",
             escape(&waypoint.title),
             waypoint.waypoint_id,
             bundle.manifest.revision,
@@ -930,6 +945,10 @@ fn render_materialized_with_consumer(
         part.push_str(&waypoint.part_markdown);
         if !part.ends_with('\n') {
             part.push('\n');
+        }
+        if waypoint.outcome_plan.is_some() {
+            part.push('\n');
+            outcome_plan::render_outcome_plan(&mut part, waypoint.outcome_plan.as_ref());
         }
         operator_results::render(
             &mut part,
@@ -1218,6 +1237,7 @@ impl MissionLifecycle {
 
     fn fragment(input: DirectWaypoint) -> WaypointFragment {
         WaypointFragment {
+            outcome_plan: None,
             session_package: input.waypoint_id.clone(),
             waypoint_id: input.waypoint_id,
             title: input.title,
@@ -1818,6 +1838,7 @@ mod tests {
 
     fn waypoint(id: &str, depends_on: Vec<String>) -> WaypointFragment {
         WaypointFragment {
+            outcome_plan: None,
             waypoint_id: id.into(),
             title: id.into(),
             depends_on,

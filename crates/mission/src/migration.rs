@@ -546,6 +546,7 @@ fn parse_waypoint(
     Ok(ParsedWaypoint {
         source_label,
         fragment: WaypointFragment {
+            outcome_plan: None,
             waypoint_id,
             title,
             depends_on: Vec::new(),

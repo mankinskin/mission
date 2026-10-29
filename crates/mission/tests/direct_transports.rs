@@ -3,6 +3,53 @@ mod support;
 use support::*;
 
 #[test]
+fn cli_and_live_mcp_preserve_typed_v3_plans_and_reject_missing_plans_identically() {
+    let workspace = tempfile::Builder::new()
+        .prefix(".w7-transport-")
+        .tempdir_in(env!("CARGO_MANIFEST_DIR"))
+        .unwrap();
+    let created = cli(workspace.path(), &["create-draft".into(), "Planned".into(), "Objective".into()]);
+    assert_ok(&created);
+    let id = created["mission_id"].as_str().unwrap();
+    let plan = json!({"expected_outcome":"Ready <safe>", "alternative_outcomes":[
+        {"outcome":"Blocked", "acceptable_handling":["Inspect manually"]}
+    ]});
+    let mut draft = created["source"].clone();
+    draft["schema_version"] = json!(3);
+    draft["waypoints"] = json!([{
+        "waypoint_id":"verify", "title":"Verify", "prompt":"Check",
+        "part":{"waypoint_id":"verify", "document":{"blocks":[]}},
+        "validation":[{"command":"check"}], "commit_checkpoint":{"message":"checkpoint"},
+        "outcome_plan":plan
+    }]);
+    let published = cli(workspace.path(), &["publish-draft".into(), id.into(), draft.to_string(), "1".into()]);
+    assert_ok(&published);
+    let mut mcp = Mcp::start(workspace.path());
+    mcp.initialize();
+    let tools = mcp.request(2, "tools/list", json!({}));
+    let tool = tools["tools"].as_array().unwrap().iter().find(|tool| {
+        tool["inputSchema"]["properties"].get("operation").is_some()
+    }).unwrap();
+    assert!(tool["inputSchema"].to_string().contains("outcome_plan"));
+    let name = tool["name"].as_str().unwrap();
+    let source = mcp.call(3, name, json!({"operation":"get_mission_source", "mission_id":id}));
+    assert_ok(&source);
+    assert_eq!(source["source"], published["source"]);
+    assert_eq!(source["source"]["waypoints"][0]["outcome_plan"], plan);
+    let mut invalid = source["source"].clone();
+    invalid["waypoints"][0].as_object_mut().unwrap().remove("outcome_plan");
+    let rejected_cli = cli(workspace.path(), &["publish-draft".into(), id.into(), invalid.to_string(), "2".into()]);
+    let rejected_mcp = mcp.call(4, name, json!({
+        "operation":"publish_draft", "mission_id":id,
+        "draft":invalid, "expected_current_revision":2
+    }));
+    assert_eq!(rejected_cli["status"], "error");
+    assert_eq!(rejected_cli["diagnostics"], rejected_mcp["diagnostics"]);
+    let after = cli(workspace.path(), &["get-mission-source".into(), id.into()]);
+    assert_eq!(after["source"], source["source"]);
+}
+
+#[test]
 fn output_contract_and_separate_reaction_round_trip_between_cli_and_mcp() {
     let workspace = TempDir::new().unwrap();
     let created = cli(workspace.path(), &[

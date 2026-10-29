@@ -107,6 +107,7 @@ fn completed_child_bundle() -> MissionBundle {
             operator_results: vec![],
         },
         waypoints: vec![WaypointFragment {
+            outcome_plan: None,
             waypoint_id: "child-work".into(),
             title: "Child work".into(),
             depends_on: vec![],

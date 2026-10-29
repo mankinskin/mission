@@ -1,4 +1,4 @@
-//! Recoverable conversion of accepted v1 records into typed v2 sources.
+//! Recoverable conversion of native v1/v2 records into typed v2/v3 sources.
 //!
 //! The accepted bundle remains an immutable historical representation.  The
 //! typed source is added alongside it, and the normal store revision is
@@ -227,13 +227,26 @@ fn migration_source(workspace: &Path, accepted: &AcceptedMission) -> Result<Type
 }
 
 pub(super) fn convert(workspace: &Path, accepted: &AcceptedMission) -> Result<TypedDraft, MissionError> {
-    let diagnostics = validate_manifest_shape(&accepted.bundle.manifest, Path::new("accepted.json"));
+    let mut diagnostics = validate_manifest_shape(&accepted.bundle.manifest, Path::new("accepted.json"));
+    for waypoint in &accepted.bundle.waypoints {
+        if let Err(diagnostic) = outcome_plan::validate_outcome_plan(
+            waypoint.outcome_plan.as_ref(),
+            accepted.bundle.manifest.schema_version == OUTCOME_BUNDLE_SCHEMA_VERSION,
+            &waypoint.waypoint_id,
+        ) {
+            diagnostics.push(diagnostic);
+        }
+    }
     if !diagnostics.is_empty() {
         return Err(MissionError::Validation(diagnostics.len(), diagnostics));
     }
     Ok(TypedDraft {
         mission_id: accepted.mission_id,
-        schema_version: TYPED_SOURCE_SCHEMA_VERSION,
+        schema_version: if accepted.bundle.manifest.schema_version == OUTCOME_BUNDLE_SCHEMA_VERSION {
+            OUTCOME_SOURCE_SCHEMA_VERSION
+        } else {
+            TYPED_SOURCE_SCHEMA_VERSION
+        },
         revision: accepted.bundle.manifest.revision,
         title: accepted.bundle.manifest.title.clone(),
         objective: accepted.bundle.manifest.objective.clone(),
@@ -260,6 +273,7 @@ pub(super) fn convert(workspace: &Path, accepted: &AcceptedMission) -> Result<Ty
                     .map(|reference| local_entity_reference_id(workspace, reference, "mission"))
                     .transpose()?;
                 Ok(TypedWaypoint {
+                    outcome_plan: w.outcome_plan.clone(),
                     waypoint_id: w.waypoint_id.clone(),
                     title: w.title.clone(),
                     prompt: w.prompt.clone(),

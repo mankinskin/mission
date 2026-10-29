@@ -716,7 +716,6 @@ impl MissionLifecycle {
         };
         response.predicted_revision = Some(next_revision);
         source.revision = next_revision;
-        source.schema_version = TYPED_SOURCE_SCHEMA_VERSION;
         let next = match accepted_from_typed(&source, Some(&accepted)) {
             Ok(next) => next,
             Err(error) => {
@@ -1545,6 +1544,7 @@ fn load_source_from_directory(
         let part: PartSource =
             serde_json::from_slice(&fs::read(mission_dir.join(waypoint.part_file))?)?;
         waypoints.push(TypedWaypoint {
+            outcome_plan: waypoint.outcome_plan,
             waypoint_id: waypoint.waypoint_id,
             title: waypoint.title,
             prompt: waypoint.prompt,

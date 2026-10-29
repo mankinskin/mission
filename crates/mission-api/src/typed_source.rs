@@ -1,6 +1,7 @@
 use super::*;
 use schemars::JsonSchema;
 
+/// Legacy authoring version; v3 requires explicit authored outcome plans.
 pub const TYPED_SOURCE_SCHEMA_VERSION: u32 = 2;
 pub const PART_SOURCE_SCHEMA_VERSION: u32 = 1;
 
@@ -20,6 +21,8 @@ pub struct TypedDraft {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TypedWaypoint {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome_plan: Option<WaypointOutcomePlan>,
     pub waypoint_id: String,
     pub title: String,
     pub prompt: String,
@@ -74,6 +77,8 @@ pub(super) struct StoredSource {
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct StoredWaypoint {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) outcome_plan: Option<WaypointOutcomePlan>,
     pub(super) waypoint_id: String,
     pub(super) title: String,
     pub(super) prompt: String,
@@ -265,6 +270,7 @@ impl MissionLifecycle {
                 typed_error("invalid-part-json", "Part files must be strict typed JSON.")
             })?;
             waypoints.push(TypedWaypoint {
+                outcome_plan: waypoint.outcome_plan,
                 waypoint_id: waypoint.waypoint_id,
                 title: waypoint.title,
                 prompt: waypoint.prompt,
@@ -306,6 +312,7 @@ impl MissionLifecycle {
         for waypoint in source.waypoints {
             markdown.push_str(&format!("\n## {}\n\n", waypoint.title));
             render_blocks(&mut markdown, &waypoint.part.document.blocks, 0);
+            outcome_plan::render_outcome_plan(&mut markdown, waypoint.outcome_plan.as_ref());
             if let Some(content) = relationships.get(&waypoint.waypoint_id) {
                 markdown.push_str(content);
             }
@@ -361,6 +368,7 @@ impl MissionLifecycle {
         for waypoint in &draft.waypoints {
             output.push_str(&format!("\n## {}\n\n", waypoint.title));
             render_blocks(&mut output, &waypoint.part.document.blocks, 0);
+            outcome_plan::render_outcome_plan(&mut output, waypoint.outcome_plan.as_ref());
         }
         output
     }
@@ -430,6 +438,7 @@ pub(super) fn accepted_from_typed(
         waypoint.commit_checkpoint = input.commit_checkpoint.clone();
         waypoint.non_goals = input.non_goals.clone();
         waypoint.relationships = input.relationships.clone();
+        waypoint.outcome_plan = input.outcome_plan.clone();
         waypoint.part_markdown.clear();
         render_blocks(&mut waypoint.part_markdown, &input.part.document.blocks, 0);
         let refs = &input.ownership_refs;
@@ -452,6 +461,11 @@ pub(super) fn accepted_from_typed(
         waypoints.push(waypoint);
     }
     bundle.manifest.revision = draft.revision;
+    bundle.manifest.schema_version = if draft.schema_version == OUTCOME_SOURCE_SCHEMA_VERSION {
+        OUTCOME_BUNDLE_SCHEMA_VERSION
+    } else {
+        SCHEMA_VERSION
+    };
     bundle.manifest.title = draft.title.clone();
     bundle.manifest.objective = draft.objective.clone();
     bundle.manifest.execution_order = draft
@@ -838,6 +852,7 @@ pub(super) fn stored_source(draft: &TypedDraft) -> StoredSource {
             .waypoints
             .iter()
             .map(|waypoint| StoredWaypoint {
+                outcome_plan: waypoint.outcome_plan.clone(),
                 waypoint_id: waypoint.waypoint_id.clone(),
                 title: waypoint.title.clone(),
                 prompt: waypoint.prompt.clone(),
@@ -867,12 +882,12 @@ fn typed_error(code: &'static str, message: &str) -> MissionError {
 }
 
 pub(super) fn validate_typed(draft: &TypedDraft, publishing: bool) -> Result<(), MissionError> {
-    if draft.schema_version != TYPED_SOURCE_SCHEMA_VERSION {
+    if !matches!(draft.schema_version, TYPED_SOURCE_SCHEMA_VERSION | OUTCOME_SOURCE_SCHEMA_VERSION) {
         return Err(typed_error(
             "invalid-schema-version",
             &format!(
-                "source schema_version must be {}.",
-                TYPED_SOURCE_SCHEMA_VERSION
+                "source schema_version must be {} (legacy) or {} (planned outcomes).",
+                TYPED_SOURCE_SCHEMA_VERSION, OUTCOME_SOURCE_SCHEMA_VERSION
             ),
         ));
     }
@@ -884,6 +899,11 @@ pub(super) fn validate_typed(draft: &TypedDraft, publishing: bool) -> Result<(),
         ));
     }
     for waypoint in &draft.waypoints {
+        outcome_plan::validate_outcome_plan(
+            waypoint.outcome_plan.as_ref(),
+            draft.schema_version == OUTCOME_SOURCE_SCHEMA_VERSION,
+            &waypoint.waypoint_id,
+        ).map_err(one_diagnostic)?;
         waypoint.relationships.validate().map_err(one_diagnostic)?;
         let refs = &waypoint.ownership_refs;
         if let (Some(id), Some(uri)) = (refs.ticket_id, &refs.ticket_uri)
