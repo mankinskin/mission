@@ -1,5 +1,23 @@
 # Mission
 
+## Review a generated Mission
+
+**Novice path:** Start from the Mission's `generated/README.md` and choose the
+[Mission Review Agent](../.agents/agents/mission-review.agent.md) in the agent
+picker. Provide that entry path; the role follows its linked Mission artifacts
+and reports evidence-backed gaps without running product tests or claiming
+readiness from publication alone. If the entry is missing or incomplete, the
+review is blocked rather than reconstructed from hidden state.
+
+**Power-user path:** Invoke the Mission Review Agent with the exact
+`generated/README.md` path or URI and, when needed, the relevant acceptance
+criteria link. It checks the linked strict accepted Mission, inventory,
+references, and existing validation receipts without executing tests. For the
+complete, missing, contradictory, and incomplete-entry examples, see the
+[manual walkthrough and synthetic fixtures](../test/docs/mission-reviewer-role/manual-walkthrough.md).
+These examples validate reviewer behavior only; they are not product
+acceptance evidence.
+
 ## Direct authoring and operator evidence
 
 The `mission` package provides the `mission` binary with feature `cli` and the
