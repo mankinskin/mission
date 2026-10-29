@@ -183,7 +183,7 @@ fn direct_authoring_persists_evidence_and_rejects_stale_writes() {
                     waypoint_id: "install".into(),
                     outcome: "passed".into(),
                     operator_command: "cargo test".into(),
-                    evidence_pointer: "test://run/1".into()
+                    evidence_pointer: "ce://run/test/1".into()
                 },
             }
         )
@@ -202,7 +202,7 @@ fn direct_authoring_persists_evidence_and_rejects_stale_writes() {
     assert_eq!(read_back.revision, Some(3));
     assert_eq!(
         read_back.accepted.unwrap().bundle.manifest.operator_results[0].evidence_pointer,
-        "test://run/1"
+        "ce://run/test/1"
     );
 }
 

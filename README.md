@@ -107,8 +107,24 @@ Start at `generated/README.md` in the selected Mission directory. It links the
 roadmap, every generated Part and declared evidence, and distinguishes promises,
 delivery and verification from unknown product facts. Workspace file artifacts
 are resolved from the workspace root and linked relative to this entry;
-canonical `ce://` references remain canonical. Outside-workspace references and
-symlink escapes are explicitly unavailable, never absolute file links.
+canonical `ce://` references remain canonical. Publication rejects
+outside-workspace references and symlink escapes; a read-only render without a
+workspace reports such links as unavailable, never as absolute file links.
+Read-only rendering of a historical reference that is now missing, unsupported
+or outside the workspace also marks it explicitly unavailable in the entry,
+roadmap and Parts. This does not authorize accepting that reference on a write.
+
+Each persisted revision also records
+`history/provenance-revision-<revision>.json`. This immutable record identifies
+the `workflow-tools/mission-api` producer, purpose, invocation, grouping,
+inputs and outputs, and validates every declared file's authored/generated/
+helper role, format and schema guarantee. Reads do not synthesize provenance
+for older revisions. Publication rejects missing, unsupported, wrong-workspace
+or escaping file references before replacing source or accepted data; canonical
+`ce://` references remain owned by their respective domains and are not
+resolved by Mission. `resolve_artifact_reference(workspace_root,
+consumer_path, reference)` produces a consumer-relative link so each supported
+Markdown destination resolves from its actual location.
 
 Publication, repair fingerprints and verification share one generated inventory
 containing the README, roadmap and Parts. An absent external-status snapshot and

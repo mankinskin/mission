@@ -89,7 +89,7 @@ fn cli_create_mcp_edit_and_cli_publish_use_real_transports() {
             "install".into(),
             "passed".into(),
             "operator test command".into(),
-            "test://direct/1".into(),
+            "ce://direct/test/1".into(),
             revision(&edited).to_string(),
         ],
     );
@@ -377,7 +377,7 @@ fn mcp_create_and_lifecycle_round_trip_through_cli_adapters() {
     let progressed = mcp.call(23, &tool_name, json!({         "operation": "record_progress", "mission_id": mission_id, "waypoint_id": "verify",         "state": "completed", "expected_current_revision": revision(&ordered)
     }));
     assert_ok(&progressed);
-    let evidenced = mcp.call(24, &tool_name, json!({         "operation": "record_validation_result", "mission_id": mission_id, "waypoint_id": "verify",         "outcome": "passed", "operator_command": "operator verify command",         "evidence_pointer": "test://mcp/verify", "expected_current_revision": revision(&progressed)
+    let evidenced = mcp.call(24, &tool_name, json!({         "operation": "record_validation_result", "mission_id": mission_id, "waypoint_id": "verify",         "outcome": "passed", "operator_command": "operator verify command",         "evidence_pointer": "ce://mcp/test/verify", "expected_current_revision": revision(&progressed)
     }));
     assert_ok(&evidenced);
     assert_ok(&mcp.call(
@@ -404,7 +404,7 @@ fn mcp_create_and_lifecycle_round_trip_through_cli_adapters() {
     );
     assert_eq!(
         read["accepted"]["bundle"]["manifest"]["operator_results"][0]["evidence_pointer"],
-        "test://mcp/verify"
+        "ce://mcp/test/verify"
     );
     assert_eq!(read["publication_state"], "current");
     assert_ok(&cli(

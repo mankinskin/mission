@@ -358,7 +358,7 @@ fn parse_roadmap(
             objective,
             waypoint_files: Vec::new(),
             execution_order,
-            artifacts: vec![source_path.to_string(), roadmap_relative.clone()],
+            artifacts: vec![roadmap_relative.clone()],
             requirements: Vec::new(),
             validation_gates,
             notes: vec![

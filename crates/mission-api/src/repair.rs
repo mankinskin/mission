@@ -1389,6 +1389,11 @@ fn projected_fingerprint(
         "mission.md".into(),
         sha256(lifecycle.render_typed(source).as_bytes()),
     );
+    let provenance = MissionArtifactProvenance::for_write(accepted, Some(source), Some(rendered));
+    after.insert(
+        format!("history/provenance-revision-{revision}.json"),
+        sha256(&serde_json::to_vec_pretty(&provenance)?),
+    );
     Ok(after)
 }
 
@@ -1434,6 +1439,12 @@ fn projected_rollback_fingerprint(
     for (name, bytes) in rendered.files() {
         after.insert(format!("generated/{name}"), sha256(bytes));
     }
+    let provenance =
+        MissionArtifactProvenance::for_write(accepted, source, Some(rendered));
+    after.insert(
+        format!("history/provenance-revision-{revision}.json"),
+        sha256(&serde_json::to_vec_pretty(&provenance)?),
+    );
     Ok(after)
 }
 

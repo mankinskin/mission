@@ -53,6 +53,8 @@ fn bundle() -> MissionBundle {
 #[test]
 fn publication_includes_review_entry_with_empty_external_status() {
     let workspace = tempfile::tempdir().unwrap();
+    fs::create_dir(workspace.path().join("docs")).unwrap();
+    fs::write(workspace.path().join("docs/evidence.md"), "Evidence").unwrap();
     let store = MissionStore::init(workspace.path()).unwrap();
     let id = Uuid::new_v4();
     store.publish(id, bundle(), 0).unwrap();
@@ -129,6 +131,61 @@ fn rendering_does_not_invent_external_status_or_acceptance() {
 }
 
 #[test]
+fn rendering_invalidated_artifacts_is_explicitly_unavailable_in_every_projection() {
+    let (workspace, store, id, _generated) = published();
+    fs::remove_file(workspace.path().join("docs/evidence.md")).unwrap();
+    let rendered = projection(&store, id);
+    for bytes in [&rendered.readme, &rendered.roadmap] {
+        let text = String::from_utf8_lossy(bytes);
+        assert!(text.contains("docs/evidence.md: unavailable"), "{text}");
+        assert!(!text.contains("](../../../../../docs/evidence.md)"));
+    }
+
+    let mut invalid = bundle();
+    invalid.manifest.artifacts = vec!["ce://default/unknown/id".into()];
+    invalid.waypoints[0].artifacts = vec!["unsupported://reference".into()];
+    let rendered = render(&invalid, id).unwrap();
+    let readme = String::from_utf8_lossy(&rendered.readme);
+    assert!(readme.contains("ce://default/unknown/id: unavailable"));
+    assert!(!readme.contains("](ce://default/unknown/id)"));
+    let part = String::from_utf8_lossy(&rendered.parts["01-first.md"]);
+    assert!(part.contains("unsupported://reference: unavailable"));
+}
+
+#[test]
+fn read_only_render_preserves_unavailable_outside_workspace_without_absolute_links() {
+    let (workspace, store, id, _generated) = published();
+    let outside = tempfile::tempdir().unwrap();
+    let outside_path = outside.path().join("private.md");
+    fs::write(&outside_path, "private").unwrap();
+    // Historical records remain readable without republishing their invalid references.
+    let accepted_path = workspace
+        .path()
+        .join(".workflow-tools/mission/missions")
+        .join(id.to_string())
+        .join("accepted.json");
+    let mut accepted: AcceptedMission =
+        serde_json::from_slice(&fs::read(&accepted_path).unwrap()).unwrap();
+    accepted.bundle.manifest.artifacts = vec![
+        outside_path.display().to_string(),
+        "../outside.md".into(),
+        "https://example.test/unverified".into(),
+        "C:\\outside.md".into(),
+    ];
+    fs::write(&accepted_path, serde_json::to_vec_pretty(&accepted).unwrap()).unwrap();
+    let before = fs::read(&accepted_path).unwrap();
+    let rendered = projection(&store, id);
+    for bytes in [&rendered.readme, &rendered.roadmap] {
+        let text = String::from_utf8_lossy(bytes);
+        assert_eq!(text.matches(": unavailable").count(), 4, "{text}");
+        assert!(!text.contains("](/"));
+        assert!(!text.contains("](https://"));
+        assert!(!text.contains("](../../../../../../"));
+    }
+    assert_eq!(fs::read(&accepted_path).unwrap(), before);
+}
+
+#[test]
 fn typed_publication_verifies_identically_and_detects_real_output_drift() {
     let workspace = tempfile::tempdir().unwrap();
     let lifecycle = MissionLifecycle::open(workspace.path());
@@ -178,11 +235,11 @@ fn typed_publication_verifies_identically_and_detects_real_output_drift() {
 }
 
 #[test]
-fn references_are_workspace_relative_encoded_or_explicitly_unavailable() {
+fn references_are_workspace_relative_or_canonical_and_encoded() {
     let workspace = tempfile::tempdir().unwrap();
-    let outside = tempfile::tempdir().unwrap();
     let mut value = bundle();
     fs::create_dir(workspace.path().join("docs")).unwrap();
+    fs::write(workspace.path().join("docs/evidence.md"), "Evidence").unwrap();
     fs::write(workspace.path().join("docs/a (b)#.md"), "Evidence").unwrap();
     value.manifest.artifacts.extend([
         workspace
@@ -190,10 +247,6 @@ fn references_are_workspace_relative_encoded_or_explicitly_unavailable() {
             .join("docs/a (b)#.md")
             .display()
             .to_string(),
-        outside.path().join("private.md").display().to_string(),
-        "../outside.md".into(),
-        "https://example.test/unverified".into(),
-        "C:\\outside.md".into(),
     ]);
     value.waypoints[0].artifacts.push("docs/a (b)#.md".into());
     value.manifest.operator_results.push(OperatorResult {
@@ -206,12 +259,14 @@ fn references_are_workspace_relative_encoded_or_explicitly_unavailable() {
     let id = Uuid::new_v4();
     store.publish(id, value, 0).unwrap();
     let output = String::from_utf8(projection(&store, id).readme).unwrap();
+    let roadmap = String::from_utf8(projection(&store, id).roadmap).unwrap();
     assert!(output.contains("(../../../../../docs/a%20%28b%29%23.md)"));
+    assert!(roadmap.contains("(../../../../../docs/a%20%28b%29%23.md)"));
     assert!(output.contains("(ce://default/test/receipt)"));
     assert!(!output.contains("](/"));
     assert!(!output.contains("](https://"));
     assert!(!output.contains("](../../../../../../"));
-    assert_eq!(output.matches(": unavailable").count(), 4);
+    assert_eq!(output.matches(": unavailable").count(), 0);
 }
 
 #[test]

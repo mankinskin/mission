@@ -15,11 +15,16 @@ use thiserror::Error;
 use uuid::Uuid;
 
 mod operator_results;
+mod artifact_contract;
 mod repair;
 mod review_entry;
 mod typed_migration;
 mod typed_source;
 pub use repair::*;
+pub use artifact_contract::{
+    ARTIFACT_PROVENANCE_SCHEMA_VERSION, MissionArtifactProvenance, MissionFileFormat,
+    MissionFileProvenance, MissionFileRole, resolve_artifact_reference,
+};
 pub use typed_migration::*;
 pub use typed_source::*;
 
@@ -703,6 +708,16 @@ pub fn render_with_snapshot(
     mission_id: Uuid,
     snapshot_id: Option<&str>,
 ) -> Result<RenderedRoadmap, Vec<Diagnostic>> {
+    render_with_consumer(bundle, mission_id, snapshot_id, None, None)
+}
+
+fn render_with_consumer(
+    bundle: &MissionBundle,
+    mission_id: Uuid,
+    snapshot_id: Option<&str>,
+    workspace: Option<&Path>,
+    generated_directory: Option<&Path>,
+) -> Result<RenderedRoadmap, Vec<Diagnostic>> {
     if snapshot_id.is_some() {
         let mut validation_bundle = bundle.clone();
         for waypoint in &mut validation_bundle.waypoints {
@@ -717,17 +732,21 @@ pub fn render_with_snapshot(
     } else {
         validate_bundle(bundle)?;
     }
-    Ok(render_materialized_with_snapshot(
+    Ok(render_materialized_with_consumer(
         bundle,
         mission_id,
         snapshot_id,
+        workspace,
+        generated_directory,
     ))
 }
 
-fn render_materialized_with_snapshot(
+fn render_materialized_with_consumer(
     bundle: &MissionBundle,
     mission_id: Uuid,
     snapshot_id: Option<&str>,
+    workspace: Option<&Path>,
+    generated_directory: Option<&Path>,
 ) -> RenderedRoadmap {
     let snapshot_id = snapshot_id.filter(|id| *id != "ticket-status-v1:{}");
     let snapshot_provenance = format!(
@@ -740,7 +759,12 @@ fn render_materialized_with_snapshot(
         bundle.manifest.revision,
         bundle.manifest.objective
     );
-    render_string_section(&mut roadmap, "Artifacts", &bundle.manifest.artifacts);
+    render_artifact_section(
+        &mut roadmap,
+        &bundle.manifest.artifacts,
+        workspace,
+        generated_directory.map(|path| path.join("ROADMAP.md")).as_deref(),
+    );
     if !bundle.manifest.requirements.is_empty() {
         roadmap.push_str("## Requirements\n\n| ID | Requirement | Deferred |\n|---|---|---|\n");
         for requirement in &bundle.manifest.requirements {
@@ -802,7 +826,13 @@ fn render_materialized_with_snapshot(
             escape(&dependencies),
             escape(&waypoint.session_package),
             escape(&waypoint.prompt),
-            escape(&waypoint.artifacts.join(", ")),
+            render_artifacts(
+                &waypoint.artifacts,
+                workspace,
+                generated_directory
+                    .map(|path| path.join("ROADMAP.md"))
+                    .as_deref(),
+            ),
             escape(&waypoint.requirement_ids.join(", ")),
             escape(&waypoint.non_goals.join(", ")),
             escape(&waypoint.commit_checkpoint.message)
@@ -847,7 +877,11 @@ fn render_materialized_with_snapshot(
             escape(&dependencies),
             escape(&waypoint.session_package),
             escape(&waypoint.prompt),
-            escape(&waypoint.artifacts.join(", ")),
+            render_artifacts(
+                &waypoint.artifacts,
+                workspace,
+                generated_directory.map(|path| path.join(&filename)).as_deref(),
+            ),
             escape(&waypoint.requirement_ids.join(", ")),
             escape(&waypoint.non_goals.join(", ")),
             escape(&waypoint.commit_checkpoint.message)
@@ -867,10 +901,47 @@ fn render_materialized_with_snapshot(
         parts.insert(filename, part.into_bytes());
     }
     RenderedRoadmap {
-        readme: review_entry::render(bundle, mission_id, snapshot_id, None),
+        readme: review_entry::render(
+            bundle,
+            mission_id,
+            snapshot_id,
+            workspace,
+            generated_directory.map(|path| path.join("README.md")).as_deref(),
+        ),
         roadmap: roadmap.into_bytes(),
         parts,
     }
+}
+
+fn render_artifact_section(
+    output: &mut String,
+    values: &[String],
+    workspace: Option<&Path>,
+    consumer: Option<&Path>,
+) {
+    if values.is_empty() {
+        return;
+    }
+    output.push_str("## Artifacts\n\n");
+    for value in values {
+        output.push_str(&format!(
+            "- {}\n",
+            render_artifacts(std::slice::from_ref(value), workspace, consumer)
+        ));
+    }
+    output.push('\n');
+}
+
+fn render_artifacts(
+    values: &[String],
+    workspace: Option<&Path>,
+    consumer: Option<&Path>,
+) -> String {
+    values
+        .iter()
+        .map(|reference| review_entry::render_reference(reference, workspace, consumer))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn render_string_section(output: &mut String, title: &str, values: &[String]) {
@@ -1183,15 +1254,19 @@ impl MissionStore {
         mission_id: Uuid,
         snapshot_id: Option<&str>,
     ) -> Result<RenderedRoadmap, MissionError> {
-        let mut rendered = render_with_snapshot(bundle, mission_id, snapshot_id)
-            .map_err(|errors| MissionError::Validation(errors.len(), errors))?;
-        rendered.readme = review_entry::render(
+        let generated_directory = Path::new(".workflow-tools")
+            .join("mission")
+            .join("missions")
+            .join(mission_id.to_string())
+            .join("generated");
+        let rendered = render_with_consumer(
             bundle,
             mission_id,
-            snapshot_id.filter(|id| *id != "ticket-status-v1:{}"),
-            // Store layout is <workspace>/.workflow-tools/mission/missions.
+            snapshot_id,
             self.root.ancestors().nth(3),
-        );
+            Some(&generated_directory),
+        )
+            .map_err(|errors| MissionError::Validation(errors.len(), errors))?;
         Ok(rendered)
     }
 

@@ -161,7 +161,7 @@ fn repair_same_identity_twelve_waypoints_and_publish_preserve_old_and_new_eviden
             "mission-repair".into(),
             "passed".into(),
             "post-repair validation".into(),
-            "test://repair/new".into(),
+            "ce://repair/test/new".into(),
             revision(&rebound).to_string(),
         ],
     );
@@ -646,7 +646,7 @@ fn create_typed_fixture(workspace: &Path, add_old_evidence: bool) -> (String, u6
                     (*waypoint_id).into(),
                     "passed".into(),
                     "pre-repair validation".into(),
-                    format!("test://repair/old/{waypoint_id}"),
+                    format!("ce://repair/test/old-{waypoint_id}"),
                     current_revision.to_string(),
                 ],
             );

@@ -530,6 +530,11 @@ impl MissionStore {
         replace_source: bool,
     ) -> Result<(), MissionError> {
         let id = accepted.mission_id;
+        self.validate_artifact_references(id, &accepted.bundle)?;
+        let provenance = MissionArtifactProvenance::for_write(accepted, source, rendered);
+        provenance
+            .validate()
+            .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
         let directory = self.root.join(id.to_string());
         let stage = self.root.join(format!(".{id}.typed.tmp"));
         let backup = self.root.join(format!(".{id}.typed.backup"));
@@ -602,6 +607,16 @@ impl MissionStore {
                     fs::write(stage.join("mission.md"), lifecycle.render_typed(source))?;
                 }
             }
+            write_new(
+                &stage
+                    .join("history")
+                    .join(format!(
+                        "provenance-revision-{}.json",
+                        accepted.bundle.manifest.revision
+                    )),
+                &serde_json::to_vec_pretty(&provenance)?,
+            )?;
+            super::artifact_contract::validate_file_outputs(&provenance, &stage, false)?;
             Ok::<_, MissionError>(())
         })();
         if let Err(error) = result {

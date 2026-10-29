@@ -65,7 +65,7 @@ fn stored_id_publication_generates_verified_projection_with_operator_results() {
                 waypoint_id: "verify".into(),
                 outcome: "passed".into(),
                 operator_command: "mission --help".into(),
-                evidence_pointer: "test://installation/output".into(),
+                evidence_pointer: "ce://installation/test/output".into(),
             },
         },
     );
@@ -89,7 +89,7 @@ fn stored_id_publication_generates_verified_projection_with_operator_results() {
         .join(id.to_string())
         .join("generated/ROADMAP.md");
     let roadmap = std::fs::read_to_string(path).unwrap();
-    assert!(roadmap.contains("test://installation/output"));
+    assert!(roadmap.contains("ce://installation/test/output"));
     assert!(roadmap.contains("mission --help"));
     assert!(roadmap.contains("passed"));
     let read_back =
@@ -107,6 +107,32 @@ fn stored_id_publication_generates_verified_projection_with_operator_results() {
     let drifted =
         serde_json::to_value(execute(workspace.path(), Operation::Get { mission_id: id })).unwrap();
     assert_eq!(drifted["publication_state"], "drift");
+}
+
+#[test]
+fn unsupported_evidence_reference_is_rejected_without_writing_a_revision() {
+    let workspace = TempDir::new().unwrap();
+    let id = create(&workspace);
+    let before = MissionStore::open(workspace.path()).get(id).unwrap();
+    let rejected = execute(
+        workspace.path(),
+        Operation::RecordValidationResult {
+            mission_id: id,
+            expected_current_revision: 1,
+            result: mission::OperatorResult {
+                waypoint_id: "verify".into(),
+                outcome: "passed".into(),
+                operator_command: "mission --help".into(),
+                evidence_pointer: "test://installation/output".into(),
+            },
+        },
+    );
+    assert_eq!(rejected.status, "error");
+    assert!(rejected
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "mission-reference-unknown"));
+    assert_eq!(MissionStore::open(workspace.path()).get(id).unwrap(), before);
 }
 
 #[test]

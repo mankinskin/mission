@@ -64,7 +64,7 @@ fn lifecycle_owns_create_and_mutations() {
                 waypoint_id: "second".into(),
                 outcome: "passed".into(),
                 operator_command: "cargo test".into(),
-                evidence_pointer: "target/evidence".into(),
+                evidence_pointer: "ce://default/test/receipt".into(),
             },
             7,
         )

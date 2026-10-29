@@ -1,6 +1,6 @@
 use super::*;
 
-fn label(value: &str) -> String {
+pub(super) fn label(value: &str) -> String {
     value
         .replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -21,42 +21,27 @@ fn encode_path(value: &str) -> String {
     })
 }
 
-fn relative_artifact(reference: &str, workspace: Option<&Path>) -> Option<PathBuf> {
-    if reference.is_empty() || reference.contains(':') || reference.contains('\\') {
-        return None;
-    }
-    let path = Path::new(reference);
-    let relative = if path.is_absolute() {
-        path.strip_prefix(workspace?).ok()?
+pub(super) fn render_reference(
+    reference: &str,
+    workspace: Option<&Path>,
+    consumer: Option<&Path>,
+) -> String {
+    let resolved = if reference.starts_with("ce://") {
+        if artifact_contract::validate_canonical_uri(reference) {
+            Ok(encode_urn(reference))
+        } else {
+            Err("mission-reference-unknown")
+        }
+    } else if let (Some(workspace), Some(consumer)) = (workspace, consumer) {
+        resolve_artifact_reference(workspace, consumer, reference)
+            .map_err(|diagnostic| diagnostic.code)
     } else {
-        path
+        Err("mission-reference-context-unavailable")
     };
-    if relative.as_os_str().is_empty()
-        || relative.components().any(|part| {
-            matches!(
-                part,
-                Component::ParentDir | Component::RootDir | Component::Prefix(_)
-            )
-        })
-    {
-        return None;
+    match resolved {
+        Ok(target) => format!("[{}]({target})", label(reference)),
+        Err(code) => format!("{}: unavailable ({code})", label(reference)),
     }
-    if let Some(workspace) = workspace {
-        let root = workspace.canonicalize().ok()?;
-        let mut ancestor = workspace.join(relative);
-        while !ancestor.exists() {
-            if fs::symlink_metadata(&ancestor).is_ok() {
-                return None;
-            }
-            if !ancestor.pop() {
-                return None;
-            }
-        }
-        if !ancestor.canonicalize().ok()?.starts_with(root) {
-            return None;
-        }
-    }
-    Some(relative.to_path_buf())
 }
 
 pub(super) fn render(
@@ -64,6 +49,7 @@ pub(super) fn render(
     mission_id: Uuid,
     snapshot_id: Option<&str>,
     workspace: Option<&Path>,
+    consumer: Option<&Path>,
 ) -> Vec<u8> {
     let mut output = format!(
         "# Mission review entry\n\nMission: `{mission_id}`; revision: {}.\n\n## Promise\n\n{}\n\nFull contract and requirements: [Roadmap](ROADMAP.md); authority: [accepted Mission](../accepted.json).\n\n## Delivery\n\nGenerated projections (not proof of acceptance):\n\n- [Review entry](README.md)\n- [Roadmap](ROADMAP.md)\n",
@@ -98,24 +84,10 @@ pub(super) fn render(
         output.push_str("Evidence: unknown (none declared).\n");
     }
     for reference in references {
-        if reference.starts_with("ce://") {
-            output.push_str(&format!(
-                "- [{}]({})\n",
-                label(reference),
-                encode_urn(reference)
-            ));
-        } else if let Some(relative) = relative_artifact(reference, workspace) {
-            output.push_str(&format!(
-                "- [{}](../../../../../{})\n",
-                label(reference),
-                encode_path(&relative.to_string_lossy())
-            ));
-        } else {
-            output.push_str(&format!(
-                "- {}: unavailable (outside the workspace, unsupported or inaccessible reference).\n",
-                label(reference)
-            ));
-        }
+        output.push_str(&format!(
+            "- {}\n",
+            render_reference(reference, workspace, consumer)
+        ));
     }
     output.push_str("\n## Verification\n\n- What was promised? See the roadmap's objective and requirements.\n- What was delivered? Follow the generated inventory and declared evidence above.\n- What was verified? See the roadmap's validation gates and operator results; missing results are unknown.\n\n");
     output.push_str(&format!(
@@ -126,7 +98,7 @@ pub(super) fn render(
     output.into_bytes()
 }
 
-fn encode_urn(reference: &str) -> String {
+pub(super) fn encode_urn(reference: &str) -> String {
     reference
         .replace('%', "%25")
         .replace('(', "%28")

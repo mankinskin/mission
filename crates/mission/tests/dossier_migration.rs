@@ -17,7 +17,7 @@ fn roadmap(title: &str, waypoints: &[(&str, &str, Option<usize>)]) -> String {
     );
     for (index, (waypoint_title, part, dependency)) in waypoints.iter().enumerate() {
         contents.push_str(&format!(
-            "### W{}. {waypoint_title}\n\n| | |\n|---|---|\n| **Status** | completed |\n| **Scope** | single-session |\n| **Mode** | Execution side effect |\n| **Session package** | {} |\n| **Part** | [{part}]({part}) |\n| **Prompt** | Implement {waypoint_title}. |\n| **Artifacts** | source artifact |\n| **Non-goal** | unrelated work |\n| **Validate** | `cargo test -p mission` |\n| **Commit checkpoint** | `feat: {waypoint_title}` |\n",
+            "### W{}. {waypoint_title}\n\n| | |\n|---|---|\n| **Status** | completed |\n| **Scope** | single-session |\n| **Mode** | Execution side effect |\n| **Session package** | {} |\n| **Part** | [{part}]({part}) |\n| **Prompt** | Implement {waypoint_title}. |\n| **Artifacts** | ce://fixture/spec/source-artifact |\n| **Non-goal** | unrelated work |\n| **Validate** | `cargo test -p mission` |\n| **Commit checkpoint** | `feat: {waypoint_title}` |\n",
             index + 1,
             waypoint_title.to_ascii_lowercase().replace(' ', "-")
         ));
@@ -49,7 +49,7 @@ Preserve the authoring contract without adding execution metadata.
 | **Session package** | inspect-current-state |
 | **Part** | [01-first.md](01-first.md) |
 | **Prompt** | Inspect the current state. |
-| **Artifacts** | source artifact |
+| **Artifacts** | ce://fixture/spec/source-artifact |
 | **Non-goal** | unrelated work |
 | **Validate** | `cargo test -p mission` |
 | **Commit checkpoint** | none (read-only waypoint) |
@@ -65,7 +65,7 @@ Preserve the authoring contract without adding execution metadata.
 | **Session package** | apply-change |
 | **Part** | [02-second.md](02-second.md) |
 | **Prompt** | Apply the change. |
-| **Artifacts** | source artifact |
+| **Artifacts** | ce://fixture/spec/source-artifact |
 | **Non-goal** | unrelated work |
 | **Validate** | `cargo test -p mission` |
 | **Commit checkpoint** | feat: apply change |
@@ -170,6 +170,10 @@ fn migration_is_idempotent() {
         .get(mission_id)
         .unwrap();
     assert_eq!(accepted.bundle.manifest.revision, 1);
+    assert_eq!(
+        accepted.bundle.manifest.artifacts,
+        ["transcripts/fixture/ROADMAP.md"]
+    );
     assert!(
         accepted
             .bundle
