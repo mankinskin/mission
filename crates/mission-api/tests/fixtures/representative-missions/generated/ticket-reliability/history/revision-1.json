@@ -1,0 +1,792 @@
+{
+  "mission_id": "00000000-0000-4000-8000-000000003001",
+  "bundle": {
+    "manifest": {
+      "schema_version": 2,
+      "revision": 1,
+      "title": "Synthetic Ticket reliability fixture",
+      "objective": "Synthetic, read-only adaptation of 17 waypoints. No source roadmap is executed or mutated.",
+      "waypoint_files": [],
+      "execution_order": [
+        "part-write",
+        "recoverable-publication",
+        "residual-test-scope",
+        "missing-prefix",
+        "descendant-refs",
+        "default-workspace",
+        "board-fixtures",
+        "move-fixtures",
+        "index-output",
+        "update-fixture",
+        "test-gate",
+        "part-layout",
+        "cli-dispatch",
+        "migration-scope",
+        "root-preflight",
+        "approved-apply",
+        "transport-docs"
+      ],
+      "artifacts": [],
+      "requirements": [],
+      "validation_gates": [],
+      "notes": [
+        "Synthetic adaptation. Mission API predecessor checkpoints encode rendered order and do not assert source-roadmap prerequisites.",
+        "Fixture-authored outcome plans and synthetic local evidence are not requester approvals or real execution evidence."
+      ],
+      "operator_results": []
+    },
+    "waypoints": [
+      {
+        "outcome_plan": {
+          "expected_outcome": "Blank writes fail while valid part content and state rules remain stable.",
+          "alternative_outcomes": [
+            {
+              "outcome": "A whitespace-only payload reaches a transport path not covered by the first check.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "part-write",
+        "title": "Establish the part-write contract",
+        "depends_on": [],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "single-session"
+        },
+        "state": "completed",
+        "ticket_ref": null,
+        "child_mission_ref": null,
+        "session_package": "w8-part-write",
+        "prompt": "Fixture-only adaptation: Reject blank Ticket-part content and preserve settled lifecycle constraints for writes. Preserve the boundary: Keep the contract narrow; transaction recovery and migration are separate work.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not change unrelated lifecycle states."
+        ],
+        "validation": [
+          {
+            "command": "Run focused Ticket API validation and inspect empty, whitespace, and valid part cases.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: part-write"
+        },
+        "part_markdown": "## Adapted objective\n\nReject blank Ticket-part content and preserve settled lifecycle constraints for writes.\n\n## Constraints and boundary\n\nKeep the contract narrow; transaction recovery and migration are separate work.\n\n## Validation and non-goal\n\nValidation guidance: Run focused Ticket API validation and inspect empty, whitespace, and valid part cases.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not change unrelated lifecycle states..\n\n## Fixture-authored outcome guidance\n\nExpected: Blank writes fail while valid part content and state rules remain stable.\n\nAlternative: A whitespace-only payload reaches a transport path not covered by the first check.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      },
+      {
+        "outcome_plan": {
+          "expected_outcome": "Every interrupted publication is recoverable without a mixed manifest/file state.",
+          "alternative_outcomes": [
+            {
+              "outcome": "A recovery journal indicates a partial operation whose inputs need inspection.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "recoverable-publication",
+        "title": "Make filesystem publication recoverable",
+        "depends_on": [
+          "part-write"
+        ],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "single-session"
+        },
+        "state": "completed",
+        "ticket_ref": null,
+        "child_mission_ref": null,
+        "session_package": "w8-recoverable-publication",
+        "prompt": "Fixture-only adaptation: Stage part bytes and manifest updates with a recoverable transaction and explicit rollback state. Preserve the boundary: A multi-file operation needs a journal; a single rename is not the transaction.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not add migration selection or broad cleanup."
+        ],
+        "validation": [
+          {
+            "command": "Inject failures around stage, backup, replace, and recovery; verify old or new complete state.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: recoverable-publication"
+        },
+        "part_markdown": "## Adapted objective\n\nStage part bytes and manifest updates with a recoverable transaction and explicit rollback state.\n\n## Constraints and boundary\n\nA multi-file operation needs a journal; a single rename is not the transaction.\n\n## Validation and non-goal\n\nValidation guidance: Inject failures around stage, backup, replace, and recovery; verify old or new complete state.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not add migration selection or broad cleanup..\n\n## Fixture-authored outcome guidance\n\nExpected: Every interrupted publication is recoverable without a mixed manifest/file state.\n\nAlternative: A recovery journal indicates a partial operation whose inputs need inspection.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      },
+      {
+        "outcome_plan": {
+          "expected_outcome": "Each residual failure has an evidence-backed owner and an explicit disposition.",
+          "alternative_outcomes": [
+            {
+              "outcome": "A failure cannot be attributed safely from the current fixture evidence.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "residual-test-scope",
+        "title": "Decide residual package failures",
+        "depends_on": [
+          "recoverable-publication"
+        ],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "single-session"
+        },
+        "state": "completed",
+        "ticket_ref": null,
+        "child_mission_ref": null,
+        "session_package": "w8-residual-test-scope",
+        "prompt": "Fixture-only adaptation: Separate missing server behavior from fixture defects before changing the full package test gate. Preserve the boundary: Keep the gate intact and do not create Mission entities for this Ticket task.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not implement server behavior or weaken the package gate in this decision step."
+        ],
+        "validation": [
+          {
+            "command": "Reproduce each failure and record the scoped decision before implementation.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: residual-test-scope"
+        },
+        "part_markdown": "## Adapted objective\n\nSeparate missing server behavior from fixture defects before changing the full package test gate.\n\n## Constraints and boundary\n\nKeep the gate intact and do not create Mission entities for this Ticket task.\n\n## Validation and non-goal\n\nValidation guidance: Reproduce each failure and record the scoped decision before implementation.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not implement server behavior or weaken the package gate in this decision step..\n\n## Fixture-authored outcome guidance\n\nExpected: Each residual failure has an evidence-backed owner and an explicit disposition.\n\nAlternative: A failure cannot be attributed safely from the current fixture evidence.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      },
+      {
+        "outcome_plan": {
+          "expected_outcome": "The result names the search scope and leaves every store byte unchanged.",
+          "alternative_outcomes": [
+            {
+              "outcome": "A prefix matches a candidate outside the selected workspace.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "missing-prefix",
+        "title": "Report missing-prefix search scope",
+        "depends_on": [
+          "residual-test-scope"
+        ],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "single-session"
+        },
+        "state": "completed",
+        "ticket_ref": null,
+        "child_mission_ref": null,
+        "session_package": "w8-missing-prefix",
+        "prompt": "Fixture-only adaptation: Return useful searched-workspace diagnostics when a Ticket identifier prefix matches nothing. Preserve the boundary: Diagnostics are read-only and must reveal no unrelated Ticket content.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not broaden the resolver to arbitrary ancestor stores."
+        ],
+        "validation": [
+          {
+            "command": "Exercise absent and ambiguous prefixes under explicit workspace roots.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: missing-prefix"
+        },
+        "part_markdown": "## Adapted objective\n\nReturn useful searched-workspace diagnostics when a Ticket identifier prefix matches nothing.\n\n## Constraints and boundary\n\nDiagnostics are read-only and must reveal no unrelated Ticket content.\n\n## Validation and non-goal\n\nValidation guidance: Exercise absent and ambiguous prefixes under explicit workspace roots.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not broaden the resolver to arbitrary ancestor stores..\n\n## Fixture-authored outcome guidance\n\nExpected: The result names the search scope and leaves every store byte unchanged.\n\nAlternative: A prefix matches a candidate outside the selected workspace.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      },
+      {
+        "outcome_plan": {
+          "expected_outcome": "Valid local references resolve and invalid paths fail before writes.",
+          "alternative_outcomes": [
+            {
+              "outcome": "A symlinked descendant escapes the canonical root.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "descendant-refs",
+        "title": "Resolve descendant Ticket references",
+        "depends_on": [
+          "missing-prefix"
+        ],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "single-session"
+        },
+        "state": "completed",
+        "ticket_ref": null,
+        "child_mission_ref": null,
+        "session_package": "w8-descendant-refs",
+        "prompt": "Fixture-only adaptation: Allow a selected workspace to follow valid Ticket references into owned descendants. Preserve the boundary: Validate canonical IDs and remain within the explicitly selected store.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not accept arbitrary external stores."
+        ],
+        "validation": [
+          {
+            "command": "Test valid descendant references, absent paths, and traversal attempts.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: descendant-refs"
+        },
+        "part_markdown": "## Adapted objective\n\nAllow a selected workspace to follow valid Ticket references into owned descendants.\n\n## Constraints and boundary\n\nValidate canonical IDs and remain within the explicitly selected store.\n\n## Validation and non-goal\n\nValidation guidance: Test valid descendant references, absent paths, and traversal attempts.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not accept arbitrary external stores..\n\n## Fixture-authored outcome guidance\n\nExpected: Valid local references resolve and invalid paths fail before writes.\n\nAlternative: A symlinked descendant escapes the canonical root.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      },
+      {
+        "outcome_plan": {
+          "expected_outcome": "Read queries use the same selected default and writes retain explicit-root requirements.",
+          "alternative_outcomes": [
+            {
+              "outcome": "Default resolution is ambiguous between two candidate workspaces.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "default-workspace",
+        "title": "Honor default-workspace reads",
+        "depends_on": [
+          "descendant-refs"
+        ],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "single-session"
+        },
+        "state": "completed",
+        "ticket_ref": null,
+        "child_mission_ref": null,
+        "session_package": "w8-default-workspace",
+        "prompt": "Fixture-only adaptation: Permit read-only operations to use the documented workspace default when a caller omits it. Preserve the boundary: Keep writes explicit and prevent omission from selecting an unrelated store.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not change production workspace policy."
+        ],
+        "validation": [
+          {
+            "command": "Compare omitted and explicit read behavior and assert write rejection without root.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: default-workspace"
+        },
+        "part_markdown": "## Adapted objective\n\nPermit read-only operations to use the documented workspace default when a caller omits it.\n\n## Constraints and boundary\n\nKeep writes explicit and prevent omission from selecting an unrelated store.\n\n## Validation and non-goal\n\nValidation guidance: Compare omitted and explicit read behavior and assert write rejection without root.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not change production workspace policy..\n\n## Fixture-authored outcome guidance\n\nExpected: Read queries use the same selected default and writes retain explicit-root requirements.\n\nAlternative: Default resolution is ambiguous between two candidate workspaces.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      },
+      {
+        "outcome_plan": {
+          "expected_outcome": "Tests read their own generated board records from the selected root.",
+          "alternative_outcomes": [
+            {
+              "outcome": "A test unexpectedly discovers a host-level board store.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "board-fixtures",
+        "title": "Repair board MCP workspace fixtures",
+        "depends_on": [
+          "default-workspace"
+        ],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "single-session"
+        },
+        "state": "completed",
+        "ticket_ref": null,
+        "child_mission_ref": null,
+        "session_package": "w8-board-fixtures",
+        "prompt": "Fixture-only adaptation: Make board tests construct data under the workspace root actually resolved by the server. Preserve the boundary: Fix fixtures rather than changing valid production lookup behavior.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not relax workspace scoping or touch live board state."
+        ],
+        "validation": [
+          {
+            "command": "Run the focused board MCP suite with exact root read-back.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: board-fixtures"
+        },
+        "part_markdown": "## Adapted objective\n\nMake board tests construct data under the workspace root actually resolved by the server.\n\n## Constraints and boundary\n\nFix fixtures rather than changing valid production lookup behavior.\n\n## Validation and non-goal\n\nValidation guidance: Run the focused board MCP suite with exact root read-back.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not relax workspace scoping or touch live board state..\n\n## Fixture-authored outcome guidance\n\nExpected: Tests read their own generated board records from the selected root.\n\nAlternative: A test unexpectedly discovers a host-level board store.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      },
+      {
+        "outcome_plan": {
+          "expected_outcome": "Each fixture proves the intended source/destination pair and preserves unrelated bytes.",
+          "alternative_outcomes": [
+            {
+              "outcome": "The report's source identity no longer matches the fixture root.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "move-fixtures",
+        "title": "Repair move MCP workspace fixtures",
+        "depends_on": [
+          "board-fixtures"
+        ],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "single-session"
+        },
+        "state": "completed",
+        "ticket_ref": null,
+        "child_mission_ref": null,
+        "session_package": "w8-move-fixtures",
+        "prompt": "Fixture-only adaptation: Align move preflight/apply tests with the configured source and destination stores. Preserve the boundary: Keep move operations isolated and verify rollback on rejection.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not perform a live store move."
+        ],
+        "validation": [
+          {
+            "command": "Exercise same-root, distinct-root, and stale-report fixtures.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: move-fixtures"
+        },
+        "part_markdown": "## Adapted objective\n\nAlign move preflight/apply tests with the configured source and destination stores.\n\n## Constraints and boundary\n\nKeep move operations isolated and verify rollback on rejection.\n\n## Validation and non-goal\n\nValidation guidance: Exercise same-root, distinct-root, and stale-report fixtures.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not perform a live store move..\n\n## Fixture-authored outcome guidance\n\nExpected: Each fixture proves the intended source/destination pair and preserves unrelated bytes.\n\nAlternative: The report's source identity no longer matches the fixture root.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      },
+      {
+        "outcome_plan": {
+          "expected_outcome": "The test observes the canonical artifact location and stable contents.",
+          "alternative_outcomes": [
+            {
+              "outcome": "An output is created outside the expected store root.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "index-output",
+        "title": "Align store-index output fixtures",
+        "depends_on": [
+          "move-fixtures"
+        ],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "single-session"
+        },
+        "state": "completed",
+        "ticket_ref": null,
+        "child_mission_ref": null,
+        "session_package": "w8-index-output",
+        "prompt": "Fixture-only adaptation: Place generated index artifacts beneath the canonical Ticket store paths used by tests. Preserve the boundary: Test paths must match `.workflow-tools/ticket` and stay inside their fixture root.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not change the index contract to fit an incorrect fixture."
+        ],
+        "validation": [
+          {
+            "command": "Compare exact generated artifact paths and rerun the focused index suite.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: index-output"
+        },
+        "part_markdown": "## Adapted objective\n\nPlace generated index artifacts beneath the canonical Ticket store paths used by tests.\n\n## Constraints and boundary\n\nTest paths must match `.workflow-tools/ticket` and stay inside their fixture root.\n\n## Validation and non-goal\n\nValidation guidance: Compare exact generated artifact paths and rerun the focused index suite.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not change the index contract to fit an incorrect fixture..\n\n## Fixture-authored outcome guidance\n\nExpected: The test observes the canonical artifact location and stable contents.\n\nAlternative: An output is created outside the expected store root.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      },
+      {
+        "outcome_plan": {
+          "expected_outcome": "The returned and persisted Ticket share the intended canonical ID.",
+          "alternative_outcomes": [
+            {
+              "outcome": "Read-back resolves a different workspace than setup.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "update-fixture",
+        "title": "Correct update MCP workspace fixtures",
+        "depends_on": [
+          "index-output"
+        ],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "single-session"
+        },
+        "state": "completed",
+        "ticket_ref": null,
+        "child_mission_ref": null,
+        "session_package": "w8-update-fixture",
+        "prompt": "Fixture-only adaptation: Ensure updates target the same explicit fixture workspace used for setup and read-back. Preserve the boundary: Keep mutation scoped to the synthetic Ticket and verify exact identity after update.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not update any real Ticket."
+        ],
+        "validation": [
+          {
+            "command": "Run update MCP tests against a freshly initialized local store.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: update-fixture"
+        },
+        "part_markdown": "## Adapted objective\n\nEnsure updates target the same explicit fixture workspace used for setup and read-back.\n\n## Constraints and boundary\n\nKeep mutation scoped to the synthetic Ticket and verify exact identity after update.\n\n## Validation and non-goal\n\nValidation guidance: Run update MCP tests against a freshly initialized local store.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not update any real Ticket..\n\n## Fixture-authored outcome guidance\n\nExpected: The returned and persisted Ticket share the intended canonical ID.\n\nAlternative: Read-back resolves a different workspace than setup.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      },
+      {
+        "outcome_plan": {
+          "expected_outcome": "The complete package suite passes against schema-valid state fixtures.",
+          "alternative_outcomes": [
+            {
+              "outcome": "A remaining failure is outside invalid fixture setup and requires separate scope.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "test-gate",
+        "title": "Repair the full Ticket test gate",
+        "depends_on": [
+          "update-fixture"
+        ],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "single-session"
+        },
+        "state": "completed",
+        "ticket_ref": null,
+        "child_mission_ref": null,
+        "session_package": "w8-test-gate",
+        "prompt": "Fixture-only adaptation: Correct persisted test fixtures to valid schema states so the full package gate reaches the behaviors under test. Preserve the boundary: Normalize only invalid fixture setup; retain legacy values only where a test explicitly covers scan compatibility.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not weaken production state validation or change transport behavior."
+        ],
+        "validation": [
+          {
+            "command": "Run the full Ticket package and formatting checks after focused fixture corrections.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: test-gate"
+        },
+        "part_markdown": "## Adapted objective\n\nCorrect persisted test fixtures to valid schema states so the full package gate reaches the behaviors under test.\n\n## Constraints and boundary\n\nNormalize only invalid fixture setup; retain legacy values only where a test explicitly covers scan compatibility.\n\n## Validation and non-goal\n\nValidation guidance: Run the full Ticket package and formatting checks after focused fixture corrections.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not weaken production state validation or change transport behavior..\n\n## Fixture-authored outcome guidance\n\nExpected: The complete package suite passes against schema-valid state fixtures.\n\nAlternative: A remaining failure is outside invalid fixture setup and requires separate scope.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      },
+      {
+        "outcome_plan": {
+          "expected_outcome": "The candidate set is deterministic and every excluded file remains byte-identical.",
+          "alternative_outcomes": [
+            {
+              "outcome": "A candidate has ambiguous provenance or no manifest reference.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "part-layout",
+        "title": "Scope part-layout migration",
+        "depends_on": [
+          "test-gate"
+        ],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "single-session"
+        },
+        "state": "completed",
+        "ticket_ref": null,
+        "child_mission_ref": null,
+        "session_package": "w8-part-layout",
+        "prompt": "Fixture-only adaptation: Select only existing manifest-referenced part files eligible for canonical naming or cleanup. Preserve the boundary: Never synthesize parts from flat legacy fields; retain stable IDs and order.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not rewrite unreferenced files or migrate outside the chosen stores."
+        ],
+        "validation": [
+          {
+            "command": "Test duplicate kinds, frozen empty parts, missing files, and untouched legacy content.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: part-layout"
+        },
+        "part_markdown": "## Adapted objective\n\nSelect only existing manifest-referenced part files eligible for canonical naming or cleanup.\n\n## Constraints and boundary\n\nNever synthesize parts from flat legacy fields; retain stable IDs and order.\n\n## Validation and non-goal\n\nValidation guidance: Test duplicate kinds, frozen empty parts, missing files, and untouched legacy content.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not rewrite unreferenced files or migrate outside the chosen stores..\n\n## Fixture-authored outcome guidance\n\nExpected: The candidate set is deterministic and every excluded file remains byte-identical.\n\nAlternative: A candidate has ambiguous provenance or no manifest reference.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      },
+      {
+        "outcome_plan": {
+          "expected_outcome": "Dry-run dispatch returns the selected store's report without mutation.",
+          "alternative_outcomes": [
+            {
+              "outcome": "Dispatch resolves a different store root or no handler.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "cli-dispatch",
+        "title": "Correct migration CLI dispatch",
+        "depends_on": [
+          "part-layout"
+        ],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "single-session"
+        },
+        "state": "completed",
+        "ticket_ref": null,
+        "child_mission_ref": null,
+        "session_package": "w8-cli-dispatch",
+        "prompt": "Fixture-only adaptation: Ensure the migration command reaches the selected store before producing a dry-run report. Preserve the boundary: Preserve the exact workspace and operation mode through argument dispatch.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not apply or repair migration data here."
+        ],
+        "validation": [
+          {
+            "command": "Run the focused dispatch test and assert a same-root report.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: cli-dispatch"
+        },
+        "part_markdown": "## Adapted objective\n\nEnsure the migration command reaches the selected store before producing a dry-run report.\n\n## Constraints and boundary\n\nPreserve the exact workspace and operation mode through argument dispatch.\n\n## Validation and non-goal\n\nValidation guidance: Run the focused dispatch test and assert a same-root report.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not apply or repair migration data here..\n\n## Fixture-authored outcome guidance\n\nExpected: Dry-run dispatch returns the selected store's report without mutation.\n\nAlternative: Dispatch resolves a different store root or no handler.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      },
+      {
+        "outcome_plan": {
+          "expected_outcome": "The exact two-store scope is explicit and reproducible.",
+          "alternative_outcomes": [
+            {
+              "outcome": "The inventory includes a third root or an ineligible record.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "migration-scope",
+        "title": "Bound migration scope to selected stores",
+        "depends_on": [
+          "cli-dispatch"
+        ],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "single-session"
+        },
+        "state": "completed",
+        "ticket_ref": null,
+        "child_mission_ref": null,
+        "session_package": "w8-migration-scope",
+        "prompt": "Fixture-only adaptation: Compare candidates against every current manifest in the two named stores and no third store. Preserve the boundary: Treat each candidate's provenance separately; exclude legacy flat-content conversion.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not clean unrelated stores or infer common ownership for zero-byte files."
+        ],
+        "validation": [
+          {
+            "command": "Verify root and nested inventories, target paths, and zero-conflict results.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: migration-scope"
+        },
+        "part_markdown": "## Adapted objective\n\nCompare candidates against every current manifest in the two named stores and no third store.\n\n## Constraints and boundary\n\nTreat each candidate's provenance separately; exclude legacy flat-content conversion.\n\n## Validation and non-goal\n\nValidation guidance: Verify root and nested inventories, target paths, and zero-conflict results.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not clean unrelated stores or infer common ownership for zero-byte files..\n\n## Fixture-authored outcome guidance\n\nExpected: The exact two-store scope is explicit and reproducible.\n\nAlternative: The inventory includes a third root or an ineligible record.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      },
+      {
+        "outcome_plan": {
+          "expected_outcome": "Preflight evidence is preserved while unresolved root ownership remains a blocker.",
+          "alternative_outcomes": [
+            {
+              "outcome": "The explicit root query still fails or a report is stale.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "root-preflight",
+        "title": "Run root-store preflight",
+        "depends_on": [
+          "migration-scope"
+        ],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "ticket-backed",
+          "ticket_ref": "ce://default/ticket/00000000-0000-4000-8000-000000003002"
+        },
+        "state": null,
+        "ticket_ref": "ce://default/ticket/00000000-0000-4000-8000-000000003002",
+        "child_mission_ref": null,
+        "relationships": {
+          "specification_ids": [
+            "00000000-0000-4000-8000-000000003003"
+          ],
+          "criteria": [
+            {
+              "specification_id": "00000000-0000-4000-8000-000000003003",
+              "criterion_id": "ticket-migration-safety"
+            }
+          ],
+          "executions": [
+            {
+              "execution_id": "ticket-reliability-synthetic-check"
+            }
+          ]
+        },
+        "session_package": "w8-root-preflight",
+        "prompt": "Fixture-only adaptation: Check freshness, candidate identity, and preservation for the selected root and nested Ticket stores. Preserve the boundary: The root board ownership query fails with OS error 3; retain that uncertainty and do not apply.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not claim ownership or authorize live migration."
+        ],
+        "validation": [
+          {
+            "command": "Verify both reports, same-root candidate paths, and unchanged store bytes.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: root-preflight"
+        },
+        "part_markdown": "## Adapted objective\n\nCheck freshness, candidate identity, and preservation for the selected root and nested Ticket stores.\n\n## Constraints and boundary\n\nThe root board ownership query fails with OS error 3; retain that uncertainty and do not apply.\n\n## Validation and non-goal\n\nValidation guidance: Verify both reports, same-root candidate paths, and unchanged store bytes.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not claim ownership or authorize live migration..\n\n## Fixture-authored outcome guidance\n\nExpected: Preflight evidence is preserved while unresolved root ownership remains a blocker.\n\nAlternative: The explicit root query still fails or a report is stale.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      },
+      {
+        "outcome_plan": {
+          "expected_outcome": "The synthetic example remains blocked with no source or store mutation.",
+          "alternative_outcomes": [
+            {
+              "outcome": "No separate approval exists for the exact operation order.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "approved-apply",
+        "title": "Apply only separately approved operations",
+        "depends_on": [
+          "root-preflight"
+        ],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "single-session"
+        },
+        "state": "blocked",
+        "ticket_ref": null,
+        "child_mission_ref": null,
+        "session_package": "w8-approved-apply",
+        "prompt": "Fixture-only adaptation: Keep live migration blocked until root ownership is repaired and the exact operation set receives separate approval. Preserve the boundary: No approval or ownership may be inferred from clean candidate reports.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not apply, verify, or undo any live migration in this fixture."
+        ],
+        "validation": [
+          {
+            "command": "Before any future apply, require fresh reports, operation-by-operation approval, and immediate read-back.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: approved-apply"
+        },
+        "part_markdown": "## Adapted objective\n\nKeep live migration blocked until root ownership is repaired and the exact operation set receives separate approval.\n\n## Constraints and boundary\n\nNo approval or ownership may be inferred from clean candidate reports.\n\n## Validation and non-goal\n\nValidation guidance: Before any future apply, require fresh reports, operation-by-operation approval, and immediate read-back.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not apply, verify, or undo any live migration in this fixture..\n\n## Fixture-authored outcome guidance\n\nExpected: The synthetic example remains blocked with no source or store mutation.\n\nAlternative: No separate approval exists for the exact operation order.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      },
+      {
+        "outcome_plan": {
+          "expected_outcome": "Transport behavior and documentation agree with the validated contract.",
+          "alternative_outcomes": [
+            {
+              "outcome": "A transport contract or required validation read-back is missing.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "transport-docs",
+        "title": "Integrate transport and settled behavior",
+        "depends_on": [
+          "approved-apply"
+        ],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "single-session"
+        },
+        "state": "pending",
+        "ticket_ref": null,
+        "child_mission_ref": null,
+        "session_package": "w8-transport-docs",
+        "prompt": "Fixture-only adaptation: Document validated Ticket-part behavior consistently across CLI, MCP, and owned usage guidance. Preserve the boundary: Retain the two-store boundary and keep evidence/status authorities separate.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not create new entities or broaden migration."
+        ],
+        "validation": [
+          {
+            "command": "Run Ticket API/package and transport checks, then read back each validation record.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: transport-docs"
+        },
+        "part_markdown": "## Adapted objective\n\nDocument validated Ticket-part behavior consistently across CLI, MCP, and owned usage guidance.\n\n## Constraints and boundary\n\nRetain the two-store boundary and keep evidence/status authorities separate.\n\n## Validation and non-goal\n\nValidation guidance: Run Ticket API/package and transport checks, then read back each validation record.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not create new entities or broaden migration..\n\n## Fixture-authored outcome guidance\n\nExpected: Transport behavior and documentation agree with the validated contract.\n\nAlternative: A transport contract or required validation read-back is missing.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      }
+    ]
+  },
+  "label_mapping": {
+    "revision": 1,
+    "labels": {
+      "W1": "part-write",
+      "W10": "update-fixture",
+      "W11": "test-gate",
+      "W12": "part-layout",
+      "W13": "cli-dispatch",
+      "W14": "migration-scope",
+      "W15": "root-preflight",
+      "W16": "approved-apply",
+      "W17": "transport-docs",
+      "W2": "recoverable-publication",
+      "W3": "residual-test-scope",
+      "W4": "missing-prefix",
+      "W5": "descendant-refs",
+      "W6": "default-workspace",
+      "W7": "board-fixtures",
+      "W8": "move-fixtures",
+      "W9": "index-output"
+    }
+  }
+}

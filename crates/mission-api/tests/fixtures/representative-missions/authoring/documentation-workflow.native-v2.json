@@ -1,0 +1,218 @@
+{
+  "mission_id": "00000000-0000-4000-8000-000000001001",
+  "bundle": {
+    "manifest": {
+      "schema_version": 2,
+      "revision": 1,
+      "title": "Synthetic documentation workflow fixture",
+      "objective": "Synthetic, read-only adaptation of 4 waypoints. No source roadmap is executed or mutated.",
+      "waypoint_files": [],
+      "execution_order": [
+        "doc-contract",
+        "health-check",
+        "code-map",
+        "semantic-review"
+      ],
+      "artifacts": [],
+      "requirements": [],
+      "validation_gates": [],
+      "notes": [
+        "Synthetic adaptation. Mission API predecessor checkpoints encode rendered order and do not assert source-roadmap prerequisites.",
+        "Fixture-authored outcome plans and synthetic local evidence are not requester approvals or real execution evidence."
+      ],
+      "operator_results": [
+        {
+          "waypoint_id": "code-map",
+          "outcome": "passed",
+          "operator_command": "fixture-authored observation; source workspace was not scanned",
+          "evidence_pointer": "ce://default/test/doc-comment-synthetic-check"
+        }
+      ]
+    },
+    "waypoints": [
+      {
+        "outcome_plan": {
+          "expected_outcome": "A reviewed schema states required content and safe omission cases for each item kind.",
+          "alternative_outcomes": [
+            {
+              "outcome": "A trait method appears redundant but its behavior or exception cannot be verified.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "doc-contract",
+        "title": "Define the doc-comment contract",
+        "depends_on": [],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "single-session"
+        },
+        "state": null,
+        "ticket_ref": null,
+        "child_mission_ref": null,
+        "session_package": "w8-doc-contract",
+        "prompt": "Fixture-only adaptation: Specify concise purpose, behavior or responsibility, intent, relationships, and constraints for each discoverable Rust item kind. Preserve the boundary: Distinguish useful explanation from implementation restatement; define structure, length, unsupported kinds, and justified exceptions.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not document the whole workspace or refactor source."
+        ],
+        "validation": [
+          {
+            "command": "Review representative functions, types, constants, traits, implementations, and modules without inventing behavior.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: doc-contract"
+        },
+        "part_markdown": "## Adapted objective\n\nSpecify concise purpose, behavior or responsibility, intent, relationships, and constraints for each discoverable Rust item kind.\n\n## Constraints and boundary\n\nDistinguish useful explanation from implementation restatement; define structure, length, unsupported kinds, and justified exceptions.\n\n## Validation and non-goal\n\nValidation guidance: Review representative functions, types, constants, traits, implementations, and modules without inventing behavior.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not document the whole workspace or refactor source..\n\n## Fixture-authored outcome guidance\n\nExpected: A reviewed schema states required content and safe omission cases for each item kind.\n\nAlternative: A trait method appears redundant but its behavior or exception cannot be verified.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      },
+      {
+        "outcome_plan": {
+          "expected_outcome": "Every fixture item receives a status and actionable rule-specific finding.",
+          "alternative_outcomes": [
+            {
+              "outcome": "A parser cannot classify one item kind reliably.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "health-check",
+        "title": "Build the documentation health check",
+        "depends_on": [
+          "doc-contract"
+        ],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "single-session"
+        },
+        "state": null,
+        "ticket_ref": null,
+        "child_mission_ref": null,
+        "session_package": "w8-health-check",
+        "prompt": "Fixture-only adaptation: Inventory selected modules and report missing, malformed, vague, overlong, or unsupported documentation with stable status over time. Preserve the boundary: Every finding identifies the item, location, violated contract rule, and whether the case is intentionally undocumented or unsupported.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not silently rewrite comments or modify Rust source."
+        ],
+        "validation": [
+          {
+            "command": "Run compliant, missing, overlong, malformed, vague-purpose, and justified-exception fixtures.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: health-check"
+        },
+        "part_markdown": "## Adapted objective\n\nInventory selected modules and report missing, malformed, vague, overlong, or unsupported documentation with stable status over time.\n\n## Constraints and boundary\n\nEvery finding identifies the item, location, violated contract rule, and whether the case is intentionally undocumented or unsupported.\n\n## Validation and non-goal\n\nValidation guidance: Run compliant, missing, overlong, malformed, vague-purpose, and justified-exception fixtures.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not silently rewrite comments or modify Rust source..\n\n## Fixture-authored outcome guidance\n\nExpected: Every fixture item receives a status and actionable rule-specific finding.\n\nAlternative: A parser cannot classify one item kind reliably.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      },
+      {
+        "outcome_plan": {
+          "expected_outcome": "Maps preserve identity and disclose unavailable fields rather than guessing.",
+          "alternative_outcomes": [
+            {
+              "outcome": "Rustdoc JSON omits a signature field required by a consumer.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "code-map",
+        "title": "Extract maps from verified rustdoc data",
+        "depends_on": [
+          "health-check"
+        ],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "single-session"
+        },
+        "state": null,
+        "ticket_ref": null,
+        "child_mission_ref": null,
+        "session_package": "w8-code-map",
+        "prompt": "Fixture-only adaptation: Generate normalized records and per-module maps plus an aggregate index of names, paths, descriptions, and signatures. Preserve the boundary: Evaluate rustdoc JSON first; preserve module identity and report unsupported items and extraction gaps explicitly.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not replace source code, infer missing semantics from HTML, or perform duplicate analysis here."
+        ],
+        "validation": [
+          {
+            "command": "Run Cargo doc for representative crates and compare names, locations, descriptions, signatures, and gap reports.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: code-map"
+        },
+        "part_markdown": "## Adapted objective\n\nGenerate normalized records and per-module maps plus an aggregate index of names, paths, descriptions, and signatures.\n\n## Constraints and boundary\n\nEvaluate rustdoc JSON first; preserve module identity and report unsupported items and extraction gaps explicitly.\n\n## Validation and non-goal\n\nValidation guidance: Run Cargo doc for representative crates and compare names, locations, descriptions, signatures, and gap reports.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not replace source code, infer missing semantics from HTML, or perform duplicate analysis here..\n\n## Fixture-authored outcome guidance\n\nExpected: Maps preserve identity and disclose unavailable fields rather than guessing.\n\nAlternative: Rustdoc JSON omits a signature field required by a consumer.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      },
+      {
+        "outcome_plan": {
+          "expected_outcome": "Reports expose evidence-backed candidates for a human-reviewed refactoring decision.",
+          "alternative_outcomes": [
+            {
+              "outcome": "Similar descriptions hide a meaningful behavioral difference.",
+              "acceptable_handling": [
+                "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+              ]
+            }
+          ]
+        },
+        "waypoint_id": "semantic-review",
+        "title": "Review semantic duplicate candidates",
+        "depends_on": [
+          "code-map"
+        ],
+        "mode": "execution-side-effect",
+        "scope": {
+          "kind": "ticket-backed",
+          "ticket_ref": "ce://default/ticket/00000000-0000-4000-8000-000000001002"
+        },
+        "state": null,
+        "ticket_ref": "ce://default/ticket/00000000-0000-4000-8000-000000001002",
+        "child_mission_ref": null,
+        "relationships": {
+          "specification_ids": [
+            "00000000-0000-4000-8000-000000001003"
+          ],
+          "criteria": [
+            {
+              "specification_id": "00000000-0000-4000-8000-000000001003",
+              "criterion_id": "doc-comment-review-contract"
+            }
+          ],
+          "executions": [
+            {
+              "execution_id": "doc-comment-synthetic-check"
+            }
+          ]
+        },
+        "session_package": "w8-semantic-review",
+        "prompt": "Fixture-only adaptation: Compare normalized documented intent to find likely redundant behavior and missing abstraction opportunities. Preserve the boundary: Similarity narrows the search; evidence must retain element links and candidates remain distinct from confirmed redundancy.",
+        "artifacts": [],
+        "requirement_ids": [],
+        "non_goals": [
+          "Do not automatically merge, delete, generalize, or mutate implementations."
+        ],
+        "validation": [
+          {
+            "command": "Compare exact duplicates, related-but-distinct items, and overlapping vocabulary with unrelated behavior.",
+            "cwd": null
+          }
+        ],
+        "commit_checkpoint": {
+          "message": "Fixture review checkpoint: semantic-review"
+        },
+        "part_markdown": "## Adapted objective\n\nCompare normalized documented intent to find likely redundant behavior and missing abstraction opportunities.\n\n## Constraints and boundary\n\nSimilarity narrows the search; evidence must retain element links and candidates remain distinct from confirmed redundancy.\n\n## Validation and non-goal\n\nValidation guidance: Compare exact duplicates, related-but-distinct items, and overlapping vocabulary with unrelated behavior.. This is a planned check, not a claim that the source command was run.\n\nNon-goal: Do not automatically merge, delete, generalize, or mutate implementations..\n\n## Fixture-authored outcome guidance\n\nExpected: Reports expose evidence-backed candidates for a human-reviewed refactoring decision.\n\nAlternative: Similar descriptions hide a meaningful behavioral difference.\n\nAcceptable handling: record the condition, preserve source data, and stop affected follow-up.\n"
+      }
+    ]
+  }
+}

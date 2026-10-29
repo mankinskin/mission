@@ -26,15 +26,15 @@ mod schema_renderers;
 mod typed_migration;
 mod typed_source;
 mod waypoint_relationships;
-pub use waypoint_relationships::*;
-pub use repair::*;
 pub use artifact_contract::{
     ARTIFACT_PROVENANCE_SCHEMA_VERSION, MissionArtifactProvenance, MissionFileFormat,
     MissionFileProvenance, MissionFileRole, resolve_artifact_reference,
 };
+pub use repair::*;
+pub use schema_renderers::*;
 pub use typed_migration::*;
 pub use typed_source::*;
-pub use schema_renderers::*;
+pub use waypoint_relationships::*;
 
 /// Legacy native authoring version; v2 requires explicit authored outcome plans.
 pub const SCHEMA_VERSION: u32 = 1;
@@ -280,7 +280,9 @@ pub fn collect_bundle(manifest_path: &Path) -> Result<MissionBundle, MissionErro
 
 pub fn validate_bundle(bundle: &MissionBundle) -> Result<(), Vec<Diagnostic>> {
     let mut diagnostics = validate_manifest_shape(&bundle.manifest, Path::new("manifest.json"));
-    diagnostics.extend(schema_renderers::validate_requirement_shapes(&bundle.manifest.requirements));
+    diagnostics.extend(schema_renderers::validate_requirement_shapes(
+        &bundle.manifest.requirements,
+    ));
     let mut ids = BTreeSet::new();
     let mut waypoint_by_id = BTreeMap::new();
     for (index, waypoint) in bundle.waypoints.iter().enumerate() {
@@ -553,7 +555,10 @@ pub fn validate_bundle(bundle: &MissionBundle) -> Result<(), Vec<Diagnostic>> {
 
 fn validate_manifest_shape(manifest: &BundleManifest, path: &Path) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
-    if !matches!(manifest.schema_version, SCHEMA_VERSION | OUTCOME_BUNDLE_SCHEMA_VERSION) {
+    if !matches!(
+        manifest.schema_version,
+        SCHEMA_VERSION | OUTCOME_BUNDLE_SCHEMA_VERSION
+    ) {
         diagnostics.push(diag(
             "unsupported-schema-version",
             path,
@@ -761,13 +766,20 @@ fn render_with_consumer(
         validate_bundle(bundle)?;
     }
     let relationships = if let Some(workspace) = workspace {
-        waypoint_relationships::resolve_bundle(workspace, bundle)
-            .map_err(|error| match error {
-                MissionError::Validation(_, diagnostics) => diagnostics,
-                other => vec![contract_diag("mission-waypoint-link-unavailable", "", &other.to_string())],
-            })?
+        waypoint_relationships::resolve_bundle(workspace, bundle).map_err(|error| match error {
+            MissionError::Validation(_, diagnostics) => diagnostics,
+            other => vec![contract_diag(
+                "mission-waypoint-link-unavailable",
+                "",
+                &other.to_string(),
+            )],
+        })?
     } else {
-        if bundle.waypoints.iter().any(|waypoint| !waypoint.relationships.is_empty()) {
+        if bundle
+            .waypoints
+            .iter()
+            .any(|waypoint| !waypoint.relationships.is_empty())
+        {
             return Err(vec![contract_diag(
                 "mission-waypoint-link-root-required",
                 "/relationships",
@@ -785,9 +797,9 @@ fn render_with_consumer(
     );
     for (index, id) in bundle.manifest.execution_order.iter().enumerate() {
         if let Some(content) = relationships.get(id) {
-            rendered.roadmap.extend_from_slice(
-                format!("\n## Linked entities: `{id}`\n\n{content}").as_bytes(),
-            );
+            rendered
+                .roadmap
+                .extend_from_slice(format!("\n## Linked entities: `{id}`\n\n{content}").as_bytes());
             let filename = format!("waypoints/{:02}-{id}.md", index + 1);
             if let Some(part) = rendered.parts.get_mut(&filename) {
                 part.extend_from_slice(format!("\n## Linked entities\n\n{content}").as_bytes());
@@ -820,7 +832,9 @@ fn render_materialized_with_consumer(
         &mut roadmap,
         &bundle.manifest.artifacts,
         workspace,
-        generated_directory.map(|path| path.join("ROADMAP.md")).as_deref(),
+        generated_directory
+            .map(|path| path.join("ROADMAP.md"))
+            .as_deref(),
     );
     if !bundle.manifest.requirements.is_empty() {
         roadmap.push_str("## Requirements\n\n| ID | Requirement | Deferred | Canonical criteria |\n|---|---|---|---|\n");
@@ -974,7 +988,9 @@ fn render_materialized_with_consumer(
             mission_id,
             snapshot_id,
             workspace,
-            generated_directory.map(|path| path.join("README.md")).as_deref(),
+            generated_directory
+                .map(|path| path.join("README.md"))
+                .as_deref(),
         ),
         roadmap: roadmap.into_bytes(),
         parts,
@@ -1055,6 +1071,8 @@ fn escape(value: &str) -> String {
 
 pub struct MissionStore {
     root: PathBuf,
+    #[cfg(test)]
+    test_event_metadata: Option<(Uuid, u64)>,
 }
 
 /// File-backed lifecycle boundary used by the shared Mission facade.
@@ -1213,7 +1231,11 @@ impl MissionLifecycle {
         validate_bundle(&accepted.bundle)
             .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
         waypoint_relationships::resolve_bundle(
-            self.store.root.ancestors().nth(3).unwrap_or(&self.store.root),
+            self.store
+                .root
+                .ancestors()
+                .nth(3)
+                .unwrap_or(&self.store.root),
             &accepted.bundle,
         )?;
         Ok(accepted)
@@ -1340,10 +1362,13 @@ impl MissionStore {
             self.root.ancestors().nth(3),
             Some(&generated_directory),
         )
-            .map_err(|errors| MissionError::Validation(errors.len(), errors))?;
+        .map_err(|errors| MissionError::Validation(errors.len(), errors))?;
         rendered.parts.insert(
             "HISTORY.md".into(),
-            output_history::history(Some(&self.root.join(mission_id.to_string())), bundle.manifest.revision)?,
+            output_history::history(
+                Some(&self.root.join(mission_id.to_string())),
+                bundle.manifest.revision,
+            )?,
         );
         Ok(rendered)
     }
@@ -1353,7 +1378,38 @@ impl MissionStore {
             .join(".workflow-tools")
             .join("mission")
             .join("missions");
-        Self { root }
+        Self {
+            root,
+            #[cfg(test)]
+            test_event_metadata: None,
+        }
+    }
+
+    #[cfg(test)]
+    // The test-only integration harness uses these helpers; the unit-test
+    // target compiles this module without that integration target.
+    #[allow(dead_code)]
+    pub(crate) fn with_test_event_metadata(
+        mut self,
+        event_id: Uuid,
+        recorded_at_unix_ms: u64,
+    ) -> Self {
+        self.test_event_metadata = Some((event_id, recorded_at_unix_ms));
+        self
+    }
+
+    #[cfg(test)]
+    #[allow(dead_code)]
+    pub(crate) fn check_generated_output(&self, mission_id: Uuid) -> Result<(), MissionError> {
+        let accepted = self.get(mission_id)?;
+        let rendered = self.render_projection(&accepted.bundle, mission_id, None)?;
+        let generated = self.root.join(mission_id.to_string()).join("generated");
+        let diagnostics = rendered.check_generated(&generated)?;
+        if diagnostics.is_empty() {
+            Ok(())
+        } else {
+            Err(MissionError::Validation(diagnostics.len(), diagnostics))
+        }
     }
 
     pub fn init(workspace_root: &Path) -> Result<Self, MissionError> {
@@ -1469,7 +1525,13 @@ impl MissionStore {
         inputs: &MissionOutputInputs,
         status_snapshot: Option<(&BTreeMap<String, WaypointState>, &str)>,
     ) -> Result<AcceptedMission, MissionError> {
-        self.publish_inner(mission_id, bundle, expected_current_revision, status_snapshot, Some(inputs))
+        self.publish_inner(
+            mission_id,
+            bundle,
+            expected_current_revision,
+            status_snapshot,
+            Some(inputs),
+        )
     }
 
     pub fn publish_with_status_snapshot(

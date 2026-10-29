@@ -1,0 +1,1 @@
+A separate fixture-authored continuation for the later whole state.

@@ -1,0 +1,45 @@
+{
+  "waypoint_id": "ticket-set",
+  "document": {
+    "blocks": [
+      {
+        "type": "heading",
+        "level": 2,
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Adapted objective"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Create exactly one Ticket for each ticket-backed API, facade, session-attachment, and migration surface."
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "level": 2,
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Constraints and validation"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Keep W3 alignment, W8 guidance, and W9 closure single-session; preserve status authority in each linked Ticket and reconcile the serial prerequisite chain. Validation guidance: Read each exact Ticket ID, objective, acceptance, Spec link, and dependency edge.. Non-goal: Do not activate implementation before all plan references are read back or create a scheduling Ticket.."
+          }
+        ]
+      }
+    ]
+  }
+}

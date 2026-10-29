@@ -74,7 +74,10 @@ impl SharedEntity {
     }
 
     pub fn from_mission(mission: &AcceptedMission) -> Result<Self, Diagnostic> {
-        if !matches!(mission.bundle.manifest.schema_version, SCHEMA_VERSION | OUTCOME_BUNDLE_SCHEMA_VERSION) {
+        if !matches!(
+            mission.bundle.manifest.schema_version,
+            SCHEMA_VERSION | OUTCOME_BUNDLE_SCHEMA_VERSION
+        ) {
             return Err(contract_diag(
                 "mission-shared-schema-unsupported",
                 "/bundle/manifest/schema_version",
@@ -100,7 +103,10 @@ impl SharedEntity {
     }
 
     pub fn from_typed_mission(source: &TypedDraft) -> Result<Self, Diagnostic> {
-        if !matches!(source.schema_version, TYPED_SOURCE_SCHEMA_VERSION | OUTCOME_SOURCE_SCHEMA_VERSION) {
+        if !matches!(
+            source.schema_version,
+            TYPED_SOURCE_SCHEMA_VERSION | OUTCOME_SOURCE_SCHEMA_VERSION
+        ) {
             return Err(contract_diag(
                 "mission-shared-schema-unsupported",
                 "/schema_version",

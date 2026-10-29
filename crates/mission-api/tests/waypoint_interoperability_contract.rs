@@ -515,21 +515,18 @@ fn generation_reads_current_ticket_specification_criterion_and_execution_content
     ] {
         assert!(roadmap.contains(content), "missing {content}: {roadmap}");
     }
-    assert!(
-        roadmap.contains(
-            &fixture
-                .root()
-                .canonicalize()
-                .unwrap()
-                .to_string_lossy()
-                .to_string()
-        )
-    );
-    assert!(
-        String::from_utf8(rendered.parts["waypoints/01-verify.md"].clone())
-            .unwrap()
-            .contains("Updated Ticket")
-    );
+    assert!(roadmap.contains(
+        "Owning workspace: selected workspace root (local records in .workflow-tools/)."
+    ));
+    let canonical_root = fixture.root().canonicalize().unwrap();
+    assert!(!roadmap.contains(&canonical_root.to_string_lossy().to_string()));
+    assert!(roadmap.contains("renderer: mission-api/7"));
+    let part = String::from_utf8(rendered.parts["waypoints/01-verify.md"].clone()).unwrap();
+    assert!(part.contains("Updated Ticket"));
+    assert!(part.contains(
+        "Owning workspace: selected workspace root (local records in .workflow-tools/)."
+    ));
+    assert!(!part.contains(&canonical_root.to_string_lossy().to_string()));
     assert!(
         lifecycle
             .render_mission(saved.mission_id)
@@ -537,6 +534,81 @@ fn generation_reads_current_ticket_specification_criterion_and_execution_content
             .contains("Updated Ticket")
     );
     assert_eq!(snapshot(&fixture.mission_dir()), before);
+}
+
+#[test]
+fn linked_v7_publication_preserves_unlinked_v6_history() {
+    let mut fixture = Fixture::new();
+    let mission_id = fixture.draft.mission_id;
+    let lifecycle = MissionLifecycle::open(fixture.root());
+    lifecycle
+        .publish_draft(mission_id, fixture.draft.clone(), 1)
+        .unwrap();
+    let directory = fixture.mission_dir();
+    let store = MissionStore::open(fixture.root());
+    let accepted = store.get(mission_id).unwrap();
+    let mut unlinked_v2 = accepted.bundle.clone();
+    unlinked_v2.manifest.schema_version = OUTCOME_BUNDLE_SCHEMA_VERSION;
+    let unlinked_revision = accepted.bundle.manifest.revision + 1;
+    unlinked_v2.manifest.revision = unlinked_revision;
+    for waypoint in &mut unlinked_v2.waypoints {
+        waypoint.outcome_plan = Some(WaypointOutcomePlan {
+            expected_outcome: "Fixture-authored migration outcome".into(),
+            alternative_outcomes: vec![AlternativeOutcome {
+                outcome: "Fixture validation reports a problem".into(),
+                acceptable_handling: vec!["Record the observation and preserve the state.".into()],
+            }],
+        });
+    }
+    store
+        .publish(
+            mission_id,
+            unlinked_v2.clone(),
+            accepted.bundle.manifest.revision,
+        )
+        .unwrap();
+    let original_roadmap = fs::read(directory.join("generated/ROADMAP.md")).unwrap();
+    let original_contract = store.output_contract(mission_id).unwrap();
+    assert_eq!(original_contract.renderer, "mission-api/6");
+    assert!(String::from_utf8(original_roadmap.clone())
+        .unwrap()
+        .contains("renderer: mission-api/6"));
+
+    let mut linked_v2 = unlinked_v2;
+    linked_v2.manifest.revision = unlinked_revision + 1;
+    linked_v2.waypoints[0].relationships = WaypointRelationships {
+        specification_ids: vec![fixture.spec.id],
+        criteria: vec![fixture.criterion.clone()],
+        executions: vec![WaypointExecutionReference {
+            execution_id: "fixture-green".into(),
+            criterion: None,
+        }],
+    };
+    store
+        .publish(mission_id, linked_v2, unlinked_revision)
+        .unwrap();
+
+    let contract = store.output_contract(mission_id).unwrap();
+    assert_eq!(contract.renderer, "mission-api/7");
+    assert!(fs::read_to_string(directory.join("generated/ROADMAP.md"))
+        .unwrap()
+        .contains("renderer: mission-api/7"));
+    let archived_contract_path = directory
+        .join("history/states")
+        .join(format!("revision-{unlinked_revision}/output-contract.json"));
+    let archived_contract: MissionOutputContract =
+        serde_json::from_slice(&fs::read(archived_contract_path).unwrap()).unwrap();
+    assert_eq!(archived_contract.renderer, "mission-api/6");
+    assert_eq!(
+        fs::read(
+            directory
+                .join("history/states")
+                .join(format!("revision-{unlinked_revision}/generated/ROADMAP.md"))
+        )
+        .unwrap(),
+        original_roadmap
+    );
+    store.verify_output_history(mission_id).unwrap();
 }
 
 #[test]

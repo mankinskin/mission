@@ -1,0 +1,193 @@
+{
+  "schema_version": 1,
+  "mission_id": "00000000-0000-4000-8000-000000002001",
+  "revision": 1,
+  "revision_label": "revision-1",
+  "renderer": "mission-api/7",
+  "producer": "mission-api",
+  "purpose": "whole-state pre-approval inventory",
+  "files": [
+    {
+      "path": "accepted.json",
+      "size_bytes": 23126,
+      "sha256": "6acc5cf630bb9aa9963b655424a8cb42498c8c21d1f11be31701f42b02700939",
+      "role": "generated",
+      "format": "json"
+    },
+    {
+      "path": "artifact-provenance.json",
+      "size_bytes": 7197,
+      "sha256": "4cc10a5a036b0e62b2d6e43d9771aced66b553a8388833a2844ea6692f0e02c3",
+      "role": "generated",
+      "format": "json"
+    },
+    {
+      "path": "generated/HISTORY.md",
+      "size_bytes": 499,
+      "sha256": "08bbd94a6770927a3c218c6c47c1f74fe0cec286e266e4964a1e0451a3d4d580",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/README.md",
+      "size_bytes": 1536,
+      "sha256": "569a55258ae3fb241f160544e343d2075de97e23f509439a5ca4aeaa36a53c8f",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/ROADMAP.md",
+      "size_bytes": 16251,
+      "sha256": "f60bac744486dc586d368f49e29b41ad66e69c0b7fdc088d3dd09faa0cf0b100",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/01-mission-spec.md",
+      "size_bytes": 2470,
+      "sha256": "3dc1a16ee9b09c0abfeac5ec26abc5f578ac8162593be3d4e80f7c236a8db2ab",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/02-ticket-set.md",
+      "size_bytes": 2359,
+      "sha256": "24277bfa819358c419491650bfa6a8b86208e3cde6bcf102b2d8d022a4061ed2",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/03-roadmap-contract.md",
+      "size_bytes": 2400,
+      "sha256": "947374d18ab40aa367a21303e0beb75ce0c49c23ae38efda270ba6792a6639f0",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/04-mission-api.md",
+      "size_bytes": 3432,
+      "sha256": "da29b3100d73f997c2e796f843c1739a6834d938d9b4b2c991d7114ebee254b6",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/05-mission-transports.md",
+      "size_bytes": 2270,
+      "sha256": "ffc6f1fe60963a2bcdd9554990d1b27c6af27b889edb6be1b4a1cf6835a853f0",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/06-session-attachment.md",
+      "size_bytes": 2284,
+      "sha256": "84a5a6d5d855994f7e5407c29824ee0d2c75cae4ef69587ecc6a741f307d1e14",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/07-dossier-migration.md",
+      "size_bytes": 2563,
+      "sha256": "6f7dab895a5a32e4dc605b08daddb625362711f7085f373576484e9a467cbf19",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/08-guidance-retarget.md",
+      "size_bytes": 2358,
+      "sha256": "b9a35cce7d254f141d96cefbc8afd8c887f49a8706f83d8315f3231a00ea6aa8",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/09-validation-closure.md",
+      "size_bytes": 2347,
+      "sha256": "60f7145d98e77844c1fe4b131aa23726f14323c899e06e03ff3dfa838c76ded4",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/README.md",
+      "size_bytes": 471,
+      "sha256": "7ffc2c1646c043bba050a1e29ba2412bd863c2e7bd39faf8f498ac8f19e3ae7b",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "mission.md",
+      "size_bytes": 10725,
+      "sha256": "cd1f88b94d4dcb9a77e60e91fcf16dca98b715f695f7cd7c47fd5e7dac3e10c9",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "parts/dossier-migration.json",
+      "size_bytes": 1323,
+      "sha256": "f1838cc445beada267761f4c99fcdbb19d4801f5c5344bb695bb2a3af6a2fbc5",
+      "role": "authored",
+      "format": "json"
+    },
+    {
+      "path": "parts/guidance-retarget.json",
+      "size_bytes": 1244,
+      "sha256": "29f8b8a762aa398aeac918e7d131f9a2f026d376ee88aee039cf2716e9e507d9",
+      "role": "authored",
+      "format": "json"
+    },
+    {
+      "path": "parts/mission-api.json",
+      "size_bytes": 1231,
+      "sha256": "e6f6450fb4dea4874efcf5dc3c09e5c8d4ca1310b44986a607940c66cdf1ac35",
+      "role": "authored",
+      "format": "json"
+    },
+    {
+      "path": "parts/mission-spec.json",
+      "size_bytes": 1328,
+      "sha256": "9ea6c6c201b0f03382d5349fa0284c0283e8b971adcb8843e69b4a3037cb3cbf",
+      "role": "authored",
+      "format": "json"
+    },
+    {
+      "path": "parts/mission-transports.json",
+      "size_bytes": 1205,
+      "sha256": "c77c88eb3370c327ab4bc155ae21984964208e138cc602843f586199312a6abf",
+      "role": "authored",
+      "format": "json"
+    },
+    {
+      "path": "parts/roadmap-contract.json",
+      "size_bytes": 1257,
+      "sha256": "484e825bcd72566589146a82450662fa5ce91bf424843450d064184871520434",
+      "role": "authored",
+      "format": "json"
+    },
+    {
+      "path": "parts/session-attachment.json",
+      "size_bytes": 1200,
+      "sha256": "e64bb28c23633c37c439ce494d418c0c51bf7e1ed5cbfa71aed3167ebb8a0127",
+      "role": "authored",
+      "format": "json"
+    },
+    {
+      "path": "parts/ticket-set.json",
+      "size_bytes": 1239,
+      "sha256": "825eddfb4ec5d46405452eafe03b5d9062f770c71ce22608d59b553e9ddfed42",
+      "role": "authored",
+      "format": "json"
+    },
+    {
+      "path": "parts/validation-closure.json",
+      "size_bytes": 1260,
+      "sha256": "8bd8be533e7cf9499d3a332edc517569e05d12ef3fb3c65d62ec10cce00fbaa2",
+      "role": "authored",
+      "format": "json"
+    },
+    {
+      "path": "source.json",
+      "size_bytes": 14974,
+      "sha256": "222e12d1979f5183884da1b3666c75948234970a416651fe33db2a15fd6b770d",
+      "role": "authored",
+      "format": "json"
+    }
+  ]
+}

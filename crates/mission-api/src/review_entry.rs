@@ -150,7 +150,11 @@ pub(super) fn check_generated(
             && parent != generated
             && fs::symlink_metadata(parent).is_ok_and(|metadata| metadata.file_type().is_symlink())
         {
-            diagnostics.push(issue("generated-destination-invalid", parent, "Generated subdirectories must not be symbolic links."));
+            diagnostics.push(issue(
+                "generated-destination-invalid",
+                parent,
+                "Generated subdirectories must not be symbolic links.",
+            ));
             continue;
         }
         match fs::symlink_metadata(&path) {
@@ -235,10 +239,16 @@ fn check_extra_files(
             entries.sort_by_key(|entry| entry.file_name());
             for entry in entries {
                 let path = entry.path();
-                let name = path.strip_prefix(generated)
+                let name = path
+                    .strip_prefix(generated)
                     .map_err(|error| std::io::Error::other(error.to_string()))?
-                    .to_string_lossy().replace('\\', "/");
-                if entry.file_type()?.is_dir() && expected.keys().any(|key| key.starts_with(&format!("{name}/"))) {
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                if entry.file_type()?.is_dir()
+                    && expected
+                        .keys()
+                        .any(|key| key.starts_with(&format!("{name}/")))
+                {
                     check_extra_files(generated, &path, expected, diagnostics)?;
                 } else if !expected.contains_key(name.as_str()) {
                     diagnostics.push(issue(

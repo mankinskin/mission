@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "mission_id": "00000000-0000-4000-8000-000000001001",
+  "revision": 1,
+  "revision_label": "revision-1",
+  "renderer": "mission-api/7",
+  "producer": "mission-api",
+  "purpose": "whole-state pre-approval inventory",
+  "files": [
+    {
+      "path": "REQUEST.md",
+      "size_bytes": 60,
+      "sha256": "1304e2c5c5b6916c0bf273d618e9d1987c88079c96380b82f93868ad5edae029",
+      "role": "authored",
+      "format": "markdown"
+    },
+    {
+      "path": "accepted.json",
+      "size_bytes": 12678,
+      "sha256": "d0434cf64a0fbe3ad318e97416e250c9fa55c1d99c8d5de77b40af7a9a50b8ea",
+      "role": "generated",
+      "format": "json"
+    },
+    {
+      "path": "artifact-provenance.json",
+      "size_bytes": 3066,
+      "sha256": "8f370bb393dd31d74ed718fdde9ab0eed612ddb3faa3c1bc4a82bd059deae202",
+      "role": "generated",
+      "format": "json"
+    },
+    {
+      "path": "generated/HISTORY.md",
+      "size_bytes": 499,
+      "sha256": "08bbd94a6770927a3c218c6c47c1f74fe0cec286e266e4964a1e0451a3d4d580",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/README.md",
+      "size_bytes": 1372,
+      "sha256": "f390401fe020db94ee9c36d03e287bfd6231b4845294a803075d2f5c3cf3ba33",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/ROADMAP.md",
+      "size_bytes": 8187,
+      "sha256": "bbd2dd0bda8af80a8bd406a1f3359e4aa786c40657292e49a2cc6fd4f0ec7ca7",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/01-doc-contract.md",
+      "size_bytes": 2694,
+      "sha256": "aded70e29eba1cc682c9e3fe29209a1d42ce64cef5f9edc92ffe786ea56a7c24",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/02-health-check.md",
+      "size_bytes": 2628,
+      "sha256": "04dd94cec6b37fef49f73dbf99f22058b2dfefdacc78189ba443db5391a6a1bc",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/03-code-map.md",
+      "size_bytes": 2942,
+      "sha256": "60b343375580645f6b54a4f1eb064bb42679deabed93e2f20eae1d2535d2acc7",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/04-semantic-review.md",
+      "size_bytes": 3659,
+      "sha256": "43cfad0002c300f7690b662b1d45554beff8e229d3d885896e3bf507704abf94",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/README.md",
+      "size_bytes": 196,
+      "sha256": "3eee357aa88fd0799d6b1b5e63539ef3feaf9af4367571e1ca6cdbf76dd89bc5",
+      "role": "generated",
+      "format": "markdown"
+    }
+  ]
+}

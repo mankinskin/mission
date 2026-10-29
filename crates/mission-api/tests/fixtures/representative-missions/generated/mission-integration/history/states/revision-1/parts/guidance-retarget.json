@@ -1,0 +1,45 @@
+{
+  "waypoint_id": "guidance-retarget",
+  "document": {
+    "blocks": [
+      {
+        "type": "heading",
+        "level": 2,
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Adapted objective"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Replace only approved dossier routes with durable Mission operations after migration is validated."
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "level": 2,
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Constraints and validation"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Require explicit requester authorization for takeover regardless of prior session status; preserve prior/new owner provenance and avoid unrelated policy edits. Validation guidance: Search only owned guidance for stale routes and verify every changed link and takeover boundary.. Non-goal: Do not rewrite unrelated instructions or infer authority from expiry, pins, or history.."
+          }
+        ]
+      }
+    ]
+  }
+}

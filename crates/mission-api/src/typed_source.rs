@@ -305,7 +305,11 @@ impl MissionLifecycle {
         let source = self.get_mission_source(mission_id)?;
         let accepted = accepted_from_typed(&source, Some(&self.store.get(mission_id)?))?;
         let relationships = waypoint_relationships::resolve_bundle(
-            self.store.root.ancestors().nth(3).unwrap_or(&self.store.root),
+            self.store
+                .root
+                .ancestors()
+                .nth(3)
+                .unwrap_or(&self.store.root),
             &accepted.bundle,
         )?;
         let mut markdown = format!("# {}\n\n{}\n", source.title, source.objective);
@@ -354,7 +358,8 @@ impl MissionLifecycle {
                 .validate_child_missions(draft.mission_id, &next.bundle)
                 .map_err(|errors| MissionError::Validation(errors.len(), errors))?;
             Some(
-                self.store.render_projection(&next.bundle, draft.mission_id, None)?,
+                self.store
+                    .render_projection(&next.bundle, draft.mission_id, None)?,
             )
         } else {
             None
@@ -508,13 +513,14 @@ impl MissionStore {
         let lifecycle = MissionLifecycle {
             store: Self {
                 root: self.root.clone(),
+                #[cfg(test)]
+                test_event_metadata: None,
             },
         };
         let previous = lifecycle.get_mission_source(next.mission_id)?;
         let old = self.get(next.mission_id)?;
-        let mut source = typed_migration::convert(
-            self.root.ancestors().nth(3).unwrap_or(&self.root), next,
-        )?;
+        let mut source =
+            typed_migration::convert(self.root.ancestors().nth(3).unwrap_or(&self.root), next)?;
         for waypoint in &mut source.waypoints {
             if old.bundle.waypoints.iter().any(|w| {
                 w.waypoint_id == waypoint.waypoint_id
@@ -656,22 +662,25 @@ impl MissionStore {
                     let lifecycle = MissionLifecycle {
                         store: Self {
                             root: self.root.clone(),
+                            #[cfg(test)]
+                            test_event_metadata: None,
                         },
                     };
                     fs::write(stage.join("mission.md"), lifecycle.render_typed(source))?;
                 }
             }
             write_new(
-                &stage
-                    .join("history")
-                    .join(format!(
-                        "provenance-revision-{}.json",
-                        accepted.bundle.manifest.revision
-                    )),
+                &stage.join("history").join(format!(
+                    "provenance-revision-{}.json",
+                    accepted.bundle.manifest.revision
+                )),
                 &serde_json::to_vec_pretty(&provenance)?,
             )?;
             super::artifact_contract::validate_file_outputs(&provenance, &stage, false)?;
-            fs::write(stage.join("artifact-provenance.json"), serde_json::to_vec_pretty(&provenance)?)?;
+            fs::write(
+                stage.join("artifact-provenance.json"),
+                serde_json::to_vec_pretty(&provenance)?,
+            )?;
             if let Some(inputs) = inputs {
                 super::output_history::write_inputs(&stage, inputs)?;
             }
@@ -882,7 +891,10 @@ fn typed_error(code: &'static str, message: &str) -> MissionError {
 }
 
 pub(super) fn validate_typed(draft: &TypedDraft, publishing: bool) -> Result<(), MissionError> {
-    if !matches!(draft.schema_version, TYPED_SOURCE_SCHEMA_VERSION | OUTCOME_SOURCE_SCHEMA_VERSION) {
+    if !matches!(
+        draft.schema_version,
+        TYPED_SOURCE_SCHEMA_VERSION | OUTCOME_SOURCE_SCHEMA_VERSION
+    ) {
         return Err(typed_error(
             "invalid-schema-version",
             &format!(
@@ -903,11 +915,16 @@ pub(super) fn validate_typed(draft: &TypedDraft, publishing: bool) -> Result<(),
             waypoint.outcome_plan.as_ref(),
             draft.schema_version == OUTCOME_SOURCE_SCHEMA_VERSION,
             &waypoint.waypoint_id,
-        ).map_err(one_diagnostic)?;
+        )
+        .map_err(one_diagnostic)?;
         waypoint.relationships.validate().map_err(one_diagnostic)?;
         let refs = &waypoint.ownership_refs;
         if let (Some(id), Some(uri)) = (refs.ticket_id, &refs.ticket_uri)
-            && uri.rsplit('/').next().and_then(|value| Uuid::parse_str(value).ok()) != Some(id)
+            && uri
+                .rsplit('/')
+                .next()
+                .and_then(|value| Uuid::parse_str(value).ok())
+                != Some(id)
         {
             return Err(typed_error(
                 "mission-waypoint-link-identity-mismatch",

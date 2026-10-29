@@ -1,0 +1,1 @@
+Synthetic continuation retained in later whole states.

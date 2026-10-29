@@ -788,12 +788,13 @@ impl MissionLifecycle {
             response.disposition = Some("already_conformant".into());
             return (response, None);
         }
-        let rendered = match self.store.render_projection(&next.bundle, request.mission_id, None) {
+        let rendered = match self
+            .store
+            .render_projection(&next.bundle, request.mission_id, None)
+        {
             Ok(rendered) => rendered,
             Err(errors) => {
-                response
-                    .blockers
-                    .push(format!("render-failed: {errors}"));
+                response.blockers.push(format!("render-failed: {errors}"));
                 return (response, None);
             }
         };
@@ -1053,7 +1054,9 @@ impl MissionLifecycle {
                 "compensation source history already exists.",
             ));
         }
-        let rendered = self.store.render_projection(&restored.bundle, mission_id, None)?;
+        let rendered = self
+            .store
+            .render_projection(&restored.bundle, mission_id, None)?;
         let projected = projected_rollback_fingerprint(
             &current_files,
             &restored,
@@ -1439,8 +1442,7 @@ fn projected_rollback_fingerprint(
     for (name, bytes) in rendered.files() {
         after.insert(format!("generated/{name}"), sha256(bytes));
     }
-    let provenance =
-        MissionArtifactProvenance::for_write(accepted, source, Some(rendered));
+    let provenance = MissionArtifactProvenance::for_write(accepted, source, Some(rendered));
     after.insert(
         format!("history/provenance-revision-{revision}.json"),
         sha256(&serde_json::to_vec_pretty(&provenance)?),
@@ -1458,12 +1460,22 @@ fn extend_output_state(
 ) -> Result<(), MissionError> {
     let directory = lifecycle.store.root.join(accepted.mission_id.to_string());
     let projected = super::output_history::projected_state(
-        &directory, accepted, source, rendered, source.map(|source| lifecycle.render_typed(source)),
+        &directory,
+        accepted,
+        source,
+        rendered,
+        source.map(|source| lifecycle.render_typed(source)),
     )?;
     for (name, bytes) in projected {
         let digest = sha256(&bytes);
         after.insert(name.clone(), digest.clone());
-        after.insert(format!("history/states/revision-{}/{name}", accepted.bundle.manifest.revision), digest);
+        after.insert(
+            format!(
+                "history/states/revision-{}/{name}",
+                accepted.bundle.manifest.revision
+            ),
+            digest,
+        );
     }
     Ok(())
 }

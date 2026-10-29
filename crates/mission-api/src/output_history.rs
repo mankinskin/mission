@@ -79,6 +79,16 @@ fn timestamp() -> Result<u64, MissionError> {
         .ok_or_else(|| invalid("System clock cannot supply a recording timestamp."))
 }
 
+impl MissionStore {
+    fn event_metadata(&self) -> Result<(Uuid, u64), MissionError> {
+        #[cfg(test)]
+        if let Some(metadata) = self.test_event_metadata {
+            return Ok(metadata);
+        }
+        Ok((Uuid::new_v4(), timestamp()?))
+    }
+}
+
 fn invalid(message: &str) -> MissionError {
     MissionError::Validation(
         1,
@@ -486,11 +496,12 @@ impl MissionStore {
                 "Reaction must bind to the current revision; historical approval reuse is forbidden.",
             ));
         }
+        let (event_id, recorded_at_unix_ms) = self.event_metadata()?;
         let event = MissionApprovalEvent {
             schema_version: 1,
-            event_id: Uuid::new_v4(),
+            event_id,
             mission_id,
-            recorded_at_unix_ms: timestamp()?,
+            recorded_at_unix_ms,
             reaction: request,
         };
         self.validate_event(&event, &directory)?;

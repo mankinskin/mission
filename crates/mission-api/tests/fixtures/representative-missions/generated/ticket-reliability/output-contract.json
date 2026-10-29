@@ -1,0 +1,179 @@
+{
+  "schema_version": 1,
+  "mission_id": "00000000-0000-4000-8000-000000003001",
+  "revision": 1,
+  "revision_label": "revision-1",
+  "renderer": "mission-api/7",
+  "producer": "mission-api",
+  "purpose": "whole-state pre-approval inventory",
+  "files": [
+    {
+      "path": "REQUEST.md",
+      "size_bytes": 60,
+      "sha256": "1304e2c5c5b6916c0bf273d618e9d1987c88079c96380b82f93868ad5edae029",
+      "role": "authored",
+      "format": "markdown"
+    },
+    {
+      "path": "accepted.json",
+      "size_bytes": 44050,
+      "sha256": "29e906e861b99c11835eeeef60476d76c08726c52e59a94b84f20a5764d889e8",
+      "role": "generated",
+      "format": "json"
+    },
+    {
+      "path": "artifact-provenance.json",
+      "size_bytes": 6520,
+      "sha256": "386363195497ee3fecb0bb56475dfb5ff09d63233990a45a0390a49eb237ca7d",
+      "role": "generated",
+      "format": "json"
+    },
+    {
+      "path": "generated/HISTORY.md",
+      "size_bytes": 499,
+      "sha256": "08bbd94a6770927a3c218c6c47c1f74fe0cec286e266e4964a1e0451a3d4d580",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/README.md",
+      "size_bytes": 1837,
+      "sha256": "28e6b55469e76a3a7b6f900be125c7c6b773c2e979a51550e606f8325a4cd5b1",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/ROADMAP.md",
+      "size_bytes": 26490,
+      "sha256": "a15c15d1426a9e20313ffb8b147837f17022c75d873f5e6c70adfe67eb05f569",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/01-part-write.md",
+      "size_bytes": 2401,
+      "sha256": "0fe8020d219f285ed41d1c746e0052e27d33ec9088a54b03f3137620f75ccd64",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/02-recoverable-publication.md",
+      "size_bytes": 2551,
+      "sha256": "d945ad0245d623c73f84171b7672f974c494368714bb78794502856b0f590a6a",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/03-residual-test-scope.md",
+      "size_bytes": 2573,
+      "sha256": "3e5ae17c18beea33a4d104a9ae49013c3e3d684dfc1bf8502bf7d17928ff1464",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/04-missing-prefix.md",
+      "size_bytes": 2428,
+      "sha256": "688c8356095b650d3830743cd7b9983b75a827d31727b643da1b6f7b3202d98c",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/05-descendant-refs.md",
+      "size_bytes": 2346,
+      "sha256": "dfe7b8d4c4f4d45c87228226946566bf0b9fbd3c8f6bf459a4f18ae1b85c3f6d",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/06-default-workspace.md",
+      "size_bytes": 2464,
+      "sha256": "5628a5138d003804eeee8c1e61ceef1a33cd83714f3d96b039aacb71f9d7d72a",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/07-board-fixtures.md",
+      "size_bytes": 2363,
+      "sha256": "4f0a3bcf13e25508373874b84c07f1931653667fbe12bf2a8bddd61eba0caa62",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/08-move-fixtures.md",
+      "size_bytes": 2342,
+      "sha256": "d5221abdc3dd8604f5fbca962332f3d5dbdbab73f4aa6e0a40f9426eb3103576",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/09-index-output.md",
+      "size_bytes": 2411,
+      "sha256": "9a0cd1bc017ff748779b7248e0885d442328f5bf466ca15a13e6964a163dfd08",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/10-update-fixture.md",
+      "size_bytes": 2319,
+      "sha256": "156d4e44184bd7f8f72aa4186ccc91625e30584c6e8f434f15c5202cdfee65f2",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/11-test-gate.md",
+      "size_bytes": 2611,
+      "sha256": "fb591c9a96a15a0b48343a67550254725e8a84fa6f352fb51f32c6d1f17ae5fa",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/12-part-layout.md",
+      "size_bytes": 2473,
+      "sha256": "160a6e3c6ada4bcf5f2008d25fb6fe8b08c693969106a11a569607d4719f9e21",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/13-cli-dispatch.md",
+      "size_bytes": 2335,
+      "sha256": "c3f1a19884200e426401bb935c7185701c6ee7ed7293e88a24aba9b546379ece",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/14-migration-scope.md",
+      "size_bytes": 2461,
+      "sha256": "a3526eef96b065e270d610711d469bd07deded0621ffb4c6c131f6228de4976a",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/15-root-preflight.md",
+      "size_bytes": 3522,
+      "sha256": "38d9709d1a9309f17b50a44be4118b9c8776527edd73dea5be9e47e8a4ef1462",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/16-approved-apply.md",
+      "size_bytes": 2543,
+      "sha256": "b247cd64551c1b57b829c39829ba1a26a62b1c3fa4af083152b3910a6d5d941d",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/17-transport-docs.md",
+      "size_bytes": 2395,
+      "sha256": "61202035e3da42539fdbac734fc47649bc4597e849029fadd01ecd6c87ea2850",
+      "role": "generated",
+      "format": "markdown"
+    },
+    {
+      "path": "generated/waypoints/README.md",
+      "size_bytes": 829,
+      "sha256": "4ee1e90c43a2f06d42f69cd51ab3ac899fab331305ee18f723573bed5ee20058",
+      "role": "generated",
+      "format": "markdown"
+    }
+  ]
+}

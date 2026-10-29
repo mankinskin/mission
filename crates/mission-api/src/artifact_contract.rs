@@ -767,12 +767,15 @@ fn known_file_contract(
             true,
         ));
     }
-    if path
-        .strip_prefix("generated/")
-        .is_some_and(|name| matches!(name, "README.md" | "ROADMAP.md" | "HISTORY.md" | "waypoints/README.md")
-            || name.strip_prefix("waypoints/").is_some_and(valid_part_filename)
-            || valid_part_filename(name))
-    {
+    if path.strip_prefix("generated/").is_some_and(|name| {
+        matches!(
+            name,
+            "README.md" | "ROADMAP.md" | "HISTORY.md" | "waypoints/README.md"
+        ) || name
+            .strip_prefix("waypoints/")
+            .is_some_and(valid_part_filename)
+            || valid_part_filename(name)
+    }) {
         return Some((
             MissionFileRole::Generated,
             MissionFileFormat::Markdown,

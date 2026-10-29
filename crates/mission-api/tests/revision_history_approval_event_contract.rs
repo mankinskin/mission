@@ -72,6 +72,9 @@ fn publication_preserves_whole_states_at_shared_revision_labels() {
             .is_file()
     );
     let first = fs::read(directory.join("generated/ROADMAP.md")).unwrap();
+    assert!(String::from_utf8(first.clone())
+        .unwrap()
+        .contains("renderer: mission-api/5"));
     store.publish(id, bundle(3), 1).unwrap();
     assert_eq!(
         fs::read(directory.join("history/states/revision-1/generated/ROADMAP.md")).unwrap(),

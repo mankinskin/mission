@@ -1,0 +1,45 @@
+{
+  "waypoint_id": "mission-transports",
+  "document": {
+    "blocks": [
+      {
+        "type": "heading",
+        "level": 2,
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Adapted objective"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Provide structured-roadmap validate/import/render/publish/check-generated operations over one Mission API through CLI and MCP."
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "level": 2,
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Constraints and validation"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "inlines": [
+          {
+            "type": "text",
+            "text": "Preserve explicit workspace selection, preview-versus-mutation boundaries, diagnostic parity, and recovery behavior. Validation guidance: Build CLI and MCP and compare representative responses, output destinations, and no-write previews.. Non-goal: Do not add HTTP, viewer, session attachment, or scheduling.."
+          }
+        ]
+      }
+    ]
+  }
+}

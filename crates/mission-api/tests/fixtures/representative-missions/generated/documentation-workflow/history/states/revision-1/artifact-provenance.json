@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "mission_id": "00000000-0000-4000-8000-000000001001",
+  "revision": 1,
+  "producer": "workflow-tools/mission-api",
+  "purpose": "Persist a Mission revision and its declared projections",
+  "invocation": "MissionStore::write_authority",
+  "grouping": "mission:00000000-0000-4000-8000-000000001001/revision:1",
+  "inputs": [
+    "in-memory:MissionBundle"
+  ],
+  "outputs": [
+    "accepted.json",
+    "history/revision-1.json",
+    "generated/README.md",
+    "generated/ROADMAP.md",
+    "generated/HISTORY.md",
+    "generated/waypoints/01-doc-contract.md",
+    "generated/waypoints/02-health-check.md",
+    "generated/waypoints/03-code-map.md",
+    "generated/waypoints/04-semantic-review.md",
+    "generated/waypoints/README.md",
+    "history/provenance-revision-1.json"
+  ],
+  "files": [
+    {
+      "path": "accepted.json",
+      "role": "generated",
+      "format": "json",
+      "schema_guarantees": [
+        "mission-accepted/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "history/revision-1.json",
+      "role": "generated",
+      "format": "json",
+      "schema_guarantees": [
+        "mission-accepted/1"
+      ],
+      "immutable": true
+    },
+    {
+      "path": "generated/README.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/ROADMAP.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/HISTORY.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/waypoints/01-doc-contract.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/waypoints/02-health-check.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/waypoints/03-code-map.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/waypoints/04-semantic-review.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/waypoints/README.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "history/provenance-revision-1.json",
+      "role": "generated",
+      "format": "json",
+      "schema_guarantees": [
+        "mission-artifact-provenance/1"
+      ],
+      "immutable": true
+    }
+  ]
+}

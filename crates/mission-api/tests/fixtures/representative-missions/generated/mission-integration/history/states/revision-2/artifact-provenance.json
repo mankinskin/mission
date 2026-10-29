@@ -1,0 +1,296 @@
+{
+  "schema_version": 1,
+  "mission_id": "00000000-0000-4000-8000-000000002001",
+  "revision": 2,
+  "producer": "workflow-tools/mission-api",
+  "purpose": "Persist a Mission revision and its declared projections",
+  "invocation": "MissionStore::write_authority",
+  "grouping": "mission:00000000-0000-4000-8000-000000002001/revision:2",
+  "inputs": [
+    "source.json"
+  ],
+  "outputs": [
+    "accepted.json",
+    "history/revision-2.json",
+    "source.json",
+    "history/source-revision-2.json",
+    "parts/mission-spec.json",
+    "parts/ticket-set.json",
+    "parts/roadmap-contract.json",
+    "parts/mission-api.json",
+    "parts/mission-transports.json",
+    "parts/session-attachment.json",
+    "parts/dossier-migration.json",
+    "parts/guidance-retarget.json",
+    "parts/validation-closure.json",
+    "generated/README.md",
+    "generated/ROADMAP.md",
+    "generated/HISTORY.md",
+    "generated/waypoints/01-mission-spec.md",
+    "generated/waypoints/02-ticket-set.md",
+    "generated/waypoints/03-roadmap-contract.md",
+    "generated/waypoints/04-mission-api.md",
+    "generated/waypoints/05-mission-transports.md",
+    "generated/waypoints/06-session-attachment.md",
+    "generated/waypoints/07-dossier-migration.md",
+    "generated/waypoints/08-guidance-retarget.md",
+    "generated/waypoints/09-validation-closure.md",
+    "generated/waypoints/README.md",
+    "mission.md",
+    "history/provenance-revision-2.json"
+  ],
+  "files": [
+    {
+      "path": "accepted.json",
+      "role": "generated",
+      "format": "json",
+      "schema_guarantees": [
+        "mission-accepted/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "history/revision-2.json",
+      "role": "generated",
+      "format": "json",
+      "schema_guarantees": [
+        "mission-accepted/1"
+      ],
+      "immutable": true
+    },
+    {
+      "path": "source.json",
+      "role": "authored",
+      "format": "json",
+      "schema_guarantees": [
+        "mission-typed-source/2"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "history/source-revision-2.json",
+      "role": "authored",
+      "format": "json",
+      "schema_guarantees": [
+        "mission-typed-source/2"
+      ],
+      "immutable": true
+    },
+    {
+      "path": "parts/mission-spec.json",
+      "role": "authored",
+      "format": "json",
+      "schema_guarantees": [
+        "mission-part-source/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "parts/ticket-set.json",
+      "role": "authored",
+      "format": "json",
+      "schema_guarantees": [
+        "mission-part-source/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "parts/roadmap-contract.json",
+      "role": "authored",
+      "format": "json",
+      "schema_guarantees": [
+        "mission-part-source/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "parts/mission-api.json",
+      "role": "authored",
+      "format": "json",
+      "schema_guarantees": [
+        "mission-part-source/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "parts/mission-transports.json",
+      "role": "authored",
+      "format": "json",
+      "schema_guarantees": [
+        "mission-part-source/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "parts/session-attachment.json",
+      "role": "authored",
+      "format": "json",
+      "schema_guarantees": [
+        "mission-part-source/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "parts/dossier-migration.json",
+      "role": "authored",
+      "format": "json",
+      "schema_guarantees": [
+        "mission-part-source/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "parts/guidance-retarget.json",
+      "role": "authored",
+      "format": "json",
+      "schema_guarantees": [
+        "mission-part-source/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "parts/validation-closure.json",
+      "role": "authored",
+      "format": "json",
+      "schema_guarantees": [
+        "mission-part-source/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/README.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/ROADMAP.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/HISTORY.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/waypoints/01-mission-spec.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/waypoints/02-ticket-set.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/waypoints/03-roadmap-contract.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/waypoints/04-mission-api.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/waypoints/05-mission-transports.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/waypoints/06-session-attachment.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/waypoints/07-dossier-migration.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/waypoints/08-guidance-retarget.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/waypoints/09-validation-closure.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "generated/waypoints/README.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "mission.md",
+      "role": "generated",
+      "format": "markdown",
+      "schema_guarantees": [
+        "utf-8-markdown/1"
+      ],
+      "immutable": false
+    },
+    {
+      "path": "history/provenance-revision-2.json",
+      "role": "generated",
+      "format": "json",
+      "schema_guarantees": [
+        "mission-artifact-provenance/1"
+      ],
+      "immutable": true
+    }
+  ]
+}

@@ -59,15 +59,16 @@ impl MissionLifecycle {
                     continue;
                 };
                 let accepted = store.get(mission_id)?;
-                let diagnostics = validate_manifest_shape(
-                    &accepted.bundle.manifest, Path::new("accepted.json"),
-                );
+                let diagnostics =
+                    validate_manifest_shape(&accepted.bundle.manifest, Path::new("accepted.json"));
                 if !diagnostics.is_empty() {
                     return Err(MissionError::Validation(diagnostics.len(), diagnostics));
                 }
                 match MissionLifecycle::open(workspace).get_mission_source(mission_id) {
                     Ok(_) => continue,
-                    Err(error) if fs::symlink_metadata(entry.path().join("source.json")).is_ok() => {
+                    Err(error)
+                        if fs::symlink_metadata(entry.path().join("source.json")).is_ok() =>
+                    {
                         // Existing but unreadable sources are not legacy records.
                         return Err(error);
                     }
@@ -123,11 +124,17 @@ impl MissionLifecycle {
                 continue;
             }
             if fs::symlink_metadata(
-                store.root.join(record.mission_id.to_string()).join("source.json"),
-            ).is_ok() {
+                store
+                    .root
+                    .join(record.mission_id.to_string())
+                    .join("source.json"),
+            )
+            .is_ok()
+            {
                 record.state = MigrationState::Failed;
                 record.diagnostic = Some(
-                    "typed source appeared after planning; preserve it and replan explicitly".into(),
+                    "typed source appeared after planning; preserve it and replan explicitly"
+                        .into(),
                 );
                 continue;
             }
@@ -199,10 +206,18 @@ impl MissionLifecycle {
                 || restored.bundle.manifest.revision != record.source_revision
                 || snapshot.join("source.json").exists()
             {
-                return Err(migration_error("snapshot", 0, "Original native snapshot identity mismatch."));
+                return Err(migration_error(
+                    "snapshot",
+                    0,
+                    "Original native snapshot identity mismatch.",
+                ));
             }
-            restored.bundle.manifest.revision = current.bundle.manifest.revision
-                .checked_add(1).ok_or_else(|| migration_error("revision", 0, "revision exhausted"))?;
+            restored.bundle.manifest.revision = current
+                .bundle
+                .manifest
+                .revision
+                .checked_add(1)
+                .ok_or_else(|| migration_error("revision", 0, "revision exhausted"))?;
             restored.label_mapping.revision = restored.bundle.manifest.revision;
             let rendered = if snapshot.join("generated").is_dir() {
                 Some(store.render_projection(&restored.bundle, record.mission_id, None)?)
@@ -217,7 +232,10 @@ impl MissionLifecycle {
     }
 }
 
-fn migration_source(workspace: &Path, accepted: &AcceptedMission) -> Result<TypedDraft, MissionError> {
+fn migration_source(
+    workspace: &Path,
+    accepted: &AcceptedMission,
+) -> Result<TypedDraft, MissionError> {
     let mut source = convert(workspace, accepted)?;
     source.revision = source
         .revision
@@ -226,8 +244,12 @@ fn migration_source(workspace: &Path, accepted: &AcceptedMission) -> Result<Type
     Ok(source)
 }
 
-pub(super) fn convert(workspace: &Path, accepted: &AcceptedMission) -> Result<TypedDraft, MissionError> {
-    let mut diagnostics = validate_manifest_shape(&accepted.bundle.manifest, Path::new("accepted.json"));
+pub(super) fn convert(
+    workspace: &Path,
+    accepted: &AcceptedMission,
+) -> Result<TypedDraft, MissionError> {
+    let mut diagnostics =
+        validate_manifest_shape(&accepted.bundle.manifest, Path::new("accepted.json"));
     for waypoint in &accepted.bundle.waypoints {
         if let Err(diagnostic) = outcome_plan::validate_outcome_plan(
             waypoint.outcome_plan.as_ref(),
@@ -242,7 +264,8 @@ pub(super) fn convert(workspace: &Path, accepted: &AcceptedMission) -> Result<Ty
     }
     Ok(TypedDraft {
         mission_id: accepted.mission_id,
-        schema_version: if accepted.bundle.manifest.schema_version == OUTCOME_BUNDLE_SCHEMA_VERSION {
+        schema_version: if accepted.bundle.manifest.schema_version == OUTCOME_BUNDLE_SCHEMA_VERSION
+        {
             OUTCOME_SOURCE_SCHEMA_VERSION
         } else {
             TYPED_SOURCE_SCHEMA_VERSION
@@ -263,13 +286,18 @@ pub(super) fn convert(workspace: &Path, accepted: &AcceptedMission) -> Result<Ty
                     .map(|reference| local_entity_reference_id(workspace, reference, "ticket"))
                     .transpose()?;
                 if let Scope::TicketBacked { ticket_ref } = &w.scope
-                    && Some(local_entity_reference_id(workspace, ticket_ref, "ticket")?) != ticket_id
+                    && Some(local_entity_reference_id(workspace, ticket_ref, "ticket")?)
+                        != ticket_id
                 {
                     return Err(migration_error(
-                        &w.waypoint_id, 0, "Ticket scope and reference identify different Tickets.",
+                        &w.waypoint_id,
+                        0,
+                        "Ticket scope and reference identify different Tickets.",
                     ));
                 }
-                let child_mission_id = w.child_mission_ref.as_deref()
+                let child_mission_id = w
+                    .child_mission_ref
+                    .as_deref()
                     .map(|reference| local_entity_reference_id(workspace, reference, "mission"))
                     .transpose()?;
                 Ok(TypedWaypoint {

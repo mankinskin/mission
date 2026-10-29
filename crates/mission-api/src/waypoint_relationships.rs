@@ -180,9 +180,8 @@ pub(super) fn resolve_bundle(
         if ticket_ref.is_none() && links.is_empty() {
             continue;
         }
-        let mut output = format!(
-            "Owning workspace: {}\n\n",
-            schema_renderers::markdown_text(&workspace.canonicalize()?.to_string_lossy())
+        let mut output = String::from(
+            "Owning workspace: selected workspace root (local records in .workflow-tools/).\n\n",
         );
         let mut specs: BTreeSet<Uuid> = links.specification_ids.iter().copied().collect();
         if let Some(reference) = ticket_ref {
