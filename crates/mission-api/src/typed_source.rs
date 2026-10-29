@@ -34,6 +34,8 @@ pub struct TypedWaypoint {
     pub non_goals: Vec<String>,
     #[serde(default)]
     pub ownership_refs: OwnershipRefs,
+    #[serde(default, skip_serializing_if = "WaypointRelationships::is_empty")]
+    pub relationships: WaypointRelationships,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -86,6 +88,8 @@ pub(super) struct StoredWaypoint {
     pub(super) non_goals: Vec<String>,
     #[serde(default)]
     pub(super) ownership_refs: OwnershipRefs,
+    #[serde(default, skip_serializing_if = "WaypointRelationships::is_empty")]
+    pub(super) relationships: WaypointRelationships,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -270,6 +274,7 @@ impl MissionLifecycle {
                 commit_checkpoint: waypoint.commit_checkpoint,
                 non_goals: waypoint.non_goals,
                 ownership_refs: waypoint.ownership_refs,
+                relationships: waypoint.relationships,
             });
         }
         let draft = TypedDraft {
@@ -292,10 +297,18 @@ impl MissionLifecycle {
 
     pub fn render_mission(&self, mission_id: Uuid) -> Result<String, MissionError> {
         let source = self.get_mission_source(mission_id)?;
+        let accepted = accepted_from_typed(&source, Some(&self.store.get(mission_id)?))?;
+        let relationships = waypoint_relationships::resolve_bundle(
+            self.store.root.ancestors().nth(3).unwrap_or(&self.store.root),
+            &accepted.bundle,
+        )?;
         let mut markdown = format!("# {}\n\n{}\n", source.title, source.objective);
         for waypoint in source.waypoints {
             markdown.push_str(&format!("\n## {}\n\n", waypoint.title));
             render_blocks(&mut markdown, &waypoint.part.document.blocks, 0);
+            if let Some(content) = relationships.get(&waypoint.waypoint_id) {
+                markdown.push_str(content);
+            }
         }
         Ok(markdown)
     }
@@ -416,6 +429,7 @@ pub(super) fn accepted_from_typed(
         waypoint.validation = input.validation.clone();
         waypoint.commit_checkpoint = input.commit_checkpoint.clone();
         waypoint.non_goals = input.non_goals.clone();
+        waypoint.relationships = input.relationships.clone();
         waypoint.part_markdown.clear();
         render_blocks(&mut waypoint.part_markdown, &input.part.document.blocks, 0);
         let refs = &input.ownership_refs;
@@ -428,6 +442,7 @@ pub(super) fn accepted_from_typed(
                 .map(|id| format!("ce://default/mission/{id}"))
         });
         if let Some(reference) = &waypoint.ticket_ref {
+            waypoint.state = None;
             waypoint.scope = Scope::TicketBacked {
                 ticket_ref: reference.clone(),
             };
@@ -483,7 +498,9 @@ impl MissionStore {
         };
         let previous = lifecycle.get_mission_source(next.mission_id)?;
         let old = self.get(next.mission_id)?;
-        let mut source = typed_migration::convert(next)?;
+        let mut source = typed_migration::convert(
+            self.root.ancestors().nth(3).unwrap_or(&self.root), next,
+        )?;
         for waypoint in &mut source.waypoints {
             if old.bundle.waypoints.iter().any(|w| {
                 w.waypoint_id == waypoint.waypoint_id
@@ -531,6 +548,10 @@ impl MissionStore {
     ) -> Result<(), MissionError> {
         let id = accepted.mission_id;
         self.validate_requirement_references(&accepted.bundle)?;
+        waypoint_relationships::resolve_bundle(
+            self.root.ancestors().nth(3).unwrap_or(&self.root),
+            &accepted.bundle,
+        )?;
         self.validate_artifact_references(id, &accepted.bundle)?;
         let provenance = MissionArtifactProvenance::for_write(accepted, source, rendered);
         provenance
@@ -803,6 +824,7 @@ pub(super) fn stored_source(draft: &TypedDraft) -> StoredSource {
                 commit_checkpoint: waypoint.commit_checkpoint.clone(),
                 non_goals: waypoint.non_goals.clone(),
                 ownership_refs: waypoint.ownership_refs.clone(),
+                relationships: waypoint.relationships.clone(),
             })
             .collect(),
     }
@@ -839,6 +861,16 @@ pub(super) fn validate_typed(draft: &TypedDraft, publishing: bool) -> Result<(),
         ));
     }
     for waypoint in &draft.waypoints {
+        waypoint.relationships.validate().map_err(one_diagnostic)?;
+        let refs = &waypoint.ownership_refs;
+        if let (Some(id), Some(uri)) = (refs.ticket_id, &refs.ticket_uri)
+            && uri.rsplit('/').next().and_then(|value| Uuid::parse_str(value).ok()) != Some(id)
+        {
+            return Err(typed_error(
+                "mission-waypoint-link-identity-mismatch",
+                "ownership_refs.ticket_id and ticket_uri must identify the same canonical Ticket.",
+            ));
+        }
         if waypoint.waypoint_id.is_empty()
             || waypoint.waypoint_id.contains('/')
             || waypoint.waypoint_id.contains('\\')

@@ -208,8 +208,14 @@ fn direct_edits_cannot_override_ticket_or_child_authority() {
         bundle.manifest.revision = 2;
         bundle.waypoints[0].state = None;
         if owner == "ticket" {
+            let ticket_id = uuid::Uuid::new_v4();
+            let path = workspace.path().join(".workflow-tools/ticket/tickets").join(ticket_id.to_string());
+            std::fs::create_dir_all(&path).unwrap();
+            std::fs::write(path.join("ticket.toml"), format!(
+                "id = \"{ticket_id}\"\ncreated_at = \"2026-10-29T00:00:00Z\"\ntitle = \"Existing Ticket\"\nstate = \"ready\"\n"
+            )).unwrap();
             bundle.waypoints[0].scope = mission::Scope::TicketBacked {
-                ticket_ref: format!("ce://default/ticket/{}", uuid::Uuid::nil()),
+                ticket_ref: format!("ce://default/ticket/{ticket_id}"),
             };
         } else {
             bundle.waypoints[0].child_mission_ref =

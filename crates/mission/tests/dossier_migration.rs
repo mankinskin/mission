@@ -114,6 +114,7 @@ fn completed_child_bundle() -> MissionBundle {
             scope: Scope::SingleSession,
             state: Some(WaypointState::Completed),
             ticket_ref: None,
+            relationships: Default::default(),
             child_mission_ref: None,
             session_package: "child-work".into(),
             prompt: "Complete the child work.".into(),

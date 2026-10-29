@@ -513,6 +513,7 @@ fn parse_waypoint(
             state,
             ticket_ref,
             child_mission_ref,
+            relationships: Default::default(),
             session_package,
             prompt,
             artifacts,

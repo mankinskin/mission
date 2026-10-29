@@ -853,34 +853,14 @@ fn parse_reference(
     reference: &str,
     kind: &str,
 ) -> Result<Uuid, MissionError> {
-    let Some(rest) = reference.strip_prefix("ce://") else {
-        return Err(external_status_error(
-            reference,
-            "Reference is not a canonical URN.",
-        ));
-    };
-    let mut parts = rest.split('/');
-    let workspace = parts.next().unwrap_or_default();
-    let reference_kind = parts.next().unwrap_or_default();
-    let id = parts.next().unwrap_or_default();
-    if parts.next().is_some()
-        || reference_kind != kind
-        || (workspace != "default" && workspace != selected_workspace(workspace_root))
-    {
-        return Err(external_status_error(
-            reference,
-            "Reference does not resolve within the explicitly selected workspace.",
-        ));
-    }
-    Uuid::parse_str(id)
-        .map_err(|error| external_status_error(reference, &format!("Invalid entity UUID: {error}")))
-}
-
-fn selected_workspace(workspace_root: &Path) -> &str {
-    workspace_root
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("default")
+    mission_api::local_entity_reference_id(workspace_root, reference, kind)
+        .map_err(|error| {
+            let message = error
+                .diagnostics()
+                .and_then(|diagnostics| diagnostics.first())
+                .map_or_else(|| error.to_string(), |diagnostic| diagnostic.message.clone());
+            external_status_error(reference, &message)
+        })
 }
 
 fn external_status_error(reference: &str, message: &str) -> MissionError {

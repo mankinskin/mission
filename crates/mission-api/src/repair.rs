@@ -674,7 +674,7 @@ impl MissionLifecycle {
                     return (response, None);
                 }
             },
-            None => match typed_migration::convert(&accepted) {
+            None => match typed_migration::convert(source_root, &accepted) {
                 Ok(source) => source,
                 Err(error) => {
                     response
@@ -684,7 +684,7 @@ impl MissionLifecycle {
                 }
             },
         };
-        let ownership_source = match typed_migration::convert(&accepted) {
+        let ownership_source = match typed_migration::convert(source_root, &accepted) {
             Ok(source) => source,
             Err(error) => {
                 response
@@ -1533,6 +1533,7 @@ fn load_source_from_directory(
             commit_checkpoint: waypoint.commit_checkpoint,
             non_goals: waypoint.non_goals,
             ownership_refs: waypoint.ownership_refs,
+            relationships: waypoint.relationships,
         });
     }
     Ok(TypedDraft {

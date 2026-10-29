@@ -74,7 +74,7 @@ impl MissionLifecycle {
                     Err(MissionError::NotFound(_)) => {}
                     Err(error) => return Err(error),
                 }
-                let converted = migration_source(&accepted)?;
+                let converted = migration_source(workspace, &accepted)?;
                 records.push(MigrationRecord {
                     workspace: workspace.clone(),
                     mission_id,
@@ -131,7 +131,7 @@ impl MissionLifecycle {
                 );
                 continue;
             }
-            let source = match migration_source(&current) {
+            let source = match migration_source(&record.workspace, &current) {
                 Ok(source) => source,
                 Err(error) => {
                     record.state = MigrationState::Failed;
@@ -201,8 +201,8 @@ impl MissionLifecycle {
     }
 }
 
-fn migration_source(accepted: &AcceptedMission) -> Result<TypedDraft, MissionError> {
-    let mut source = convert(accepted)?;
+fn migration_source(workspace: &Path, accepted: &AcceptedMission) -> Result<TypedDraft, MissionError> {
+    let mut source = convert(workspace, accepted)?;
     source.revision = source
         .revision
         .checked_add(1)
@@ -210,7 +210,7 @@ fn migration_source(accepted: &AcceptedMission) -> Result<TypedDraft, MissionErr
     Ok(source)
 }
 
-pub(super) fn convert(accepted: &AcceptedMission) -> Result<TypedDraft, MissionError> {
+pub(super) fn convert(workspace: &Path, accepted: &AcceptedMission) -> Result<TypedDraft, MissionError> {
     let diagnostics = validate_manifest_shape(&accepted.bundle.manifest, Path::new("accepted.json"));
     if !diagnostics.is_empty() {
         return Err(MissionError::Validation(diagnostics.len(), diagnostics));
@@ -226,6 +226,23 @@ pub(super) fn convert(accepted: &AcceptedMission) -> Result<TypedDraft, MissionE
             .waypoints
             .iter()
             .map(|w| {
+                let ticket_uri = w.ticket_ref.as_ref().or(match &w.scope {
+                    Scope::TicketBacked { ticket_ref } => Some(ticket_ref),
+                    Scope::SingleSession => None,
+                });
+                let ticket_id = ticket_uri
+                    .map(|reference| local_entity_reference_id(workspace, reference, "ticket"))
+                    .transpose()?;
+                if let Scope::TicketBacked { ticket_ref } = &w.scope
+                    && Some(local_entity_reference_id(workspace, ticket_ref, "ticket")?) != ticket_id
+                {
+                    return Err(migration_error(
+                        &w.waypoint_id, 0, "Ticket scope and reference identify different Tickets.",
+                    ));
+                }
+                let child_mission_id = w.child_mission_ref.as_deref()
+                    .map(|reference| local_entity_reference_id(workspace, reference, "mission"))
+                    .transpose()?;
                 Ok(TypedWaypoint {
                     waypoint_id: w.waypoint_id.clone(),
                     title: w.title.clone(),
@@ -238,16 +255,11 @@ pub(super) fn convert(accepted: &AcceptedMission) -> Result<TypedDraft, MissionE
                     validation: w.validation.clone(),
                     commit_checkpoint: w.commit_checkpoint.clone(),
                     non_goals: w.non_goals.clone(),
+                    relationships: w.relationships.clone(),
                     ownership_refs: OwnershipRefs {
-                        ticket_id: w.ticket_ref.as_deref().and_then(|s| s.parse().ok()),
-                        child_mission_id: w
-                            .child_mission_ref
-                            .as_deref()
-                            .and_then(|s| s.parse().ok()),
-                        ticket_uri: w.ticket_ref.clone().or_else(|| match &w.scope {
-                            Scope::TicketBacked { ticket_ref } => Some(ticket_ref.clone()),
-                            Scope::SingleSession => None,
-                        }),
+                        ticket_id,
+                        child_mission_id,
+                        ticket_uri: ticket_uri.cloned(),
                         child_mission_uri: w.child_mission_ref.clone(),
                     },
                 })

@@ -10,6 +10,7 @@ fn bundle() -> MissionBundle {
         scope: Scope::SingleSession,
         state: Some(WaypointState::Pending),
         ticket_ref: None,
+        relationships: Default::default(),
         child_mission_ref: None,
         session_package: id.into(),
         prompt: "go | now".into(),

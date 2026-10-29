@@ -21,6 +21,8 @@ mod review_entry;
 mod schema_renderers;
 mod typed_migration;
 mod typed_source;
+mod waypoint_relationships;
+pub use waypoint_relationships::*;
 pub use repair::*;
 pub use artifact_contract::{
     ARTIFACT_PROVENANCE_SCHEMA_VERSION, MissionArtifactProvenance, MissionFileFormat,
@@ -31,7 +33,7 @@ pub use typed_source::*;
 pub use schema_renderers::*;
 
 pub const SCHEMA_VERSION: u32 = 1;
-pub const RENDERER_VERSION: &str = "mission-api/3";
+pub const RENDERER_VERSION: &str = "mission-api/4";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -102,6 +104,8 @@ pub struct WaypointFragment {
     /// separate from ticket ownership and from the execution scope.
     #[serde(default)]
     pub child_mission_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "WaypointRelationships::is_empty")]
+    pub relationships: WaypointRelationships,
     pub session_package: String,
     pub prompt: String,
     #[serde(default)]
@@ -272,6 +276,9 @@ pub fn validate_bundle(bundle: &MissionBundle) -> Result<(), Vec<Diagnostic>> {
     let mut ids = BTreeSet::new();
     let mut waypoint_by_id = BTreeMap::new();
     for (index, waypoint) in bundle.waypoints.iter().enumerate() {
+        if let Err(diagnostic) = waypoint.relationships.validate() {
+            diagnostics.push(diagnostic);
+        }
         let source = format!("waypoint[{index}]");
         if !valid_stable_id(&waypoint.waypoint_id) {
             diagnostics.push(diag(
@@ -738,13 +745,41 @@ fn render_with_consumer(
     } else {
         validate_bundle(bundle)?;
     }
-    Ok(render_materialized_with_consumer(
+    let relationships = if let Some(workspace) = workspace {
+        waypoint_relationships::resolve_bundle(workspace, bundle)
+            .map_err(|error| match error {
+                MissionError::Validation(_, diagnostics) => diagnostics,
+                other => vec![contract_diag("mission-waypoint-link-unavailable", "", &other.to_string())],
+            })?
+    } else {
+        if bundle.waypoints.iter().any(|waypoint| !waypoint.relationships.is_empty()) {
+            return Err(vec![contract_diag(
+                "mission-waypoint-link-root-required",
+                "/relationships",
+                "Use render_in_workspace with an explicit owning workspace to resolve waypoint relationships.",
+            )]);
+        }
+        BTreeMap::new()
+    };
+    let mut rendered = render_materialized_with_consumer(
         bundle,
         mission_id,
         snapshot_id,
         workspace,
         generated_directory,
-    ))
+    );
+    for (index, id) in bundle.manifest.execution_order.iter().enumerate() {
+        if let Some(content) = relationships.get(id) {
+            rendered.roadmap.extend_from_slice(
+                format!("\n## Linked entities: `{id}`\n\n{content}").as_bytes(),
+            );
+            let filename = format!("{:02}-{id}.md", index + 1);
+            if let Some(part) = rendered.parts.get_mut(&filename) {
+                part.extend_from_slice(format!("\n## Linked entities\n\n{content}").as_bytes());
+            }
+        }
+    }
+    Ok(rendered)
 }
 
 fn render_materialized_with_consumer(
@@ -1145,6 +1180,10 @@ impl MissionLifecycle {
         let accepted = self.store.get(mission_id)?;
         validate_bundle(&accepted.bundle)
             .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
+        waypoint_relationships::resolve_bundle(
+            self.store.root.ancestors().nth(3).unwrap_or(&self.store.root),
+            &accepted.bundle,
+        )?;
         Ok(accepted)
     }
 
@@ -1174,6 +1213,7 @@ impl MissionLifecycle {
             scope: Scope::SingleSession,
             state: Some(WaypointState::Pending),
             ticket_ref: None,
+            relationships: WaypointRelationships::default(),
             child_mission_ref: None,
             part_markdown: input.prompt.clone(),
             prompt: input.prompt,
@@ -1754,6 +1794,7 @@ mod tests {
             scope: Scope::SingleSession,
             state: Some(WaypointState::Pending),
             ticket_ref: None,
+            relationships: WaypointRelationships::default(),
             child_mission_ref: None,
             session_package: id.into(),
             prompt: "implement".into(),

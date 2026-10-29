@@ -32,6 +32,7 @@ fn bundle() -> MissionBundle {
             scope: Scope::SingleSession,
             state: Some(WaypointState::Pending),
             ticket_ref: None,
+            relationships: Default::default(),
             child_mission_ref: None,
             session_package: "first".into(),
             prompt: "Implement".into(),

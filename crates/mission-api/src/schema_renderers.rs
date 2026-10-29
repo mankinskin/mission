@@ -134,15 +134,16 @@ impl SharedEntity {
 
 /// The criterion ID is scoped to the canonical specification UUID.
 /// Resolution is deliberately local to an explicitly selected owning workspace.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CriterionReference {
+    #[schemars(with = "String")]
     pub specification_id: Uuid,
     pub criterion_id: CriterionId,
 }
 
 /// Opaque Spec-owned stable ID; unlike a Requirement ID it is not a Mission slug.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
 #[serde(transparent)]
 pub struct CriterionId(String);
 
@@ -469,7 +470,7 @@ pub(super) fn markdown_text(value: &str) -> String {
     output
 }
 
-fn contract_diag(code: &'static str, pointer: &str, message: &str) -> Diagnostic {
+pub(super) fn contract_diag(code: &'static str, pointer: &str, message: &str) -> Diagnostic {
     diag(
         code,
         Path::new("schema-requirement-renderer"),
@@ -479,6 +480,6 @@ fn contract_diag(code: &'static str, pointer: &str, message: &str) -> Diagnostic
     )
 }
 
-fn one_diagnostic(diagnostic: Diagnostic) -> MissionError {
+pub(super) fn one_diagnostic(diagnostic: Diagnostic) -> MissionError {
     MissionError::Validation(1, vec![diagnostic])
 }

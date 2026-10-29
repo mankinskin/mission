@@ -12,6 +12,7 @@ fn waypoint(id: &str, depends_on: &[&str]) -> WaypointFragment {
         scope: Scope::SingleSession,
         state: Some(WaypointState::Pending),
         ticket_ref: None,
+        relationships: Default::default(),
         child_mission_ref: None,
         session_package: id.into(),
         prompt: "do the work".into(),

@@ -101,7 +101,13 @@ fn lifecycle_rejects_external_waypoint_mutation() {
     let id = accepted.mission_id;
     let mut bundle = accepted.bundle;
     let waypoint = &mut bundle.waypoints[0];
-    let ticket_ref = "ce://workspace/ticket/123e4567-e89b-12d3-a456-426614174000".to_owned();
+    let ticket_id = uuid::Uuid::new_v4();
+    let path = temp.path().join(".workflow-tools/ticket/tickets").join(ticket_id.to_string());
+    std::fs::create_dir_all(&path).unwrap();
+    std::fs::write(path.join("ticket.toml"), format!(
+        "id = \"{ticket_id}\"\ncreated_at = \"2026-10-29T00:00:00Z\"\ntitle = \"Existing Ticket\"\nstate = \"ready\"\n"
+    )).unwrap();
+    let ticket_ref = format!("ce://default/ticket/{ticket_id}");
     waypoint.ticket_ref = Some(ticket_ref.clone());
     waypoint.scope = Scope::TicketBacked { ticket_ref };
     waypoint.state = None;
