@@ -165,6 +165,23 @@ fn specification(workspace: &Path, id: Uuid) -> Result<(SpecManifest, String), M
     Ok((spec, body))
 }
 
+pub(super) fn linked_ticket_ids(
+    workspace: &Path,
+    bundle: &MissionBundle,
+) -> Result<BTreeSet<Uuid>, MissionError> {
+    let mut ids = BTreeSet::new();
+    for waypoint in &bundle.waypoints {
+        let reference = waypoint.ticket_ref.as_ref().or(match &waypoint.scope {
+            Scope::TicketBacked { ticket_ref } => Some(ticket_ref),
+            Scope::SingleSession => None,
+        });
+        if let Some(reference) = reference {
+            ids.insert(local_entity_reference_id(workspace, reference, "ticket")?);
+        }
+    }
+    Ok(ids)
+}
+
 pub(super) fn resolve_bundle(
     workspace: &Path,
     bundle: &MissionBundle,

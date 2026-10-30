@@ -124,6 +124,8 @@ pub struct ReviewPlan {
 pub(super) struct EvidenceLedger {
     #[serde(default)]
     pub(super) entries: Vec<EvidenceBinding>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(super) nonsemantic_revisions: Vec<u64>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -257,12 +259,59 @@ pub(super) fn ledger_from_bytes(bytes: Option<&[u8]>) -> Result<EvidenceLedger, 
             None,
         ));
     }
+    let mut seen = std::collections::BTreeSet::new();
+    if ledger.nonsemantic_revisions.iter().any(|revision| {
+        *revision == 0
+            || !seen.insert(*revision)
+            || ledger
+                .entries
+                .iter()
+                .any(|entry| entry.revision == *revision)
+    }) {
+        return Err(plan_error(
+            "invalid_evidence_ledger",
+            "nonsemantic revisions must be unique, positive and distinct from evidence revisions.",
+            None,
+        ));
+    }
     Ok(ledger)
 }
 
 pub(super) fn read_ledger(directory: &Path) -> Result<EvidenceLedger, MissionError> {
     let bytes = read_optional(directory, &directory.join(EVIDENCE_FILE))?;
     ledger_from_bytes(bytes.as_deref())
+}
+
+pub(super) fn nonsemantic_ledger(
+    directory: &Path,
+    old: &AcceptedMission,
+    old_source: &TypedDraft,
+    next: &AcceptedMission,
+    next_source: &TypedDraft,
+) -> Result<Vec<(String, Vec<u8>)>, MissionError> {
+    let mut ledger = read_ledger(directory)?;
+    let current = old.bundle.manifest.revision;
+    if ledger.entries.iter().any(|entry| entry.revision > current)
+        || ledger.nonsemantic_revisions.iter().any(|r| *r > current)
+    {
+        return Err(plan_error(
+            "projection_diverged",
+            "evidence ledger classifies a revision beyond the current plan revision.",
+            None,
+        ));
+    }
+    let before = build_review_plan(old, old_source, &ledger)?.plan_digest;
+    let after = build_review_plan(next, next_source, &ledger)?.plan_digest;
+    if before != after {
+        return Ok(Vec::new());
+    }
+    ledger
+        .nonsemantic_revisions
+        .push(next.bundle.manifest.revision);
+    Ok(vec![(
+        EVIDENCE_FILE.to_owned(),
+        serde_json::to_vec_pretty(&ledger)?,
+    )])
 }
 
 fn read_record(
@@ -475,6 +524,13 @@ impl MissionLifecycle {
         self.store.get(mission_id)?;
         let _guard =
             typed_source::TypedLock::acquire_shared_existing(&self.store.root, mission_id)?;
+        self.review_plan_unlocked(mission_id)
+    }
+
+    pub(crate) fn review_plan_unlocked(
+        &self,
+        mission_id: Uuid,
+    ) -> Result<ReviewPlan, MissionError> {
         let first = self.store.get(mission_id)?;
         let source = self.get_mission_source(mission_id)?;
         let ledger = read_ledger(&self.mission_directory(mission_id))?;
@@ -483,6 +539,7 @@ impl MissionLifecycle {
         if second.bundle.manifest.revision != revision
             || source.revision != revision
             || ledger.entries.iter().any(|entry| entry.revision > revision)
+            || ledger.nonsemantic_revisions.iter().any(|r| *r > revision)
         {
             return Err(plan_error(
                 "projection_diverged",
@@ -491,6 +548,21 @@ impl MissionLifecycle {
             ));
         }
         build_review_plan(&first, &source, &ledger)
+    }
+
+    pub(crate) fn semantic_revision_unlocked(&self, mission_id: Uuid) -> Result<u64, MissionError> {
+        let revision = self.store.get(mission_id)?.bundle.manifest.revision;
+        let ledger = read_ledger(&self.mission_directory(mission_id))?;
+        let evidence: std::collections::BTreeSet<u64> = ledger
+            .entries
+            .iter()
+            .map(|entry| entry.revision)
+            .chain(ledger.nonsemantic_revisions.iter().copied())
+            .collect();
+        Ok((1..=revision)
+            .rev()
+            .find(|candidate| !evidence.contains(candidate))
+            .unwrap_or(revision))
     }
 
     /// Apply one CAS/idempotent mutation under one lock and one atomic publication.

@@ -19,6 +19,7 @@ mod outcome_plan;
 pub use outcome_plan::*;
 mod output_history;
 pub use output_history::*;
+mod approval_transaction;
 mod artifact_contract;
 pub mod lifecycle;
 mod plan_operations;
@@ -28,6 +29,7 @@ mod schema_renderers;
 mod typed_migration;
 mod typed_source;
 mod waypoint_relationships;
+pub use approval_transaction::ApprovalTransaction;
 pub use artifact_contract::{
     ARTIFACT_PROVENANCE_SCHEMA_VERSION, MissionArtifactProvenance, MissionFileFormat,
     MissionFileProvenance, MissionFileRole, resolve_artifact_reference,
@@ -40,6 +42,7 @@ pub use plan_operations::{
 pub use repair::*;
 pub use schema_renderers::*;
 pub use typed_migration::*;
+pub use typed_source::TicketLinkLock;
 pub use typed_source::*;
 pub use waypoint_relationships::*;
 
@@ -1215,10 +1218,48 @@ impl MissionLifecycle {
         state: WaypointState,
         expected: u64,
     ) -> Result<AcceptedMission, MissionError> {
-        self.update(mission_id, expected, |bundle| {
-            Self::local_waypoint(bundle, waypoint_id)?.state = Some(state);
-            Ok(())
-        })
+        let bundle = self.progress_bundle(mission_id, waypoint_id, state, expected)?;
+        self.store.import_with(
+            mission_id,
+            bundle,
+            expected,
+            &typed_source::ImportOptions {
+                authority: None,
+                classify_nonsemantic: true,
+            },
+        )
+    }
+
+    pub(crate) fn record_progress_locked(
+        &self,
+        mission_id: Uuid,
+        waypoint_id: &str,
+        state: WaypointState,
+        expected: u64,
+        authority: &approval_transaction::EntryAuthority,
+    ) -> Result<AcceptedMission, MissionError> {
+        let bundle = self.progress_bundle(mission_id, waypoint_id, state, expected)?;
+        self.store.import_locked(
+            mission_id,
+            bundle,
+            expected,
+            &typed_source::ImportOptions {
+                authority: Some(authority),
+                classify_nonsemantic: true,
+            },
+        )
+    }
+
+    fn progress_bundle(
+        &self,
+        mission_id: Uuid,
+        waypoint_id: &str,
+        state: WaypointState,
+        expected: u64,
+    ) -> Result<MissionBundle, MissionError> {
+        let mut bundle = self.next_bundle(mission_id, expected)?;
+        Self::local_waypoint(&mut bundle, waypoint_id)?.state = Some(state);
+        Ok(bundle)
     }
 
     pub fn record_result(
@@ -1227,10 +1268,17 @@ impl MissionLifecycle {
         result: OperatorResult,
         expected: u64,
     ) -> Result<AcceptedMission, MissionError> {
-        self.update(mission_id, expected, |bundle| {
-            bundle.manifest.operator_results.push(result);
-            Ok(())
-        })
+        let mut bundle = self.next_bundle(mission_id, expected)?;
+        bundle.manifest.operator_results.push(result);
+        self.store.import_with(
+            mission_id,
+            bundle,
+            expected,
+            &typed_source::ImportOptions {
+                authority: None,
+                classify_nonsemantic: true,
+            },
+        )
     }
 
     pub fn validate(&self, mission_id: Uuid) -> Result<AcceptedMission, MissionError> {
@@ -1436,12 +1484,41 @@ impl MissionStore {
         bundle: MissionBundle,
         expected_current_revision: u64,
     ) -> Result<AcceptedMission, MissionError> {
+        self.import_with(
+            mission_id,
+            bundle,
+            expected_current_revision,
+            &typed_source::ImportOptions::default(),
+        )
+    }
+
+    pub(crate) fn import_with(
+        &self,
+        mission_id: Uuid,
+        bundle: MissionBundle,
+        expected_current_revision: u64,
+        options: &typed_source::ImportOptions<'_>,
+    ) -> Result<AcceptedMission, MissionError> {
         validate_bundle(&bundle)
             .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
         self.validate_child_missions(mission_id, &bundle)
             .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
         self.prepare_write()?;
         let _lock = typed_source::TypedLock::acquire(&self.root, mission_id)?;
+        self.import_locked(mission_id, bundle, expected_current_revision, options)
+    }
+
+    pub(crate) fn import_locked(
+        &self,
+        mission_id: Uuid,
+        bundle: MissionBundle,
+        expected_current_revision: u64,
+        options: &typed_source::ImportOptions<'_>,
+    ) -> Result<AcceptedMission, MissionError> {
+        validate_bundle(&bundle)
+            .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
+        self.validate_child_missions(mission_id, &bundle)
+            .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
         let current = match self.get(mission_id) {
             Ok(current) => Some(current),
             Err(MissionError::NotFound(_)) => None,
@@ -1480,11 +1557,31 @@ impl MissionStore {
             bundle,
         };
         let source = self.source_for_legacy(&accepted)?;
-        self.write_authority(&accepted, source.as_ref(), None)?;
+        let extras = match (
+            options.classify_nonsemantic,
+            source.as_ref(),
+            current.as_ref(),
+        ) {
+            (true, Some(next_source), Some(old)) => {
+                self.nonsemantic_extras(old, &accepted, next_source)?
+            }
+            _ => Vec::new(),
+        };
+        match options.authority {
+            Some(authority) => {
+                self.write_authority_entering(&accepted, source.as_ref(), None, &extras, authority)?
+            }
+            None => self.write_authority_with_extras(&accepted, source.as_ref(), None, &extras)?,
+        }
         self.get(mission_id)
     }
 
+    pub fn verify_store_chain(&self) -> Result<(), MissionError> {
+        typed_source::ensure_store_chain(&self.root)
+    }
+
     pub fn get(&self, mission_id: Uuid) -> Result<AcceptedMission, MissionError> {
+        typed_source::ensure_store_chain(&self.root)?;
         let path = self.root.join(mission_id.to_string()).join("accepted.json");
         if !path.is_file() {
             return Err(MissionError::NotFound(mission_id));
@@ -1982,6 +2079,24 @@ mod tests {
             "first"
         );
     }
+    #[test]
+    fn shared_writer_boundary_refuses_unauthorized_in_progress_entry() {
+        let directory = tempfile::tempdir().unwrap();
+        let store = MissionStore::init(directory.path()).unwrap();
+        let id = Uuid::new_v4();
+        store.import(id, roadmap(1), 0).unwrap();
+        let mut entering = store.get(id).unwrap();
+        entering.bundle.waypoints[1].state = Some(WaypointState::InProgress);
+        let code = |result: Result<(), MissionError>| {
+            result.unwrap_err().diagnostics().unwrap()[0].code.to_string()
+        };
+        assert_eq!(code(store.write_authority(&entering, None, None)), "approval_required");
+        assert_eq!(code(store.write_authority_with_extras(&entering, None, None, &[])), "approval_required");
+        assert_eq!(code(store.write_authority_with_inputs(&entering, None, None, None)), "approval_required");
+        assert_eq!(code(store.write_authority_for_repair(&entering, None, None, false)), "approval_required");
+        assert_eq!(store.get(id).unwrap().bundle.waypoints[1].state, Some(WaypointState::Pending));
+    }
+
     #[test]
     fn roadmap_render_is_pure_and_returns_generated_bytes() {
         let roadmap = roadmap(1);

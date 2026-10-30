@@ -263,6 +263,7 @@ impl MissionLifecycle {
         &self,
         mission_id: Uuid,
     ) -> Result<TypedDraft, MissionError> {
+        ensure_store_chain(&self.store.root)?;
         let mission_dir = self.store.root.join(mission_id.to_string());
         let path = mission_dir.join("source.json");
         if !mission_dir.exists() || !path.exists() {
@@ -542,7 +543,9 @@ pub(super) fn accepted_from_typed(
 
 impl MissionStore {
     pub(super) fn prepare_write(&self) -> Result<(), MissionError> {
+        ensure_store_chain(&self.root)?;
         fs::create_dir_all(&self.root)?;
+        ensure_store_chain(&self.root)?;
         ensure_safe_path(&self.root, &self.root)?;
         Ok(())
     }
@@ -585,13 +588,36 @@ impl MissionStore {
     }
 
     /// Stage all representations under the same lock and replace one directory.
+    pub(super) fn nonsemantic_extras(
+        &self,
+        old: &AcceptedMission,
+        next: &AcceptedMission,
+        next_source: &TypedDraft,
+    ) -> Result<Vec<(String, Vec<u8>)>, MissionError> {
+        let lifecycle = MissionLifecycle {
+            store: Self {
+                root: self.root.clone(),
+                #[cfg(test)]
+                test_event_metadata: None,
+            },
+        };
+        let previous = lifecycle.get_mission_source(old.mission_id)?;
+        plan_operations::nonsemantic_ledger(
+            &self.root.join(old.mission_id.to_string()),
+            old,
+            &previous,
+            next,
+            next_source,
+        )
+    }
+
     pub(super) fn write_authority(
         &self,
         accepted: &AcceptedMission,
         source: Option<&TypedDraft>,
         rendered: Option<&RenderedRoadmap>,
     ) -> Result<(), MissionError> {
-        self.write_authority_inner(accepted, source, rendered, false, None, &[])
+        self.write_authority_inner(accepted, source, rendered, false, None, &[], None)
     }
 
     pub(super) fn write_authority_with_extras(
@@ -601,7 +627,26 @@ impl MissionStore {
         rendered: Option<&RenderedRoadmap>,
         extras: &[(String, Vec<u8>)],
     ) -> Result<(), MissionError> {
-        self.write_authority_inner(accepted, source, rendered, false, None, extras)
+        self.write_authority_inner(accepted, source, rendered, false, None, extras, None)
+    }
+
+    pub(super) fn write_authority_entering(
+        &self,
+        accepted: &AcceptedMission,
+        source: Option<&TypedDraft>,
+        rendered: Option<&RenderedRoadmap>,
+        extras: &[(String, Vec<u8>)],
+        authority: &approval_transaction::EntryAuthority,
+    ) -> Result<(), MissionError> {
+        self.write_authority_inner(
+            accepted,
+            source,
+            rendered,
+            false,
+            None,
+            extras,
+            Some(authority),
+        )
     }
 
     pub(super) fn write_authority_with_inputs(
@@ -611,7 +656,7 @@ impl MissionStore {
         rendered: Option<&RenderedRoadmap>,
         inputs: Option<&MissionOutputInputs>,
     ) -> Result<(), MissionError> {
-        self.write_authority_inner(accepted, source, rendered, false, inputs, &[])
+        self.write_authority_inner(accepted, source, rendered, false, inputs, &[], None)
     }
 
     pub(super) fn write_authority_for_repair(
@@ -621,7 +666,7 @@ impl MissionStore {
         rendered: Option<&RenderedRoadmap>,
         replace_source: bool,
     ) -> Result<(), MissionError> {
-        self.write_authority_inner(accepted, source, rendered, replace_source, None, &[])
+        self.write_authority_inner(accepted, source, rendered, replace_source, None, &[], None)
     }
 
     fn write_authority_inner(
@@ -632,6 +677,7 @@ impl MissionStore {
         replace_source: bool,
         inputs: Option<&MissionOutputInputs>,
         extras: &[(String, Vec<u8>)],
+        authority: Option<&approval_transaction::EntryAuthority>,
     ) -> Result<(), MissionError> {
         let id = accepted.mission_id;
         self.validate_requirement_references(&accepted.bundle)?;
@@ -639,12 +685,34 @@ impl MissionStore {
             self.root.ancestors().nth(3).unwrap_or(&self.root),
             &accepted.bundle,
         )?;
+        let _ticket_links = TicketLinkLock::acquire_all(
+            &self.root,
+            &waypoint_relationships::linked_ticket_ids(
+                self.root.ancestors().nth(3).unwrap_or(&self.root),
+                &accepted.bundle,
+            )?,
+        )?;
         self.validate_artifact_references(id, &accepted.bundle)?;
         let provenance = MissionArtifactProvenance::for_write(accepted, source, rendered);
         provenance
             .validate()
             .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
         let directory = self.root.join(id.to_string());
+        if authority.is_none() {
+            let existing = if present(&directory.join("accepted.json"))? {
+                Some(self.get(id)?)
+            } else {
+                None
+            };
+            if let Some(waypoint_id) = entering_in_progress(existing.as_ref(), &accepted.bundle) {
+                return Err(typed_error(
+                    "approval_required",
+                    &format!(
+                        "waypoint `{waypoint_id}` requires the requester-approval entry gate."
+                    ),
+                ));
+            }
+        }
         if directory.join("history/events").exists() {
             self.validate_preserved_events(id)?;
         }
@@ -965,6 +1033,7 @@ impl TypedLock {
         root: &Path,
         mission_id: Uuid,
     ) -> Result<Self, MissionError> {
+        ensure_store_chain(root)?;
         let flock = root.join(format!(".{mission_id}.typed.flock"));
         match fs::symlink_metadata(&flock) {
             Ok(meta) if meta.file_type().is_file() => {}
@@ -1024,6 +1093,7 @@ impl TypedLock {
         mission_id: Uuid,
         timeout: std::time::Duration,
     ) -> Result<Self, MissionError> {
+        ensure_store_chain(root)?;
         let started = std::time::Instant::now();
         let flock = root.join(format!(".{mission_id}.typed.flock"));
         match fs::symlink_metadata(&flock) {
@@ -1082,6 +1152,57 @@ impl TypedLock {
                 Ok(_) => std::thread::sleep(std::time::Duration::from_millis(10)),
             }
         }
+    }
+}
+
+/// Lock order: Mission typed locks, then ascending Ticket link locks.
+pub struct TicketLinkLock {
+    _file: fs::File,
+}
+
+impl TicketLinkLock {
+    pub(super) fn acquire(root: &Path, ticket_id: Uuid) -> Result<Self, MissionError> {
+        ensure_store_chain(root)?;
+        let flock = root.join(format!(".{ticket_id}.ticket-link.flock"));
+        match fs::symlink_metadata(&flock) {
+            Ok(meta) if !meta.file_type().is_file() => {
+                return Err(typed_error(
+                    "ticket-link-lock-unsafe",
+                    &format!("Ticket link lock {} is not a regular file", flock.display()),
+                ));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&flock)?;
+        let started = std::time::Instant::now();
+        loop {
+            match file.try_lock() {
+                Ok(()) => return Ok(Self { _file: file }),
+                Err(fs::TryLockError::WouldBlock) => {
+                    if started.elapsed() >= std::time::Duration::from_secs(30) {
+                        return Err(typed_error(
+                            "ticket-link-lock-timeout",
+                            &format!("another holder keeps the link lock for Ticket {ticket_id}."),
+                        ));
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(fs::TryLockError::Error(error)) => return Err(error.into()),
+            }
+        }
+    }
+    pub(super) fn acquire_all(
+        root: &Path,
+        ids: &std::collections::BTreeSet<Uuid>,
+    ) -> Result<Vec<Self>, MissionError> {
+        ids.iter().map(|id| Self::acquire(root, *id)).collect()
     }
 }
 
@@ -1270,6 +1391,57 @@ pub(super) fn ensure_safe_path(root: &Path, path: &Path) -> Result<(), MissionEr
                 "unsafe-part-path",
                 "managed source paths and their ancestors must not be symlinks.",
             ));
+        }
+    }
+    Ok(())
+}
+
+#[derive(Default)]
+pub(super) struct ImportOptions<'a> {
+    pub(super) authority: Option<&'a approval_transaction::EntryAuthority>,
+    pub(super) classify_nonsemantic: bool,
+}
+
+fn entering_in_progress(
+    current: Option<&AcceptedMission>,
+    bundle: &MissionBundle,
+) -> Option<String> {
+    bundle
+        .waypoints
+        .iter()
+        .find(|waypoint| {
+            matches!(waypoint.state, Some(WaypointState::InProgress))
+                && !current.is_some_and(|existing| {
+                    existing.bundle.waypoints.iter().any(|old| {
+                        old.waypoint_id == waypoint.waypoint_id
+                            && matches!(old.state, Some(WaypointState::InProgress))
+                    })
+                })
+        })
+        .map(|waypoint| waypoint.waypoint_id.clone())
+}
+
+pub(super) fn ensure_store_chain(root: &Path) -> Result<(), MissionError> {
+    let managed = Path::new(".workflow-tools/mission/missions");
+    if !root.ends_with(managed) {
+        return Ok(());
+    }
+    let Some(workspace) = root.ancestors().nth(3) else {
+        return Ok(());
+    };
+    let mut current = workspace.to_path_buf();
+    for component in managed.components() {
+        current.push(component);
+        match fs::symlink_metadata(&current) {
+            Ok(meta) if meta.file_type().is_symlink() || !meta.is_dir() => {
+                return Err(typed_error(
+                    "unsafe-part-path",
+                    "Mission store components below the workspace must be plain directories.",
+                ));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(error.into()),
         }
     }
     Ok(())

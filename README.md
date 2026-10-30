@@ -695,6 +695,64 @@ unguarded read. Run a typed write or repair, or inspect the legacy lock once no
 older writer is running, to restore it. A writer holding the lock makes the
 read wait up to 30 seconds (`typed-lock-timeout`).
 
+### Revision-bound requester approval
+
+Mission-linked Ticket execution entry requires a grant bound to the reviewed
+plan revision, `plan_digest` and review snapshot. `mission::approval` is a
+trusted library facade, not an agent-callable receipt-minting tool.
+
+1. Record a passing cold walkthrough, followed by a formal review from a
+   different reviewer that names its `cold_review_id`. Only the latest
+   cold/formal chain for the current snapshot supports a challenge.
+2. `prepare_challenge` journals the binding under
+   `<mission>/approvals/journal/` before registering it with Session. It returns
+   exact standalone `mission-decision approve|reject|replan <uuid> <revision>
+   <plan-sha256> <review-snapshot-sha256> <challenge-id>` prompts.
+3. The host `UserPromptSubmit` hook retains immutable raw bytes, source-event
+   identity and the Session-owned receipt. Generic reactions, actor assertions
+   and assistant/tool events cannot authorize.
+4. `accept_decision` holds the Mission publication lock while validating the
+   receipt, raw prompt, roots and current reviews, then appends the disposition
+   and consumes the Session challenge. `pending` exposes interrupted work;
+   exact replay is idempotent and divergent decisions conflict.
+5. Mission-linked activation and resume through `WorkspaceLifecycle` hold the
+   same gate through the Ticket transition. Dispatch callers use
+   `MissionApproval::guard_entry`. Each entry revalidates the journal chain,
+   Session challenge and consumption. Finished Sessions, failed reviews,
+   reject/replan and semantic changes refuse entry. Evidence-only appends retain
+   semantic approval; edit/revert does not revive an old grant.
+
+Independent Tickets retain ordinary Ticket authority. Unreadable Mission
+authority fails closed. Fixture hook stdin validates plumbing only; it is not
+proof that a human authorized execution. Real installed-host validation belongs
+to the subsequent pilot.
+
+Ticket prerequisites remain authoritative even with a valid grant: the Ticket
+domain refuses a consumer advancing past an unresolved `depends_on` provider.
+Mission link publication and Ticket entry share a per-Ticket lock. Lock order
+is Mission typed locks first, then ascending Ticket link locks; entry
+rediscovers links while holding that link lock and keeps it through the Ticket
+update. A moving link set fails closed rather than authorizing against an
+outdated discovery.
+
+An unconsumed grant interrupted before a semantic edit remains visible as
+pending history; reconciliation cannot consume it after that edit. Re-review
+and issue a fresh challenge. Finished predecessor Sessions likewise require
+a fresh challenge for the active successor.
+
+Native progress and typed publication share the writer boundary: newly entering
+`in-progress` needs an `EntryAuthority` capability minted by
+`ApprovalTransaction::record_progress`. That method is trusted local library
+API, not an exposed CLI/MCP operation; callers must use the facade's validated
+`EntryGuard`. Completed/progress/result writes receive explicit nonsemantic
+ledger revisions only while `plan_digest` is unchanged. Corrupt classification
+fails closed; edit/revert remains semantic and never revives a grant.
+
+Before locks, reads or writes, store-path checks reject symlinks and
+non-directories between the workspace trust anchor and the managed Mission
+store. This is path validation, not protection against concurrent malicious
+filesystem replacement.
+
 ### Validation
 
 From the workflow-tools workspace:

@@ -229,6 +229,8 @@ pub enum LifecycleError {
     IllegalTransition(String),
     #[error("foreign_transition_rejected: {0}")]
     TransitionRejected(String),
+    #[error("approval_gate: {code}: {message}")]
+    ApprovalGate { code: &'static str, message: String },
 }
 
 impl LifecycleError {
@@ -245,6 +247,7 @@ impl LifecycleError {
             Self::InvalidControlHistory { .. } => "control_history_invalid",
             Self::IllegalTransition(_) => "illegal_transition",
             Self::TransitionRejected(_) => "foreign_transition_rejected",
+            Self::ApprovalGate { code, .. } => code,
         }
     }
 

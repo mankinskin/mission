@@ -74,10 +74,42 @@ pub(super) fn record_progress(
     state: WaypointState,
     expected: u64,
 ) -> StatusSnapshot {
+    if matches!(state, WaypointState::InProgress) {
+        return enter_progress(workspace, id, waypoint_id, expected);
+    }
     finish(
         Some(id),
         MissionLifecycle::open(workspace).record_progress(id, &waypoint_id, state, expected),
     )
+}
+
+fn enter_progress(
+    workspace: &Path,
+    id: Uuid,
+    waypoint_id: String,
+    expected: u64,
+) -> StatusSnapshot {
+    let session = session_api::SessionStoreConfig::new(workspace.join(".workflow-tools/session"));
+    let approval = crate::approval::MissionApproval::open(workspace, &session);
+    let result = approval
+        .guard_entry(id, crate::approval::EntryPath::Activation)
+        .and_then(|guard| guard.record_progress(&waypoint_id, WaypointState::InProgress, expected));
+    match result {
+        Ok(accepted) => finish(Some(id), Ok(accepted)),
+        Err(error) => finish(
+            Some(id),
+            Err(MissionError::Validation(
+                1,
+                vec![mission_api::Diagnostic {
+                    code: error.code(),
+                    source: "approvals".into(),
+                    pointer: String::new(),
+                    waypoint_id: Some(waypoint_id),
+                    message: error.message().to_string(),
+                }],
+            )),
+        ),
+    }
 }
 
 pub(super) fn record_result(

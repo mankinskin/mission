@@ -9,6 +9,7 @@ use std::{
 };
 
 use mission_api::{AcceptedMission, MissionStore, Scope, WaypointFragment, WaypointState};
+use session_api::SessionStoreConfig;
 use ticket_api::{
     error::StorageError,
     storage::{store::TicketStore, ticket_fs::TicketFs},
@@ -258,6 +259,70 @@ impl WorkspaceLifecycle {
             }
         }
     }
+
+    fn gate_error(error: crate::approval::ApprovalError) -> LifecycleError {
+        LifecycleError::ApprovalGate {
+            code: error.code(),
+            message: error.message().to_string(),
+        }
+    }
+
+    fn missions_linking(&self, ticket_id: Uuid) -> Result<BTreeSet<Uuid>, LifecycleError> {
+        let unavailable = |message: String| LifecycleError::ApprovalGate {
+            code: "approval_authority_unavailable",
+            message,
+        };
+        let root = self.workspace_root.join(".workflow-tools/mission/missions");
+        MissionStore::open(&self.workspace_root)
+            .verify_store_chain()
+            .map_err(|error| unavailable(format!("Mission store path unsafe: {error}")))?;
+        let entries = match std::fs::read_dir(&root) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(BTreeSet::new());
+            }
+            Err(error) => return Err(unavailable(format!("Mission store unreadable: {error}"))),
+        };
+        let store = MissionStore::open(&self.workspace_root);
+        let mut linked = BTreeSet::new();
+        for entry in entries {
+            let entry = entry.map_err(|error| unavailable(error.to_string()))?;
+            let name = entry.file_name();
+            let name = name
+                .to_str()
+                .ok_or_else(|| unavailable("non-UTF-8 Mission entry".into()))?;
+            if name.starts_with('.') {
+                continue;
+            }
+            let Ok(mission_id) = Uuid::parse_str(name) else {
+                continue;
+            };
+            let metadata = std::fs::symlink_metadata(entry.path()).map_err(|error| {
+                unavailable(format!("Mission entry {name} unreadable: {error}"))
+            })?;
+            if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                return Err(unavailable(format!(
+                    "Mission entry {name} is not a plain directory"
+                )));
+            }
+            let accepted = store.get(mission_id).map_err(|error| {
+                unavailable(format!("Mission {mission_id} cannot be inspected: {error}"))
+            })?;
+            for waypoint in &accepted.bundle.waypoints {
+                if let Some(reference) = Self::ticket_of(waypoint) {
+                    let linked_id = self.ticket_id(reference).map_err(|error| {
+                        unavailable(format!(
+                            "Mission {mission_id} has unresolvable Ticket link: {error}"
+                        ))
+                    })?;
+                    if linked_id == ticket_id {
+                        linked.insert(mission_id);
+                    }
+                }
+            }
+        }
+        Ok(linked)
+    }
 }
 
 impl LifecycleRead for WorkspaceLifecycle {
@@ -324,6 +389,52 @@ impl LifecycleTransition for WorkspaceLifecycle {
                 PROVIDER,
             ));
         };
+        let session = SessionStoreConfig::new(self.workspace_root.join(".workflow-tools/session"));
+        let approval = crate::approval::MissionApproval::open(&self.workspace_root, &session);
+        let mut _entry_guards = Vec::new();
+        let mut _link_lock = None;
+        if matches!(
+            LifecycleState::from_ticket_state(&request.to_native_state),
+            Ok(LifecycleState::Active)
+        ) {
+            let lifecycle = mission_api::MissionLifecycle::open(&self.workspace_root);
+            let discover = || -> Result<BTreeSet<Uuid>, LifecycleError> {
+                let mut missions = self.missions_linking(ticket_id)?;
+                if let WaypointIdentity::Waypoint { mission_id, .. } = identity {
+                    missions.insert(*mission_id);
+                }
+                Ok(missions)
+            };
+            let mut settled = false;
+            for _ in 0..3 {
+                _link_lock = None;
+                _entry_guards.clear();
+                let missions = discover()?;
+                for mission_id in &missions {
+                    _entry_guards.push(
+                        approval
+                            .guard_entry(*mission_id, crate::approval::EntryPath::Activation)
+                            .map_err(Self::gate_error)?,
+                    );
+                }
+                _link_lock = Some(lifecycle.lock_ticket_links(ticket_id).map_err(|error| {
+                    LifecycleError::ApprovalGate {
+                        code: "approval_authority_unavailable",
+                        message: error.to_string(),
+                    }
+                })?);
+                if discover()? == missions {
+                    settled = true;
+                    break;
+                }
+            }
+            if !settled {
+                return Err(LifecycleError::ApprovalGate {
+                    code: "approval_authority_unavailable",
+                    message: "Mission links kept changing during entry".into(),
+                });
+            }
+        }
         self.ticket_store()?
             .update_with_options(
                 &ticket_id,

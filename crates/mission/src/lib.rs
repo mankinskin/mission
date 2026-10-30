@@ -13,6 +13,7 @@ use ticket_api::storage::store::TicketStore;
 use uuid::Uuid;
 
 mod direct;
+pub mod approval;
 pub mod intake;
 pub mod lifecycle;
 mod migration;
