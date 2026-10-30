@@ -20,6 +20,7 @@ path = "src/bin/mission-mcp.rs"
 required-features = ["mcp"]
 
 [dependencies]
+memory-kernel = { git = "https://github.com/mankinskin/memory-kernel", branch = "main" }
 mission-api = { path = "../mission-api" }
 session-api = { path = "../../../session/crates/session-api" }
 sha2 = "0.10"

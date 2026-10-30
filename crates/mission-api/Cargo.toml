@@ -9,6 +9,7 @@ name = "mission_api"
 path = "src/lib.rs"
 
 [dependencies]
+memory-kernel = { git = "https://github.com/mankinskin/memory-kernel", branch = "main" }
 pulldown-cmark = "0.12"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

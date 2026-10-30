@@ -590,12 +590,20 @@ appends a compensation revision rather than restoring the old tree.
 
 ### Shared lifecycle projections and capability contracts
 
-`mission_api::lifecycle` (re-exported by `mission_api` and `mission`) defines the
-six shared states (`planned`, `active`, `paused`, `blocked`, `completed`,
-`cancelled`), `LifecycleSnapshot` (shared state plus retained native
-domain/state/revision, owning root, control sequence, separate execution
-eligibility) and separate read, transition, planning, approval, pause/resume,
-cancellation, completion/result-review, handoff and reopen capability traits.
+`memory_kernel::lifecycle` defines the six shared states (`planned`, `active`,
+`paused`, `blocked`, `completed`, `cancelled`), schema parsing, basic control
+defaults and independently implementable capability traits.
+`mission_api::lifecycle` re-exports these contracts and owns only Mission
+identities, journal handling, projections and `LifecycleSnapshot` (state plus native
+domain/state/revision, owning root, control sequence and separate execution
+eligibility). The kernel contracts separate read, transition, planning,
+approval, pause/resume, cancellation, completion/result-review, handoff and reopen.
+Implementers bind their domain identity, snapshot and error through
+`LifecycleSubject`; the generic traits no longer depend on Mission types.
+Native conversion helpers are provided by the domain `LifecycleStateExt`
+extension trait, which callers must import to use its associated functions.
+Ticket vocabulary is mapped by `ticket_api::TicketLifecycle`; the Mission
+extension delegates to that adapter rather than maintaining a second mapping.
 Unsupported capabilities return `unsupported_capability`; nothing pretends to
 succeed. The `mission` facade's `WorkspaceLifecycle` reads Ticket state from
 the explicit workspace Ticket store and transitions it only through the Ticket

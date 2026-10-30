@@ -325,6 +325,20 @@ impl WorkspaceLifecycle {
     }
 }
 
+impl LifecycleSubject for WorkspaceLifecycle {
+    type Identity = WaypointIdentity;
+    type Snapshot = LifecycleSnapshot;
+    type Error = LifecycleError;
+
+    fn provider_name(&self) -> &str {
+        PROVIDER
+    }
+
+    fn lifecycle_error(error: memory_kernel::lifecycle::LifecycleError) -> Self::Error {
+        error.into()
+    }
+}
+
 impl LifecycleRead for WorkspaceLifecycle {
     fn read_lifecycle(
         &self,
@@ -453,11 +467,7 @@ impl LifecycleTransition for WorkspaceLifecycle {
 
 macro_rules! unsupported_capabilities {
     ($($trait:ident),+) => {$(
-        impl $trait for WorkspaceLifecycle {
-            fn provider_name(&self) -> &str {
-                PROVIDER
-            }
-        }
+        impl $trait for WorkspaceLifecycle {}
     )+};
 }
 
