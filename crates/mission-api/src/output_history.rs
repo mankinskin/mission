@@ -261,6 +261,17 @@ pub(super) fn projected_state(
             );
         }
     }
+    let ledger = plan_operations::ledger_from_bytes(
+        files.get(plan_operations::EVIDENCE_FILE).map(Vec::as_slice),
+    )?;
+    files.remove(plan_operations::REVIEW_PLAN_FILE);
+    if let Some(source) = source {
+        let plan = plan_operations::build_review_plan(accepted, source, &ledger)?;
+        files.insert(
+            plan_operations::REVIEW_PLAN_FILE.into(),
+            serde_json::to_vec_pretty(&plan)?,
+        );
+    }
     for (name, bytes) in rendered.files() {
         files.insert(format!("generated/{name}"), bytes.to_vec());
     }

@@ -1413,6 +1413,7 @@ fn projected_rollback_fingerprint(
             && !path.starts_with("generated/")
             && path != "mission.md"
             && path != "source.json"
+            && path != "review-plan.json"
     });
     let accepted_bytes = serde_json::to_vec_pretty(accepted)?;
     let revision = accepted.bundle.manifest.revision;

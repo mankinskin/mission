@@ -653,6 +653,48 @@ array used by the CLI. Apply also requires the exact `proposal_id` returned by
 preview. `repair_journal`, `repair_resume`, and `repair_rollback` take the
 actual `journal_id`.
 
+### Granular planning operations and review plan
+
+`MissionLifecycle::apply_plan_operation` applies `SetGoal`, `CreateWaypoint`,
+`UpdateWaypoint`, `RemoveWaypoint`, `ReorderWaypoints`, `SetRequirements` or
+`RecordEvidence` to a published typed Mission using `expected_revision` and
+`request_id`.
+
+- Stale revisions return `revision_conflict`; unknown waypoint IDs return
+  `waypoint_not_found`. Rejected requests preserve authoritative and projection
+  bytes.
+- Identical request retries return the recorded outcome with `replayed: true`
+  without writes. Conflicting reuse returns `request_id_conflict`.
+- Removing referenced work requires a replacement with a new stable ID in the
+  same operation (`replacement_required`). Requirement ownership transfers to
+  the replacement. Orphaning required ownership fails (`unowned-requirement`).
+  Completed or result-bearing identities are retained
+  (`retained-waypoint-required`).
+- Schema 3 requires complete outcome plans; schema 2 remains legacy without
+  invented outcomes or requirements.
+- Source, accepted state, history, `plan-requests/`, `evidence-bindings.json`
+  and `review-plan.json` publish in one atomic swap, preserving existing intake
+  provenance and lifecycle journals. Repair includes the review projection in
+  its swap and fingerprints.
+- Each waypoint depends on its immediate predecessor in the total order.
+
+`MissionLifecycle::review_plan` never writes and reads a coherent revision
+under a shared lock on the Mission's existing `.<id>.typed.flock`.
+It exposes the goal, ordered waypoints, prompt, Part,
+checkpoint, requirements, non-goals, references, declared validation gates,
+`plan_digest` and `evidence_identity`. The semantic digest excludes evidence.
+Evidence stays bound to its original digest after an edit, with `current:
+false`. `review_status: "evidenced"` means operator evidence, not requester
+review: `formal_review` remains `not-recorded`. Approval is a separate contract.
+
+Reads never create the lock file and never follow it through a symlink. An
+absent Mission reports `NotFound`. A present Mission whose lock file is
+missing, a symlink or not a regular file, or that still has a legacy
+`.<id>.typed.lock`, returns a `PublicationRecovery` error instead of an
+unguarded read. Run a typed write or repair, or inspect the legacy lock once no
+older writer is running, to restore it. A writer holding the lock makes the
+read wait up to 30 seconds (`typed-lock-timeout`).
+
 ### Validation
 
 From the workflow-tools workspace:

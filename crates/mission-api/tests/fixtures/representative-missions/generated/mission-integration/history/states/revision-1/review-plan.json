@@ -1,0 +1,727 @@
+{
+  "mission_id": "00000000-0000-4000-8000-000000002001",
+  "schema_version": 3,
+  "revision": 1,
+  "title": "Synthetic Mission integration fixture",
+  "objective": "Synthetic adaptation of the full Mission integration roadmap; no source work is executed or mutated.",
+  "requirements": [],
+  "waypoints": [
+    {
+      "position": 1,
+      "waypoint_id": "mission-spec",
+      "title": "Define the mission-domain contract",
+      "prompt": "Fixture-only adaptation: Specify the UUID manifest, objective, roadmap, waypoints, linked domain records, session attachments, store, mutation/read-back invariants, and migration. Preserve the boundary: Keep source dossiers authoritative until selected migration; preserve the domain crate boundary and exclude scheduling, HTTP, and viewer scope.",
+      "part": {
+        "blocks": [
+          {
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Adapted objective"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Specify the UUID manifest, objective, roadmap, waypoints, linked domain records, session attachments, store, mutation/read-back invariants, and migration."
+              }
+            ]
+          },
+          {
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Constraints and validation"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Keep source dossiers authoritative until selected migration; preserve the domain crate boundary and exclude scheduling, HTTP, and viewer scope. Validation guidance: Read back the canonical specification and verify ownership, persistence, references, migration, and non-scheduling acceptance criteria.. Non-goal: Do not implement crates, transports, migration code, or scheduling in the specification waypoint.."
+              }
+            ]
+          }
+        ]
+      },
+      "commit_checkpoint": {
+        "message": "Fixture review checkpoint: mission-spec"
+      },
+      "depends_on": [],
+      "non_goals": [
+        "Do not implement crates, transports, migration code, or scheduling in the specification waypoint."
+      ],
+      "references": [],
+      "requirement_ids": [],
+      "validation": [
+        {
+          "command": "Read back the canonical specification and verify ownership, persistence, references, migration, and non-scheduling acceptance criteria.",
+          "cwd": null
+        }
+      ],
+      "validation_status": "declared",
+      "outcome_plan": {
+        "expected_outcome": "One authoritative contract names each record owner and keeps sessions and foreign entities reference-only.",
+        "alternative_outcomes": [
+          {
+            "outcome": "A proposed entity reference crosses a store boundary the contract does not define.",
+            "acceptable_handling": [
+              "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+            ]
+          }
+        ]
+      },
+      "review_status": "pending",
+      "evidence": []
+    },
+    {
+      "position": 2,
+      "waypoint_id": "ticket-set",
+      "title": "Prepare bounded implementation Tickets",
+      "prompt": "Fixture-only adaptation: Create exactly one Ticket for each ticket-backed API, facade, session-attachment, and migration surface. Preserve the boundary: Keep W3 alignment, W8 guidance, and W9 closure single-session; preserve status authority in each linked Ticket and reconcile the serial prerequisite chain.",
+      "part": {
+        "blocks": [
+          {
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Adapted objective"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Create exactly one Ticket for each ticket-backed API, facade, session-attachment, and migration surface."
+              }
+            ]
+          },
+          {
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Constraints and validation"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Keep W3 alignment, W8 guidance, and W9 closure single-session; preserve status authority in each linked Ticket and reconcile the serial prerequisite chain. Validation guidance: Read each exact Ticket ID, objective, acceptance, Spec link, and dependency edge.. Non-goal: Do not activate implementation before all plan references are read back or create a scheduling Ticket.."
+              }
+            ]
+          }
+        ]
+      },
+      "commit_checkpoint": {
+        "message": "Fixture review checkpoint: ticket-set"
+      },
+      "depends_on": [
+        "mission-spec"
+      ],
+      "non_goals": [
+        "Do not activate implementation before all plan references are read back or create a scheduling Ticket."
+      ],
+      "references": [],
+      "requirement_ids": [],
+      "validation": [
+        {
+          "command": "Read each exact Ticket ID, objective, acceptance, Spec link, and dependency edge.",
+          "cwd": null
+        }
+      ],
+      "validation_status": "declared",
+      "outcome_plan": {
+        "expected_outcome": "W4-W7 each have one linked bounded Ticket; non-ticket work remains untracked by replacement entities.",
+        "alternative_outcomes": [
+          {
+            "outcome": "A Ticket objective, acceptance, or stored edge differs from the reviewed scope.",
+            "acceptable_handling": [
+              "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+            ]
+          }
+        ]
+      },
+      "review_status": "pending",
+      "evidence": []
+    },
+    {
+      "position": 3,
+      "waypoint_id": "roadmap-contract",
+      "title": "Settle the structured roadmap contract",
+      "prompt": "Fixture-only adaptation: Define native and typed JSON, stable IDs, explicit serial order, actual dependency edges, revision-local labels, diagnostics, rendering, and recovery. Preserve the boundary: Do not infer source prerequisites from presentation order, weaken identity checks, or publish a schema change without approval.",
+      "part": {
+        "blocks": [
+          {
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Adapted objective"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Define native and typed JSON, stable IDs, explicit serial order, actual dependency edges, revision-local labels, diagnostics, rendering, and recovery."
+              }
+            ]
+          },
+          {
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Constraints and validation"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Do not infer source prerequisites from presentation order, weaken identity checks, or publish a schema change without approval. Validation guidance: Round-trip representative JSON and compare identity, order, dependencies, diagnostics, versioning, and renderer output.. Non-goal: Do not migrate dossiers or implement an unapproved schema.."
+              }
+            ]
+          }
+        ]
+      },
+      "commit_checkpoint": {
+        "message": "Fixture review checkpoint: roadmap-contract"
+      },
+      "depends_on": [
+        "ticket-set"
+      ],
+      "non_goals": [
+        "Do not migrate dossiers or implement an unapproved schema."
+      ],
+      "references": [],
+      "requirement_ids": [],
+      "validation": [
+        {
+          "command": "Round-trip representative JSON and compare identity, order, dependencies, diagnostics, versioning, and renderer output.",
+          "cwd": null
+        }
+      ],
+      "validation_status": "declared",
+      "outcome_plan": {
+        "expected_outcome": "The contract separates required identity/order from authored prerequisites and defines versioned publication recovery.",
+        "alternative_outcomes": [
+          {
+            "outcome": "A malformed stable ID, ambiguous edge, or unsupported revision is discovered.",
+            "acceptable_handling": [
+              "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+            ]
+          }
+        ]
+      },
+      "review_status": "pending",
+      "evidence": []
+    },
+    {
+      "position": 4,
+      "waypoint_id": "mission-api",
+      "title": "Implement durable Mission persistence",
+      "prompt": "Fixture-only adaptation: Implement UUID-backed validation, import, revision, archive, provenance, relationship resolution, and complete generated output in the internal API. Preserve the boundary: Use `.workflow-tools/mission/`; preserve typed Parts and original source records; keep transports out of the internal crate.",
+      "part": {
+        "blocks": [
+          {
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Adapted objective"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Implement UUID-backed validation, import, revision, archive, provenance, relationship resolution, and complete generated output in the internal API."
+              }
+            ]
+          },
+          {
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Constraints and validation"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Use `.workflow-tools/mission/`; preserve typed Parts and original source records; keep transports out of the internal crate. Validation guidance: Run focused persistence, validation, revision, exact renderer, history, and rejected-write-preservation tests.. Non-goal: Do not expose transports or mutate source dossiers.."
+              }
+            ]
+          }
+        ]
+      },
+      "commit_checkpoint": {
+        "message": "Fixture review checkpoint: mission-api"
+      },
+      "depends_on": [
+        "roadmap-contract"
+      ],
+      "non_goals": [
+        "Do not expose transports or mutate source dossiers."
+      ],
+      "references": [
+        "ce://default/ticket/00000000-0000-4000-8000-000000002002",
+        "ce://default/spec/00000000-0000-4000-8000-000000002003",
+        "criterion:{\"specification_id\":\"00000000-0000-4000-8000-000000002003\",\"criterion_id\":\"mission-domain-boundary\"}",
+        "execution:mission-integration-synthetic-check"
+      ],
+      "requirement_ids": [],
+      "validation": [
+        {
+          "command": "Run focused persistence, validation, revision, exact renderer, history, and rejected-write-preservation tests.",
+          "cwd": null
+        }
+      ],
+      "validation_status": "declared",
+      "outcome_plan": {
+        "expected_outcome": "Rejected writes preserve complete accepted bytes and every published revision remains self-contained and readable.",
+        "alternative_outcomes": [
+          {
+            "outcome": "A revision conflicts with current accepted authority or an external reference is unavailable.",
+            "acceptable_handling": [
+              "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+            ]
+          }
+        ]
+      },
+      "review_status": "pending",
+      "evidence": []
+    },
+    {
+      "position": 5,
+      "waypoint_id": "mission-transports",
+      "title": "Expose the Mission facade",
+      "prompt": "Fixture-only adaptation: Provide structured-roadmap validate/import/render/publish/check-generated operations over one Mission API through CLI and MCP. Preserve the boundary: Preserve explicit workspace selection, preview-versus-mutation boundaries, diagnostic parity, and recovery behavior.",
+      "part": {
+        "blocks": [
+          {
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Adapted objective"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Provide structured-roadmap validate/import/render/publish/check-generated operations over one Mission API through CLI and MCP."
+              }
+            ]
+          },
+          {
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Constraints and validation"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Preserve explicit workspace selection, preview-versus-mutation boundaries, diagnostic parity, and recovery behavior. Validation guidance: Build CLI and MCP and compare representative responses, output destinations, and no-write previews.. Non-goal: Do not add HTTP, viewer, session attachment, or scheduling.."
+              }
+            ]
+          }
+        ]
+      },
+      "commit_checkpoint": {
+        "message": "Fixture review checkpoint: mission-transports"
+      },
+      "depends_on": [
+        "mission-api"
+      ],
+      "non_goals": [
+        "Do not add HTTP, viewer, session attachment, or scheduling."
+      ],
+      "references": [],
+      "requirement_ids": [],
+      "validation": [
+        {
+          "command": "Build CLI and MCP and compare representative responses, output destinations, and no-write previews.",
+          "cwd": null
+        }
+      ],
+      "validation_status": "declared",
+      "outcome_plan": {
+        "expected_outcome": "Both transports use shared validation and the selected generated directory without bypasses.",
+        "alternative_outcomes": [
+          {
+            "outcome": "A transport cannot preserve a required diagnostic or mutation boundary.",
+            "acceptable_handling": [
+              "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+            ]
+          }
+        ]
+      },
+      "review_status": "pending",
+      "evidence": []
+    },
+    {
+      "position": 6,
+      "waypoint_id": "session-attachment",
+      "title": "Attach sessions to Missions",
+      "prompt": "Fixture-only adaptation: Pin and resolve canonical mission URNs across sessions without embedding the Mission or moving the session-local workflow graph. Preserve the boundary: Attachment is reference metadata only, not scheduling, shared graph ownership, or permission to mutate a Mission.",
+      "part": {
+        "blocks": [
+          {
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Adapted objective"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Pin and resolve canonical mission URNs across sessions without embedding the Mission or moving the session-local workflow graph."
+              }
+            ]
+          },
+          {
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Constraints and validation"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Attachment is reference metadata only, not scheduling, shared graph ownership, or permission to mutate a Mission. Validation guidance: Exercise valid pins, invalid URNs, and two sessions referencing one Mission with isolated stores.. Non-goal: Do not move `session_workflow_*` APIs or dispatch agents.."
+              }
+            ]
+          }
+        ]
+      },
+      "commit_checkpoint": {
+        "message": "Fixture review checkpoint: session-attachment"
+      },
+      "depends_on": [
+        "mission-transports"
+      ],
+      "non_goals": [
+        "Do not move `session_workflow_*` APIs or dispatch agents."
+      ],
+      "references": [],
+      "requirement_ids": [],
+      "validation": [
+        {
+          "command": "Exercise valid pins, invalid URNs, and two sessions referencing one Mission with isolated stores.",
+          "cwd": null
+        }
+      ],
+      "validation_status": "declared",
+      "outcome_plan": {
+        "expected_outcome": "Exact references resolve while each session retains its independent local graph.",
+        "alternative_outcomes": [
+          {
+            "outcome": "A referenced Mission is missing, malformed, or selected from the wrong workspace.",
+            "acceptable_handling": [
+              "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+            ]
+          }
+        ]
+      },
+      "review_status": "pending",
+      "evidence": []
+    },
+    {
+      "position": 7,
+      "waypoint_id": "dossier-migration",
+      "title": "Migrate selected dossiers safely",
+      "prompt": "Fixture-only adaptation: Enumerate source folders at runtime, import only the current roadmap, preserve provenance and current links, and report migrated/skipped/blocked inputs. Preserve the boundary: Leave original dossiers and version snapshots unchanged; derive IDs only by the approved title rule and defer unsupported legacy cases explicitly.",
+      "part": {
+        "blocks": [
+          {
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Adapted objective"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Enumerate source folders at runtime, import only the current roadmap, preserve provenance and current links, and report migrated/skipped/blocked inputs."
+              }
+            ]
+          },
+          {
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Constraints and validation"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Leave original dossiers and version snapshots unchanged; derive IDs only by the approved title rule and defer unsupported legacy cases explicitly. Validation guidance: Compare dry-run inventory to filesystem contents, inspect the migrated dossier record, and verify all excluded snapshot paths.. Non-goal: Do not delete source dossiers, impose historical folder counts, or convert every legacy folder.."
+              }
+            ]
+          }
+        ]
+      },
+      "commit_checkpoint": {
+        "message": "Fixture review checkpoint: dossier-migration"
+      },
+      "depends_on": [
+        "session-attachment"
+      ],
+      "non_goals": [
+        "Do not delete source dossiers, impose historical folder counts, or convert every legacy folder."
+      ],
+      "references": [],
+      "requirement_ids": [],
+      "validation": [
+        {
+          "command": "Compare dry-run inventory to filesystem contents, inspect the migrated dossier record, and verify all excluded snapshot paths.",
+          "cwd": null
+        }
+      ],
+      "validation_status": "declared",
+      "outcome_plan": {
+        "expected_outcome": "Eligible current roadmaps are represented while blocked folders and excluded history remain visible and auditable.",
+        "alternative_outcomes": [
+          {
+            "outcome": "A source folder is ambiguous, unsafe, or outside the approved migration boundary.",
+            "acceptable_handling": [
+              "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+            ]
+          }
+        ]
+      },
+      "review_status": "pending",
+      "evidence": []
+    },
+    {
+      "position": 8,
+      "waypoint_id": "guidance-retarget",
+      "title": "Retarget authorized guidance",
+      "prompt": "Fixture-only adaptation: Replace only approved dossier routes with durable Mission operations after migration is validated. Preserve the boundary: Require explicit requester authorization for takeover regardless of prior session status; preserve prior/new owner provenance and avoid unrelated policy edits.",
+      "part": {
+        "blocks": [
+          {
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Adapted objective"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Replace only approved dossier routes with durable Mission operations after migration is validated."
+              }
+            ]
+          },
+          {
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Constraints and validation"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Require explicit requester authorization for takeover regardless of prior session status; preserve prior/new owner provenance and avoid unrelated policy edits. Validation guidance: Search only owned guidance for stale routes and verify every changed link and takeover boundary.. Non-goal: Do not rewrite unrelated instructions or infer authority from expiry, pins, or history.."
+              }
+            ]
+          }
+        ]
+      },
+      "commit_checkpoint": {
+        "message": "Fixture review checkpoint: guidance-retarget"
+      },
+      "depends_on": [
+        "dossier-migration"
+      ],
+      "non_goals": [
+        "Do not rewrite unrelated instructions or infer authority from expiry, pins, or history."
+      ],
+      "references": [],
+      "requirement_ids": [],
+      "validation": [
+        {
+          "command": "Search only owned guidance for stale routes and verify every changed link and takeover boundary.",
+          "cwd": null
+        }
+      ],
+      "validation_status": "declared",
+      "outcome_plan": {
+        "expected_outcome": "Guidance routes to Mission workflows without weakening the explicit takeover gate.",
+        "alternative_outcomes": [
+          {
+            "outcome": "A guidance owner, target, or takeover authorization cannot be verified.",
+            "acceptable_handling": [
+              "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+            ]
+          }
+        ]
+      },
+      "review_status": "pending",
+      "evidence": []
+    },
+    {
+      "position": 9,
+      "waypoint_id": "validation-closure",
+      "title": "Close with evidence and dispositions",
+      "prompt": "Fixture-only adaptation: Read back the specification, implementation Tickets, validation executions, migration outcome, and required requester dispositions. Preserve the boundary: A green test is not review or requester acceptance; record the approved blocked backlog separately from unresolved exceptions.",
+      "part": {
+        "blocks": [
+          {
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Adapted objective"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Read back the specification, implementation Tickets, validation executions, migration outcome, and required requester dispositions."
+              }
+            ]
+          },
+          {
+            "type": "heading",
+            "level": 2,
+            "inlines": [
+              {
+                "type": "text",
+                "text": "Constraints and validation"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "inlines": [
+              {
+                "type": "text",
+                "text": "A green test is not review or requester acceptance; record the approved blocked backlog separately from unresolved exceptions. Validation guidance: Verify evidence links, exact entity status, generated output, and closure disposition before the final lifecycle transition.. Non-goal: Do not close with missing gates, unresolved feedback, or unapproved scope.."
+              }
+            ]
+          }
+        ]
+      },
+      "commit_checkpoint": {
+        "message": "Fixture review checkpoint: validation-closure"
+      },
+      "depends_on": [
+        "guidance-retarget"
+      ],
+      "non_goals": [
+        "Do not close with missing gates, unresolved feedback, or unapproved scope."
+      ],
+      "references": [],
+      "requirement_ids": [],
+      "validation": [
+        {
+          "command": "Verify evidence links, exact entity status, generated output, and closure disposition before the final lifecycle transition.",
+          "cwd": null
+        }
+      ],
+      "validation_status": "declared",
+      "outcome_plan": {
+        "expected_outcome": "Closure follows linked evidence and explicit dispositions, not a summary claim.",
+        "alternative_outcomes": [
+          {
+            "outcome": "A blocked item has no exact requester-approved disposition or validation read-back.",
+            "acceptable_handling": [
+              "Record the condition as fixture-authored guidance, preserve all source bytes, and stop any affected follow-up."
+            ]
+          }
+        ]
+      },
+      "review_status": "pending",
+      "evidence": []
+    }
+  ],
+  "plan_digest": "16aeb97acaae1f4c7b71f287698937ea8007c0300d759803d9685407b45b44b6",
+  "evidence_identity": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "formal_review": "not-recorded"
+}

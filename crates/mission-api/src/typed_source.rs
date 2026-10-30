@@ -354,6 +354,23 @@ impl MissionLifecycle {
         validate_typed(draft, publish)?;
         self.store.prepare_write()?;
         let _lock = TypedLock::acquire(&self.store.root, draft.mission_id)?;
+        self.save_typed_locked(
+            draft,
+            expected,
+            publish,
+            &plan_operations::PlanWrite::default(),
+        )
+    }
+
+    /// The caller must hold this Mission's non-reentrant `TypedLock`.
+    pub(super) fn save_typed_locked(
+        &self,
+        draft: &TypedDraft,
+        expected: u64,
+        publish: bool,
+        plan: &plan_operations::PlanWrite<'_>,
+    ) -> Result<(), MissionError> {
+        validate_typed(draft, publish)?;
         let current = match self.get_mission_source(draft.mission_id) {
             Ok(source) => Some(source),
             Err(MissionError::NotFound(_)) => None,
@@ -371,7 +388,10 @@ impl MissionLifecycle {
         if actual != expected {
             return Err(MissionError::StaleRevision { expected, actual });
         }
-        let next = accepted_from_typed(draft, accepted.as_ref())?;
+        let mut next = accepted_from_typed(draft, accepted.as_ref())?;
+        if let Some(adjust) = plan.adjust {
+            adjust(&mut next.bundle)?;
+        }
         let rendered = if publish {
             validate_bundle(&next.bundle)
                 .map_err(|errors| MissionError::Validation(errors.len(), errors))?;
@@ -385,8 +405,12 @@ impl MissionLifecycle {
         } else {
             None
         };
+        let extras = match plan.extras {
+            Some(build) => build(&next)?,
+            None => Vec::new(),
+        };
         self.store
-            .write_authority(&next, Some(draft), rendered.as_ref())
+            .write_authority_with_extras(&next, Some(draft), rendered.as_ref(), &extras)
     }
 
     pub(super) fn render_typed(&self, draft: &TypedDraft) -> String {
@@ -567,7 +591,17 @@ impl MissionStore {
         source: Option<&TypedDraft>,
         rendered: Option<&RenderedRoadmap>,
     ) -> Result<(), MissionError> {
-        self.write_authority_inner(accepted, source, rendered, false, None)
+        self.write_authority_inner(accepted, source, rendered, false, None, &[])
+    }
+
+    pub(super) fn write_authority_with_extras(
+        &self,
+        accepted: &AcceptedMission,
+        source: Option<&TypedDraft>,
+        rendered: Option<&RenderedRoadmap>,
+        extras: &[(String, Vec<u8>)],
+    ) -> Result<(), MissionError> {
+        self.write_authority_inner(accepted, source, rendered, false, None, extras)
     }
 
     pub(super) fn write_authority_with_inputs(
@@ -577,7 +611,7 @@ impl MissionStore {
         rendered: Option<&RenderedRoadmap>,
         inputs: Option<&MissionOutputInputs>,
     ) -> Result<(), MissionError> {
-        self.write_authority_inner(accepted, source, rendered, false, inputs)
+        self.write_authority_inner(accepted, source, rendered, false, inputs, &[])
     }
 
     pub(super) fn write_authority_for_repair(
@@ -587,7 +621,7 @@ impl MissionStore {
         rendered: Option<&RenderedRoadmap>,
         replace_source: bool,
     ) -> Result<(), MissionError> {
-        self.write_authority_inner(accepted, source, rendered, replace_source, None)
+        self.write_authority_inner(accepted, source, rendered, replace_source, None, &[])
     }
 
     fn write_authority_inner(
@@ -597,6 +631,7 @@ impl MissionStore {
         rendered: Option<&RenderedRoadmap>,
         replace_source: bool,
         inputs: Option<&MissionOutputInputs>,
+        extras: &[(String, Vec<u8>)],
     ) -> Result<(), MissionError> {
         let id = accepted.mission_id;
         self.validate_requirement_references(&accepted.bundle)?;
@@ -697,6 +732,27 @@ impl MissionStore {
                         },
                     };
                     fs::write(stage.join("mission.md"), lifecycle.render_typed(source))?;
+                }
+            }
+            for (name, bytes) in extras {
+                let path = stage.join(name);
+                if let Some(parent) = path.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                fs::write(path, bytes)?;
+            }
+            // Mirror projected_state for every writer, including repair.
+            let projection = stage.join(plan_operations::REVIEW_PLAN_FILE);
+            match (source, rendered) {
+                (Some(source), Some(_)) => {
+                    let ledger = plan_operations::read_ledger(&stage)?;
+                    let plan = plan_operations::build_review_plan(accepted, source, &ledger)?;
+                    fs::write(&projection, serde_json::to_vec_pretty(&plan)?)?;
+                }
+                _ => {
+                    if present(&projection)? {
+                        fs::remove_file(&projection)?;
+                    }
                 }
             }
             write_new(
@@ -902,6 +958,65 @@ pub(super) struct TypedLock {
 impl TypedLock {
     pub(super) fn acquire(root: &Path, mission_id: Uuid) -> Result<Self, MissionError> {
         Self::acquire_for(root, mission_id, std::time::Duration::from_secs(30))
+    }
+
+    /// Read coherently without creating a lock or accepting foreign lock paths.
+    pub(super) fn acquire_shared_existing(
+        root: &Path,
+        mission_id: Uuid,
+    ) -> Result<Self, MissionError> {
+        let flock = root.join(format!(".{mission_id}.typed.flock"));
+        match fs::symlink_metadata(&flock) {
+            Ok(meta) if meta.file_type().is_file() => {}
+            Ok(_) => {
+                return Err(MissionError::PublicationRecovery {
+                    mission_id,
+                    message: format!(
+                        "typed lock file {} is a symlink or not a regular file; refusing a coherent read outside the store",
+                        flock.display()
+                    ),
+                });
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Err(MissionError::PublicationRecovery {
+                    mission_id,
+                    message: format!(
+                        "typed lock file {} is absent, so a coherent read cannot be proven; run a typed write or repair to restore it",
+                        flock.display()
+                    ),
+                });
+            }
+            Err(error) => return Err(error.into()),
+        }
+        let file = fs::OpenOptions::new().read(true).open(&flock)?;
+        let started = std::time::Instant::now();
+        loop {
+            match file.try_lock_shared() {
+                Ok(()) => break,
+                Err(fs::TryLockError::WouldBlock) => {
+                    if started.elapsed() >= std::time::Duration::from_secs(30) {
+                        return Err(typed_error(
+                            "typed-lock-timeout",
+                            &format!("a writer holds the lock for Mission {mission_id}."),
+                        ));
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(fs::TryLockError::Error(error)) => return Err(error.into()),
+            }
+        }
+        let legacy = root.join(format!(".{mission_id}.typed.lock"));
+        match fs::symlink_metadata(&legacy) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self { _file: file }),
+            Err(error) => Err(error.into()),
+            Ok(_) => Err(MissionError::PublicationRecovery {
+                mission_id,
+                message: format!(
+                    "legacy typed write lock {} exists and its owner cannot be proven; inspect it once no older writer is running",
+                    legacy.display()
+                ),
+            }),
+        }
     }
 
     pub(super) fn acquire_for(

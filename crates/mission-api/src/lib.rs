@@ -21,6 +21,7 @@ mod output_history;
 pub use output_history::*;
 mod artifact_contract;
 pub mod lifecycle;
+mod plan_operations;
 mod repair;
 mod review_entry;
 mod schema_renderers;
@@ -32,6 +33,10 @@ pub use artifact_contract::{
     MissionFileProvenance, MissionFileRole, resolve_artifact_reference,
 };
 pub use lifecycle::*;
+pub use plan_operations::{
+    PlanOperation, PlanOperationOutcome, PlanOperationRequest, PlanRequirement, ReviewEvidence,
+    ReviewPlan, ReviewWaypoint,
+};
 pub use repair::*;
 pub use schema_renderers::*;
 pub use typed_migration::*;
