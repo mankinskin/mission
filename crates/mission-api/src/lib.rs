@@ -20,6 +20,7 @@ pub use outcome_plan::*;
 mod output_history;
 pub use output_history::*;
 mod artifact_contract;
+pub mod lifecycle;
 mod repair;
 mod review_entry;
 mod schema_renderers;
@@ -30,6 +31,7 @@ pub use artifact_contract::{
     ARTIFACT_PROVENANCE_SCHEMA_VERSION, MissionArtifactProvenance, MissionFileFormat,
     MissionFileProvenance, MissionFileRole, resolve_artifact_reference,
 };
+pub use lifecycle::*;
 pub use repair::*;
 pub use schema_renderers::*;
 pub use typed_migration::*;

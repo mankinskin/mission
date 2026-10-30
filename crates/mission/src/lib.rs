@@ -13,9 +13,11 @@ use ticket_api::storage::store::TicketStore;
 use uuid::Uuid;
 
 mod direct;
+pub mod lifecycle;
 mod migration;
 
 pub use direct::DirectWaypoint;
+pub use lifecycle::WorkspaceLifecycle;
 pub use migration::{DossierMigrationRecord, DossierMigrationReport};
 
 pub const MISSION_WORKSPACE_ENV: &str = "MISSION_WORKSPACE";

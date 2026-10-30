@@ -551,6 +551,42 @@ selection is a no-op and creates neither journal nor revision. Resume and
 rollback require the actual journal UUID and the same workspace; rollback
 appends a compensation revision rather than restoring the old tree.
 
+### Shared lifecycle projections and capability contracts
+
+`mission_api::lifecycle` (re-exported by `mission_api` and `mission`) defines the
+six shared states (`planned`, `active`, `paused`, `blocked`, `completed`,
+`cancelled`), `LifecycleSnapshot` (shared state plus retained native
+domain/state/revision, owning root, control sequence, separate execution
+eligibility) and separate read, transition, planning, approval, pause/resume,
+cancellation, completion/result-review, handoff and reopen capability traits.
+Unsupported capabilities return `unsupported_capability`; nothing pretends to
+succeed. The `mission` facade's `WorkspaceLifecycle` reads Ticket state from
+the explicit workspace Ticket store and transitions it only through the Ticket
+domain (`foreign_transition_rejected` when Ticket refuses); Mission never writes
+Ticket state.
+
+- Ticket `planning`/`ready` → planned, `in-implementation`/`in-review` → active,
+  `on-hold` → paused, `blocked` → blocked, `done` → completed, `cancelled` →
+  cancelled; any other state fails with `ticket_state_unmapped`.
+- Single-session `Pending`/`InProgress`/`Completed`/`Blocked` → planned/active/
+  completed/blocked. Paused/cancelled come only from Mission-owned control events.
+- A Mission is planned until work starts, active while work runs or results await
+  review (a legacy all-completed Mission without an explicit completion event is
+  active with `result_review_needed`), blocked at an unavailable required entry,
+  and completed only by an explicit completion event. Precedence: terminal
+  cancel/complete, pause, blocked entry, planned/active.
+- Mission pause/cancel deny the separate `eligibility` field only; a Ticket-backed
+  waypoint keeps its Ticket state.
+
+The version-1 control journal is `lifecycle-journal.json` in the UUID Mission
+directory: `{"version": 1, "events": [...]}` with `seq`, `op_id`, `target`
+(`mission` or a waypoint), `prior_seq`, `event` (`pause`/`resume`/`cancel`/
+`complete`) and `prior_state`. W1 defines schema, validation and projection
+only; durable writes and recovery belong to a later slice. A missing journal means
+no controls (never approval); corrupt content, unsupported versions and
+conflicting histories are explicit errors. Control events do not change the plan
+manifest or semantic revision.
+
 ### MCP contract
 
 Start `mission-mcp` with its owning workspace as cwd, or choose it with
