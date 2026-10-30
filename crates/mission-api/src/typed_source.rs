@@ -159,8 +159,24 @@ impl MissionLifecycle {
         title: String,
         objective: String,
     ) -> Result<TypedDraft, MissionError> {
+        self.create_draft_with_id(Uuid::new_v4(), title, objective)
+    }
+
+    /// Create a planning draft with an identity journaled by the caller.
+    pub fn create_draft_with_id(
+        &self,
+        mission_id: Uuid,
+        title: String,
+        objective: String,
+    ) -> Result<TypedDraft, MissionError> {
+        if mission_id.is_nil() {
+            return Err(typed_error(
+                "mission-id-nil",
+                "mission_id must not be the nil UUID.",
+            ));
+        }
         let draft = TypedDraft {
-            mission_id: Uuid::new_v4(),
+            mission_id,
             schema_version: TYPED_SOURCE_SCHEMA_VERSION,
             revision: 1,
             title,
@@ -169,6 +185,11 @@ impl MissionLifecycle {
         };
         self.save_typed(&draft, 0, false)?;
         Ok(draft)
+    }
+
+    /// Managed directory under the explicit owning workspace's Mission store.
+    pub fn mission_directory(&self, mission_id: Uuid) -> PathBuf {
+        self.store.root.join(mission_id.to_string())
     }
 
     pub fn save_draft(
@@ -594,13 +615,22 @@ impl MissionStore {
         }
         let stage = self.root.join(format!(".{id}.typed.tmp"));
         let backup = self.root.join(format!(".{id}.typed.backup"));
-        if stage.exists() || backup.exists() {
-            return Err(MissionError::PublicationRecovery {
-                mission_id: id,
-                message: "prior staging or backup exists; inspect it before retrying".into(),
-            });
+        let recovery = |message: &str| MissionError::PublicationRecovery {
+            mission_id: id,
+            message: message.into(),
+        };
+        if present(&backup)? {
+            return Err(recovery(
+                "prior staging or backup exists; inspect it before retrying",
+            ));
         }
-        let result = (|| {
+        let creating = source.is_some() && !directory.exists();
+        if present(&stage)? && !creating {
+            return Err(recovery(
+                "prior staging or backup exists; inspect it before retrying",
+            ));
+        }
+        let build = |stage: &Path| -> Result<(), MissionError> {
             if directory.exists() {
                 copy_directory(&directory, &stage)?;
             } else {
@@ -686,18 +716,79 @@ impl MissionStore {
             }
             super::output_history::capture(&stage, accepted)?;
             Ok::<_, MissionError>(())
-        })();
+        };
+        let mut adopt_stage = false;
+        let mut create_intent: Option<PathBuf> = None;
+        if creating && let Some(source) = source {
+            let expected = CreateIntent {
+                schema_version: CREATE_INTENT_SCHEMA_VERSION,
+                mission_id: id,
+                revision: accepted.bundle.manifest.revision,
+                request_sha256: create_request_digest(accepted, source)?,
+            };
+            let intent_path = self.root.join(format!(".{id}.typed.intent"));
+            let state = read_create_intent(&intent_path, &expected)?;
+            if state == IntentState::Conflicts {
+                return Err(recovery(
+                    "a durable create intent binds this Mission id to a different or unreadable request; left untouched for inspection",
+                ));
+            }
+            if present(&stage)? {
+                let probe = self
+                    .root
+                    .join(format!(".{id}.typed.verify-{}", Uuid::new_v4()));
+                let verdict = build(&probe).and_then(|()| compare_stage(&stage, &probe));
+                if probe.exists()
+                    && let Err(error) = fs::remove_dir_all(&probe)
+                {
+                    return Err(recovery(&format!(
+                        "could not remove verification scratch {}: {error}",
+                        probe.display()
+                    )));
+                }
+                match verdict? {
+                    StageMatch::Same => adopt_stage = true,
+                    StageMatch::OwnPartial if state == IntentState::Matches => {
+                        fs::remove_dir_all(&stage)?;
+                    }
+                    _ => {
+                        return Err(recovery(
+                            "existing staging directory is not provably this create request's; left untouched for inspection",
+                        ));
+                    }
+                }
+            }
+            if !adopt_stage && state == IntentState::Absent {
+                write_create_intent(&self.root, &intent_path, &expected)?;
+                #[cfg(test)]
+                if CRASH_AFTER_INTENT.with(|flag| flag.replace(false)) {
+                    return Err(MissionError::Io(std::io::Error::other(
+                        "injected crash after create intent",
+                    )));
+                }
+            }
+            create_intent = Some(intent_path);
+        }
+        let result = if adopt_stage { Ok(()) } else { build(&stage) };
         if let Err(error) = result {
             if stage.exists() {
                 fs::remove_dir_all(&stage)?;
             }
+            forget_create_intent(create_intent.as_deref());
             return Err(error);
         }
         if let Err(error) = sync_tree(&stage) {
             if stage.exists() {
                 fs::remove_dir_all(&stage)?;
             }
+            forget_create_intent(create_intent.as_deref());
             return Err(error);
+        }
+        #[cfg(test)]
+        if CRASH_BEFORE_PROMOTE.with(|flag| flag.replace(false)) {
+            return Err(MissionError::Io(std::io::Error::other(
+                "injected crash before promotion",
+            )));
         }
         if directory.exists() {
             fs::rename(&directory, &backup)?;
@@ -723,6 +814,7 @@ impl MissionStore {
                 });
             }
             fs::remove_dir_all(&stage)?;
+            forget_create_intent(create_intent.as_deref());
             return Err(error.into());
         }
         if let Err(error) = fs::File::open(&self.root).and_then(|root| root.sync_all()) {
@@ -740,6 +832,7 @@ impl MissionStore {
                 backup.display()
             );
         }
+        forget_create_intent(create_intent.as_deref());
         Ok(())
     }
 }
@@ -778,8 +871,18 @@ fn promote_authority(stage: &Path, directory: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 thread_local! {
     static PROMOTION_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static CRASH_AFTER_INTENT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static CRASH_BEFORE_PROMOTE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static TYPED_BACKUP_CLEANUP_FAILURE: std::cell::Cell<bool> =
         const { std::cell::Cell::new(false) };
+}
+
+fn present(path: &Path) -> std::io::Result<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
 }
 
 fn remove_typed_backup(path: &Path) -> std::io::Result<()> {
@@ -793,33 +896,240 @@ fn remove_typed_backup(path: &Path) -> std::io::Result<()> {
 }
 
 pub(super) struct TypedLock {
-    path: PathBuf,
+    _file: fs::File,
 }
 
 impl TypedLock {
     pub(super) fn acquire(root: &Path, mission_id: Uuid) -> Result<Self, MissionError> {
-        let path = root.join(format!(".{mission_id}.typed.lock"));
+        Self::acquire_for(root, mission_id, std::time::Duration::from_secs(30))
+    }
+
+    pub(super) fn acquire_for(
+        root: &Path,
+        mission_id: Uuid,
+        timeout: std::time::Duration,
+    ) -> Result<Self, MissionError> {
+        let started = std::time::Instant::now();
+        let flock = root.join(format!(".{mission_id}.typed.flock"));
+        match fs::symlink_metadata(&flock) {
+            Ok(meta) if !meta.file_type().is_file() => {
+                return Err(MissionError::PublicationRecovery {
+                    mission_id,
+                    message: format!(
+                        "typed lock file {} is a symlink or not a regular file; refusing to lock outside the store",
+                        flock.display()
+                    ),
+                });
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&flock)?;
         loop {
-            match fs::create_dir(&path) {
-                Ok(()) => return Ok(Self { path }),
-                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                    std::thread::yield_now();
+            match file.try_lock() {
+                Ok(()) => break,
+                Err(fs::TryLockError::WouldBlock) => {
+                    if started.elapsed() >= timeout {
+                        return Err(typed_error(
+                            "typed-lock-timeout",
+                            &format!("another writer holds the lock for Mission {mission_id}."),
+                        ));
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(fs::TryLockError::Error(error)) => return Err(error.into()),
+            }
+        }
+        let legacy = root.join(format!(".{mission_id}.typed.lock"));
+        let grace = timeout.min(std::time::Duration::from_secs(2));
+        let waiting = std::time::Instant::now();
+        loop {
+            match fs::symlink_metadata(&legacy) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    return Ok(Self { _file: file });
                 }
                 Err(error) => return Err(error.into()),
+                Ok(_) if waiting.elapsed() >= grace => {
+                    return Err(MissionError::PublicationRecovery {
+                        mission_id,
+                        message: format!(
+                            "legacy typed write lock {} exists and its owner cannot be proven; inspect it once no older writer is running",
+                            legacy.display()
+                        ),
+                    });
+                }
+                Ok(_) => std::thread::sleep(std::time::Duration::from_millis(10)),
             }
         }
     }
 }
 
-impl Drop for TypedLock {
-    fn drop(&mut self) {
-        if let Err(error) = fs::remove_dir(&self.path) {
-            eprintln!(
-                "mission-api: retained typed write lock {} after completed write: {error}",
-                self.path.display()
-            );
+const CREATE_INTENT_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CreateIntent {
+    schema_version: u32,
+    mission_id: Uuid,
+    revision: u64,
+    request_sha256: String,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum IntentState {
+    Absent,
+    Matches,
+    Conflicts,
+}
+
+fn create_request_digest(
+    accepted: &AcceptedMission,
+    source: &TypedDraft,
+) -> Result<String, MissionError> {
+    let accepted = serde_json::to_vec_pretty(accepted)?;
+    let source = serde_json::to_vec_pretty(&stored_source(source))?;
+    Ok(format!(
+        "{}+{}",
+        super::output_history::digest(&accepted),
+        super::output_history::digest(&source)
+    ))
+}
+
+fn read_create_intent(path: &Path, expected: &CreateIntent) -> Result<IntentState, MissionError> {
+    match fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(IntentState::Absent);
+        }
+        Err(error) => return Err(error.into()),
+        Ok(meta) if !meta.file_type().is_file() => return Ok(IntentState::Conflicts),
+        Ok(_) => {}
+    }
+    let bytes = fs::read(path)?;
+    Ok(match serde_json::from_slice::<CreateIntent>(&bytes) {
+        Ok(found) if found == *expected => IntentState::Matches,
+        _ => IntentState::Conflicts,
+    })
+}
+
+fn write_create_intent(
+    root: &Path,
+    path: &Path,
+    expected: &CreateIntent,
+) -> Result<(), MissionError> {
+    use std::io::Write;
+    let tmp = root.join(format!(
+        ".{}.typed.intent.tmp-{}",
+        expected.mission_id,
+        Uuid::new_v4()
+    ));
+    let bytes = serde_json::to_vec_pretty(expected)?;
+    let written = (|| {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)?;
+        file.write_all(&bytes)?;
+        file.sync_all()
+    })();
+    if let Err(error) = written {
+        if let Err(cleanup) = fs::remove_file(&tmp) {
+            eprintln!("mission-api: retained {}: {cleanup}", tmp.display());
+        }
+        return Err(error.into());
+    }
+    let linked = fs::hard_link(&tmp, path);
+    if let Err(cleanup) = fs::remove_file(&tmp) {
+        eprintln!("mission-api: retained {}: {cleanup}", tmp.display());
+    }
+    linked?;
+    fs::File::open(root)?.sync_all()?;
+    Ok(())
+}
+
+fn forget_create_intent(path: Option<&Path>) {
+    if let Some(path) = path
+        && let Err(error) = fs::remove_file(path)
+        && error.kind() != std::io::ErrorKind::NotFound
+    {
+        eprintln!(
+            "mission-api: retained create intent {}: {error}",
+            path.display()
+        );
+    }
+}
+
+enum StageMatch {
+    Same,
+    OwnPartial,
+    Foreign,
+}
+enum TreeEntry {
+    Dir,
+    File(Vec<u8>),
+    Other,
+}
+
+fn tree_entries(
+    root: &Path,
+) -> Result<std::collections::BTreeMap<PathBuf, TreeEntry>, MissionError> {
+    let mut out = std::collections::BTreeMap::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        for entry in fs::read_dir(&dir)? {
+            let path = entry?.path();
+            let relative = path
+                .strip_prefix(root)
+                .map_err(|_| typed_error("unsafe-part-path", "stage entry escaped its root."))?
+                .to_path_buf();
+            let meta = fs::symlink_metadata(&path)?;
+            if meta.file_type().is_symlink() {
+                out.insert(relative, TreeEntry::Other);
+            } else if meta.is_dir() {
+                out.insert(relative, TreeEntry::Dir);
+                pending.push(path);
+            } else if meta.is_file() {
+                out.insert(relative, TreeEntry::File(fs::read(&path)?));
+            } else {
+                out.insert(relative, TreeEntry::Other);
+            }
         }
     }
+    Ok(out)
+}
+
+fn compare_stage(stage: &Path, expected: &Path) -> Result<StageMatch, MissionError> {
+    if !fs::symlink_metadata(stage)?.file_type().is_dir() {
+        return Ok(StageMatch::Foreign);
+    }
+    let found = tree_entries(stage)?;
+    let wanted = tree_entries(expected)?;
+    let mut partial = found.len() != wanted.len();
+    for (relative, entry) in &found {
+        match (entry, wanted.get(relative)) {
+            (TreeEntry::Dir, Some(TreeEntry::Dir)) => {}
+            (TreeEntry::File(have), Some(TreeEntry::File(want))) => {
+                if have != want {
+                    if want.starts_with(have) {
+                        partial = true;
+                    } else {
+                        return Ok(StageMatch::Foreign);
+                    }
+                }
+            }
+            _ => return Ok(StageMatch::Foreign),
+        }
+    }
+    Ok(if partial {
+        StageMatch::OwnPartial
+    } else {
+        StageMatch::Same
+    })
 }
 
 pub(super) fn ensure_safe_path(root: &Path, path: &Path) -> Result<(), MissionError> {
@@ -876,6 +1186,11 @@ pub(super) fn stored_source(draft: &TypedDraft) -> StoredSource {
             .collect(),
     }
 }
+
+#[cfg(test)]
+mod lock_tests;
+#[cfg(test)]
+mod recovery_tests;
 
 fn typed_error(code: &'static str, message: &str) -> MissionError {
     MissionError::Validation(

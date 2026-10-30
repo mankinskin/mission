@@ -59,6 +59,43 @@ Successful conversion preserves UUIDs, Requirement links and immutable native
 history, and advances the existing shared CAS revision. No Ticket/Spec migration
 or historical repair is performed.
 
+### Session intake and managed planning Mission
+
+`mission::intake::submit_and_create` stores submitted bytes append-only in
+`sessions/<id>/intake/<request_id>/input.bin`, re-verifies their SHA-256 on read,
+and creates one planning draft under the explicit workspace root's existing
+`.workflow-tools/mission/missions/<uuid>/` layout. The Mission keeps an immutable
+copy at `input/submitted-input.bin` plus a Session reference in `input/intake.json`.
+The capture transcript is unchanged. The Session mutation lock is held across
+submission, reservation and linkage, excluding concurrent finish (`busy`).
+New or unlinked intake after finish returns `session_finished`; linked intake
+remains readable by replay.
+
+The same roots, Session, request ID and bytes resolve the same Mission UUID and
+paths across restarts. Different bytes return `idempotency_conflict`.
+The Session journals `Reserved` before Mission creation and `Linked` only
+after provenance exists. Interrupted operations expose `pending` with the
+persisted subset. The verification hook simulates stops between steps, not
+arbitrary crashes inside a step.
+
+Draft metadata is explicitly intake-derived, pending later planning. The
+receipt exposes the generated entry as `NotYetGenerated` until publication;
+symlinked or unsupported generated paths fail explicitly. Intake creates no
+approval or lifecycle journal and grants no execution authority. Structured
+failures distinguish `session_not_found`, `intake_missing`, `session_finished`,
+`workspace_unavailable` and `incompatible_store`. Later planning edits preserve
+the immutable provenance used by `find`.
+
+Typed Mission writes take an OS file lock (`.<id>.typed.flock`, never unlinked,
+released by the kernel on crash; waits end in `typed-lock-timeout`).
+Unknown legacy `.<id>.typed.lock` directories are preserved and reported as
+`PublicationRecovery` after a short grace. Mutual exclusion covers this build's
+callers only: quiesce older writers before upgrading.
+A new Mission persists a synced `.<id>.typed.intent` before staging. Partial
+stages are rebuilt only with matching intent and verified request content;
+an exact complete stage can be adopted. Foreign, corrupt, symlinked or
+differing stages and intents block creation without being deleted.
+
 ### Planned waypoint outcomes
 
 Native bundle **v2** and typed source **v3** require `outcome_plan` on every
