@@ -1,0 +1,3 @@
+# Markdown link audit source exclusions (gitignore syntax; see audit-cli README).
+# Test fixtures intentionally contain synthetic and invalid links.
+/crates/mission-api/tests/fixtures/
