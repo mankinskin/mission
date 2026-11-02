@@ -305,16 +305,13 @@ fn single_session_projection_controls_and_legacy_completion() {
     fs::remove_file(LifecycleJournal::path(root.path(), id)).unwrap();
 
     // Legacy all-completed Mission without completion event: active + review.
-    let rev = lifecycle
-        .record_progress(id, "a", mission::WaypointState::Completed, 1)
-        .unwrap();
-    let rev = lifecycle
-        .record_progress(
-            id,
-            "b",
-            mission::WaypointState::Completed,
-            rev.bundle.manifest.revision,
-        )
+    let mut legacy = lifecycle.get(id).unwrap().bundle;
+    legacy.manifest.revision = 2;
+    for waypoint in &mut legacy.waypoints {
+        waypoint.state = Some(mission::WaypointState::Completed);
+    }
+    let rev = mission::MissionStore::open(root.path())
+        .import(id, legacy, 1)
         .unwrap();
     let review = adapter.read_lifecycle(&mission).unwrap();
     assert_eq!(review.state, LifecycleState::Active);
@@ -487,8 +484,11 @@ fn completion_event_with_pending_required_waypoint_is_rejected() {
         "control_history_invalid"
     );
     // Valid once the required outcome is completed.
-    lifecycle
-        .record_progress(id, "a", mission::WaypointState::Completed, 1)
+    let mut legacy = lifecycle.get(id).unwrap().bundle;
+    legacy.manifest.revision = 2;
+    legacy.waypoints[0].state = Some(mission::WaypointState::Completed);
+    mission::MissionStore::open(root.path())
+        .import(id, legacy, 1)
         .unwrap();
     let snapshot = adapter.read_lifecycle(&mission).unwrap();
     assert_eq!(snapshot.state, LifecycleState::Completed);

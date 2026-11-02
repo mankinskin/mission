@@ -169,6 +169,7 @@ enum Entry {
     Challenge(ChallengeBinding),
     Grant(ApprovalGrant),
     Decision(Disposition),
+    Invalidated { operation_id: Uuid, reason: String },
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -204,12 +205,28 @@ pub struct EntryGuard<'a> {
     pub grant: ApprovalGrant,
 }
 impl EntryGuard<'_> {
+    pub(crate) fn check_waypoint_entry(&self, waypoint_id: &str) -> Result<(), ApprovalError> {
+        let runtime = self
+            ._tx
+            .control_state()
+            .map_err(|e| ApprovalError::new(e.code(), e.to_string()))?;
+        crate::WorkspaceLifecycle::check_prerequisites(
+            &runtime,
+            &self._tx.review_plan()?,
+            waypoint_id,
+        )
+        .map_err(|e| ApprovalError::new(e.code(), e.to_string()))
+    }
+
     pub fn record_progress(
         &self,
         waypoint_id: &str,
         state: WaypointState,
         expected: u64,
     ) -> Result<AcceptedMission, ApprovalError> {
+        if state == WaypointState::InProgress {
+            self.check_waypoint_entry(waypoint_id)?;
+        }
         Ok(self._tx.record_progress(waypoint_id, state, expected)?)
     }
 }

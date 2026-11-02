@@ -318,6 +318,21 @@ fn cli_create_mcp_edit_and_cli_publish_use_real_transports() {
             revision(&evidence).to_string(),
         ],
     );
+    assert_eq!(progress["status"], "error");
+    assert_eq!(
+        progress["diagnostics"][0]["code"],
+        "completion_evidence_required"
+    );
+    let progress = cli(
+        workspace.path(),
+        &[
+            "record-progress".into(),
+            mission_id.clone(),
+            "install".into(),
+            "blocked".into(),
+            revision(&evidence).to_string(),
+        ],
+    );
     assert_ok(&progress);
     let published = cli(
         workspace.path(),

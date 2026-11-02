@@ -117,6 +117,7 @@ impl MissionStore {
         expected_current_revision: u64,
         options: &typed_source::ImportOptions<'_>,
     ) -> Result<AcceptedMission, MissionError> {
+        crate::lifecycle::ensure_control_settled(&self.root.join(mission_id.to_string()))?;
         validate_bundle(&bundle)
             .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
         self.validate_child_missions(mission_id, &bundle)
@@ -271,6 +272,7 @@ impl MissionStore {
             .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
         self.prepare_write()?;
         let _lock = typed_source::TypedLock::acquire(&self.root, mission_id)?;
+        crate::lifecycle::ensure_control_settled(&self.root.join(mission_id.to_string()))?;
         let current = match self.get(mission_id) {
             Ok(current) => Some(current),
             Err(MissionError::NotFound(_)) => None,

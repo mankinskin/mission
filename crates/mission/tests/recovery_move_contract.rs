@@ -98,18 +98,24 @@ fn create_typed_fixture(workspace: &Path, add_old_evidence: bool) -> (String, u6
             );
             assert_ok(&evidence);
             current_revision = revision(&evidence);
-            let completed = cli(
-                workspace,
-                &[
-                    "record-progress".into(),
-                    mission_id.clone(),
-                    (*waypoint_id).into(),
-                    "completed".into(),
-                    current_revision.to_string(),
-                ],
-            );
-            assert_ok(&completed);
-            current_revision = revision(&completed);
+            // Seed historical completion for read/repair compatibility; new
+            // completions must use the evidence-checked lifecycle operation.
+            let store = mission::MissionStore::open(workspace);
+            let id = Uuid::parse_str(&mission_id).unwrap();
+            let mut legacy = store.get(id).unwrap().bundle;
+            legacy.manifest.revision = current_revision + 1;
+            legacy
+                .waypoints
+                .iter_mut()
+                .find(|waypoint| waypoint.waypoint_id == *waypoint_id)
+                .unwrap()
+                .state = Some(mission::WaypointState::Completed);
+            current_revision = store
+                .import(id, legacy, current_revision)
+                .unwrap()
+                .bundle
+                .manifest
+                .revision;
         }
     }
     let current_source = cli(

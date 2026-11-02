@@ -154,7 +154,11 @@ fn repair_same_identity_twelve_waypoints_and_publish_preserve_old_and_new_eviden
             revision(&new_evidence).to_string(),
         ],
     );
-    assert_ok(&completed);
+    assert_eq!(completed["status"], "error");
+    assert_eq!(
+        completed["diagnostics"][0]["code"],
+        "completion_evidence_required"
+    );
     let final_record = cli(workspace.path(), &["get".into(), mission_id]);
     assert_ok(&final_record);
     assert_eq!(
@@ -169,11 +173,7 @@ fn repair_same_identity_twelve_waypoints_and_publish_preserve_old_and_new_eviden
         .unwrap();
     for (index, expected_id) in NATIVE_WAYPOINT_IDS.iter().enumerate() {
         assert_eq!(final_waypoints[index]["waypoint_id"], *expected_id);
-        let expected_state = if index < 3 || index == 5 {
-            "completed"
-        } else {
-            "pending"
-        };
+        let expected_state = if index < 3 { "completed" } else { "pending" };
         assert_eq!(final_waypoints[index]["state"], expected_state);
     }
     let final_results = final_record["accepted"]["bundle"]["manifest"]["operator_results"]

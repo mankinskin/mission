@@ -1,7 +1,7 @@
 //! Cross-store lifecycle adapters.
 //!
-//! Ticket state is read from, and transitioned through, the explicit workspace
-//! Ticket store; this module never persists lifecycle state of its own.
+//! Ticket state remains Ticket-owned. Mission controls and recovery records
+//! are persisted through the API-owned journal under its publication lock.
 
 use std::{
     collections::BTreeSet,
@@ -168,18 +168,33 @@ impl WorkspaceLifecycle {
             )));
         }
         let (accepted, controls) = self.load_mission(mission_id)?;
+        let runtime = self.runtime_state(mission_id)?;
         let mut states = Vec::new();
         for waypoint_id in &accepted.bundle.manifest.execution_order {
             let waypoint = Self::find_waypoint(&accepted, mission_id, waypoint_id)?;
-            states.push(self.waypoint_state(waypoint, &controls, visiting)?);
+            let native = self.waypoint_state(waypoint, &controls, visiting)?;
+            states.push(Self::runtime_waypoint(&runtime, waypoint_id, native));
         }
-        let projection = project_mission(
+        let mut control = controls.target(&ControlTarget::Mission);
+        if !runtime.reopened.is_empty() && control.terminal == Some(LifecycleState::Completed) {
+            control.terminal = None;
+        }
+        let mut projection = project_mission(
             &MissionFacts {
                 waypoints: states,
                 required_entry_unavailable: false,
             },
-            &controls.target(&ControlTarget::Mission),
+            &control,
         )?;
+        if control.terminal.is_none()
+            && control.paused_from.is_none()
+            && matches!(
+                runtime.phase,
+                LifecycleState::Active | LifecycleState::Blocked | LifecycleState::Completed
+            )
+        {
+            projection.state = runtime.phase;
+        }
         visiting.remove(&mission_id);
         Ok(MissionRead {
             state: projection.state,
@@ -339,8 +354,8 @@ impl LifecycleSubject for WorkspaceLifecycle {
     }
 }
 
-impl LifecycleRead for WorkspaceLifecycle {
-    fn read_lifecycle(
+impl WorkspaceLifecycle {
+    fn read_native_lifecycle(
         &self,
         identity: &WaypointIdentity,
     ) -> Result<LifecycleSnapshot, LifecycleError> {
@@ -425,11 +440,11 @@ impl LifecycleTransition for WorkspaceLifecycle {
                 _entry_guards.clear();
                 let missions = discover()?;
                 for mission_id in &missions {
-                    _entry_guards.push(
-                        approval
-                            .guard_entry(*mission_id, crate::approval::EntryPath::Activation)
-                            .map_err(Self::gate_error)?,
-                    );
+                    let guard = approval
+                        .guard_entry(*mission_id, crate::approval::EntryPath::Activation)
+                        .map_err(Self::gate_error)?;
+                    self.guard_ticket_prerequisites(&guard, *mission_id, ticket_id)?;
+                    _entry_guards.push(guard);
                 }
                 _link_lock = Some(lifecycle.lock_ticket_links(ticket_id).map_err(|error| {
                     LifecycleError::ApprovalGate {
@@ -461,6 +476,8 @@ impl LifecycleTransition for WorkspaceLifecycle {
                 true,
             )
             .map_err(|error| LifecycleError::TransitionRejected(error.to_string()))?;
+        drop(_link_lock);
+        drop(_entry_guards);
         self.read_lifecycle(identity)
     }
 }
@@ -471,14 +488,10 @@ macro_rules! unsupported_capabilities {
     )+};
 }
 
-// Declared but not yet implemented: every operation returns an explicit
-// `unsupported_capability` error and changes neither store.
-unsupported_capabilities!(
-    PlanningCapability,
-    ApprovalCapability,
-    PauseResumeCapability,
-    CancellationCapability,
-    CompletionCapability,
-    HandoffCapability,
-    ReopenCapability
-);
+unsupported_capabilities!(PlanningCapability, ApprovalCapability);
+
+mod controls;
+mod handoff;
+mod reopen;
+mod runtime_projection;
+pub use reopen::ReopenStep;

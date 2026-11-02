@@ -2,6 +2,8 @@
 mod journal;
 mod mapping;
 mod projection;
+mod runtime;
+pub use runtime::*;
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -54,6 +56,8 @@ pub enum EligibilityDenial {
     MissionPaused,
     MissionCancelled,
     State(LifecycleState),
+    CrossStorePending,
+    StaleEvidence,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -134,6 +138,8 @@ pub enum LifecycleError {
     TransitionRejected(String),
     #[error("approval_gate: {code}: {message}")]
     ApprovalGate { code: &'static str, message: String },
+    #[error("{code}: {message}")]
+    ControlRejected { code: &'static str, message: String },
 }
 
 impl LifecycleError {
@@ -152,6 +158,7 @@ impl LifecycleError {
             Self::IllegalTransition(_) => "illegal_transition",
             Self::TransitionRejected(_) => "foreign_transition_rejected",
             Self::ApprovalGate { code, .. } => code,
+            Self::ControlRejected { code, .. } => code,
         }
     }
 

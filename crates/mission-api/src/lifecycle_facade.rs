@@ -159,7 +159,21 @@ impl MissionLifecycle {
         expected: u64,
     ) -> Result<MissionBundle, MissionError> {
         let mut bundle = self.next_bundle(mission_id, expected)?;
-        Self::local_waypoint(&mut bundle, waypoint_id)?.state = Some(state);
+        let waypoint = Self::local_waypoint(&mut bundle, waypoint_id)?;
+        if state == WaypointState::Completed {
+            return Err(MissionError::Validation(
+                1,
+                vec![Diagnostic {
+                    code: "completion_evidence_required",
+                    source: "lifecycle".into(),
+                    pointer: String::new(),
+                    waypoint_id: Some(waypoint_id.into()),
+                    message: "Use the validated lifecycle completion operation, not raw progress."
+                        .into(),
+                }],
+            ));
+        }
+        waypoint.state = Some(state);
         Ok(bundle)
     }
 

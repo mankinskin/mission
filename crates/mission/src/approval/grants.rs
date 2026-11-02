@@ -21,6 +21,9 @@ impl<'a> MissionApproval<'a> {
         &self,
         tx: &ApprovalTransaction<'_>,
     ) -> Result<ApprovalGrant, ApprovalError> {
+        tx.control_state()
+            .and_then(|state| state.ensure_settled())
+            .map_err(|e| ApprovalError::new(e.code(), e.to_string()))?;
         let plan = tx.review_plan()?;
         let journal = read_journal(tx)?;
         let (index, grant) = journal
@@ -34,6 +37,9 @@ impl<'a> MissionApproval<'a> {
             .ok_or_else(|| required("no requester approval grant exists"))?;
         for later in &journal[index + 1..] {
             match &later.entry {
+                Entry::Invalidated { .. } => {
+                    return Err(stale("Mission reopened; fresh approval required"));
+                }
                 Entry::Decision(_) => return Err(required("later reject/replan superseded grant")),
                 Entry::Review(r)
                     if r.verdict == ReviewVerdict::Fail && r.plan_digest == grant.plan_digest =>
@@ -161,6 +167,57 @@ impl<'a> MissionApproval<'a> {
     pub fn guard_entry(&self, id: Uuid, _path: EntryPath) -> Result<EntryGuard<'_>, ApprovalError> {
         let tx = self.begin(id)?;
         let grant = self.effective_grant(&tx)?;
+        let runtime = tx
+            .control_state()
+            .map_err(|e| ApprovalError::new(e.code(), e.to_string()))?;
+        let control = mission_api::LifecycleJournal::read(&self.workspace_root, id)
+            .and_then(|j| j.projection())
+            .map_err(|e| ApprovalError::new(e.code(), e.to_string()))?
+            .target(&mission_api::ControlTarget::Mission);
+        if control.paused_from.is_some()
+            || control.terminal == Some(mission_api::LifecycleState::Cancelled)
+            || matches!(
+                runtime.phase,
+                mission_api::LifecycleState::Blocked | mission_api::LifecycleState::Completed
+            )
+            || (control.terminal == Some(mission_api::LifecycleState::Completed)
+                && runtime.reopened.is_empty())
+        {
+            return Err(ApprovalError::new(
+                "execution_gated",
+                "Mission lifecycle denies entry",
+            ));
+        }
         Ok(EntryGuard { _tx: tx, grant })
+    }
+
+    pub(crate) fn check_locked(
+        &self,
+        tx: &ApprovalTransaction<'_>,
+    ) -> Result<ApprovalGrant, ApprovalError> {
+        self.effective_grant(tx)
+    }
+
+    pub(crate) fn invalidate_locked(
+        &self,
+        tx: &ApprovalTransaction<'_>,
+        operation_id: Uuid,
+        reason: &str,
+    ) -> Result<(), ApprovalError> {
+        let mut journal = read_journal(tx)?;
+        if journal.iter().any(|r| {
+            matches!(&r.entry,
+            Entry::Invalidated { operation_id: id, .. } if *id == operation_id)
+        }) {
+            return Ok(());
+        }
+        append(
+            tx,
+            &mut journal,
+            Entry::Invalidated {
+                operation_id,
+                reason: reason.into(),
+            },
+        )
     }
 }

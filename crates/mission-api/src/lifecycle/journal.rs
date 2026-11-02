@@ -137,7 +137,19 @@ impl LifecycleJournal {
     /// Reads the journal of a Mission. A missing file is a legacy Mission with
     /// no controls (not an approval); every other failure is an error.
     pub fn read(workspace_root: &Path, mission_id: Uuid) -> Result<Self, LifecycleError> {
-        match fs::read_to_string(Self::path(workspace_root, mission_id)) {
+        let path = Self::path(workspace_root, mission_id);
+        match fs::symlink_metadata(&path) {
+            Ok(meta) if meta.file_type().is_symlink() || !meta.is_file() => {
+                return Err(LifecycleError::JournalCorrupt(format!(
+                    "{} is not a regular journal",
+                    path.display()
+                )));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Self::default()),
+            Err(error) => return Err(LifecycleError::JournalIo(error.to_string())),
+        }
+        match fs::read_to_string(path) {
             Ok(text) => Self::from_json(&text),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Self::default()),
             Err(error) => Err(LifecycleError::JournalIo(error.to_string())),

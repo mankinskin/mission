@@ -59,6 +59,27 @@ Successful conversion preserves UUIDs, Requirement links and immutable native
 history, and advances the existing shared CAS revision. No Ticket/Spec migration
 or historical repair is performed.
 
+### Lifecycle authority and recovery
+
+`mission::WorkspaceLifecycle` provides checked activation, pause/resume,
+blocking, cancellation, waypoint/Mission completion, result review, Session
+handoff and latest-current-completion reopening. Shared state/control contracts
+remain in `memory-kernel::lifecycle`; native Ticket state remains Ticket-owned.
+Mission pause/cancel gates execution without cascading Ticket edits.
+
+Controls use the Mission publication lock, control-sequence CAS and append-only
+records. A pending cross-store reopen/handoff gates entry and route replacement;
+retry the same operation and preconditions to recover its persisted subset.
+Reopen selects the greatest current completion sequence, preserves evidence,
+uses Ticket's audited expected-done/revision reopen API, invalidates approval
+and marks dependent completion evidence stale. Resume requires valid approval
+and prerequisite evidence.
+
+Raw `record_progress` cannot mark a waypoint completed. Use validated lifecycle
+completion with current evidence; historical completed states remain readable
+and repairable. `ApprovalTransaction` record writers are trusted cross-crate
+facade persistence primitives, not agent-facing operations.
+
 ### Session intake and managed planning Mission
 
 `mission::intake::submit_and_create` stores submitted bytes append-only in

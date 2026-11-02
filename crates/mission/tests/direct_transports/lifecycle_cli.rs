@@ -76,6 +76,19 @@ fn mcp_create_and_lifecycle_round_trip_through_cli_adapters() {
     assert_ok(&ordered);
     let progressed = mcp.call(23, &tool_name, json!({         "operation": "record_progress", "mission_id": mission_id, "waypoint_id": "verify",         "state": "completed", "expected_current_revision": revision(&ordered)
     }));
+    assert_eq!(progressed["status"], "error");
+    assert_eq!(
+        progressed["diagnostics"][0]["code"],
+        "completion_evidence_required"
+    );
+    let progressed = mcp.call(
+        230,
+        &tool_name,
+        json!({
+            "operation": "record_progress", "mission_id": mission_id, "waypoint_id": "verify",
+            "state": "blocked", "expected_current_revision": revision(&ordered)
+        }),
+    );
     assert_ok(&progressed);
     let evidenced = mcp.call(24, &tool_name, json!({         "operation": "record_validation_result", "mission_id": mission_id, "waypoint_id": "verify",         "outcome": "passed", "operator_command": "operator verify command",         "evidence_pointer": "ce://mcp/test/verify", "expected_current_revision": revision(&progressed)
     }));

@@ -12,6 +12,42 @@ use mission::{
 };
 use std::{fs, path::Path, process::Command};
 use uuid::Uuid;
+fn complete_prerequisite(f: &Fx) {
+    let store = ticket_api::storage::store::TicketStore::open(&f.ws).unwrap();
+    store.close(&f.ticket, "done", Some("w5-test")).unwrap();
+    drop(store);
+    let lifecycle = MissionLifecycle::open(&f.ws);
+    let plan = f.plan();
+    lifecycle
+        .apply_plan_operation(
+            f.id,
+            PlanOperationRequest {
+                request_id: "native-prerequisite-evidence".into(),
+                expected_revision: plan.revision,
+                operation: PlanOperation::RecordEvidence {
+                    plan_digest: plan.plan_digest,
+                    result: OperatorResult {
+                        waypoint_id: "a".into(),
+                        outcome: "passed".into(),
+                        operator_command: "cargo test".into(),
+                        evidence_pointer: "ce://default/test/prerequisite".into(),
+                    },
+                },
+            },
+        )
+        .unwrap();
+    WorkspaceLifecycle::open(&f.ws)
+        .complete_waypoint(
+            f.id,
+            "a",
+            &mission::ControlRequest {
+                op_id: Uuid::new_v4(),
+                expected_control_sequence: 0,
+                evidence: Some("ce://default/test/prerequisite".into()),
+            },
+        )
+        .unwrap();
+}
 fn progress(f: &Fx, state: WaypointState) -> StatusSnapshot {
     execute(
         &f.ws,
@@ -28,8 +64,14 @@ fn code(snapshot: &StatusSnapshot) -> &str {
 }
 
 fn states(f: &Fx) -> Vec<(String, Option<WaypointState>)> {
-    MissionStore::open(&f.ws).get(f.id).unwrap().bundle.waypoints.iter()
-        .map(|w| (w.waypoint_id.clone(), w.state.clone())).collect()
+    MissionStore::open(&f.ws)
+        .get(f.id)
+        .unwrap()
+        .bundle
+        .waypoints
+        .iter()
+        .map(|w| (w.waypoint_id.clone(), w.state.clone()))
+        .collect()
 }
 #[test]
 fn typed_publish_and_operations_cannot_introduce_in_progress() {
@@ -42,34 +84,61 @@ fn typed_publish_and_operations_cannot_introduce_in_progress() {
     created.part.waypoint_id = "c".into();
     created.prompt = "c prompt".into();
     draft.waypoints.push(created.clone());
-    lifecycle.publish_draft(f.id, draft, f.plan().revision).unwrap();
-    for (id, state) in states(&f) { assert_ne!(state, Some(WaypointState::InProgress), "{id}"); }
+    lifecycle
+        .publish_draft(f.id, draft, f.plan().revision)
+        .unwrap();
+    for (id, state) in states(&f) {
+        assert_ne!(state, Some(WaypointState::InProgress), "{id}");
+    }
     let mut d = created;
     d.waypoint_id = "d".into();
     d.part.waypoint_id = "d".into();
-    lifecycle.apply_plan_operation(f.id, PlanOperationRequest {
-        request_id: "create-d".into(), expected_revision: f.plan().revision,
-        operation: PlanOperation::CreateWaypoint { waypoint: d, after: Some("c".into()) },
-    }).unwrap();
+    lifecycle
+        .apply_plan_operation(
+            f.id,
+            PlanOperationRequest {
+                request_id: "create-d".into(),
+                expected_revision: f.plan().revision,
+                operation: PlanOperation::CreateWaypoint {
+                    waypoint: d,
+                    after: Some("c".into()),
+                },
+            },
+        )
+        .unwrap();
     let mut b = lifecycle.get_mission_source(f.id).unwrap().waypoints[1].clone();
     b.prompt = "b updated".into();
-    lifecycle.apply_plan_operation(f.id, PlanOperationRequest {
-        request_id: "update-b".into(), expected_revision: f.plan().revision,
-        operation: PlanOperation::UpdateWaypoint { waypoint: b },
-    }).unwrap();
+    lifecycle
+        .apply_plan_operation(
+            f.id,
+            PlanOperationRequest {
+                request_id: "update-b".into(),
+                expected_revision: f.plan().revision,
+                operation: PlanOperation::UpdateWaypoint { waypoint: b },
+            },
+        )
+        .unwrap();
     assert_eq!(states(&f).len(), 4);
-    for (id, state) in states(&f) { assert_ne!(state, Some(WaypointState::InProgress), "{id}"); }
-    assert_eq!(code(&progress(&f, WaypointState::InProgress)), "approval_required");
+    for (id, state) in states(&f) {
+        assert_ne!(state, Some(WaypointState::InProgress), "{id}");
+    }
+    assert_eq!(
+        code(&progress(&f, WaypointState::InProgress)),
+        "approval_required"
+    );
 }
 #[test]
 fn typed_edits_preserve_entered_state_but_invalidate_grant() {
     let f = linked();
     f.approve("c1", "evt-1");
+    complete_prerequisite(&f);
     assert_eq!(progress(&f, WaypointState::InProgress).status, "ok");
     let lifecycle = MissionLifecycle::open(&f.ws);
     let mut draft = lifecycle.get_mission_source(f.id).unwrap();
     draft.waypoints[1].prompt = "b typed edit".into();
-    lifecycle.publish_draft(f.id, draft, f.plan().revision).unwrap();
+    lifecycle
+        .publish_draft(f.id, draft, f.plan().revision)
+        .unwrap();
     assert_eq!(b_state(&f), Some(WaypointState::InProgress));
     assert_eq!(f.code(EntryPath::Resume), "approval_stale");
     f.edit_b("typed-op", "b operation edit");
@@ -80,27 +149,65 @@ fn typed_edits_preserve_entered_state_but_invalidate_grant() {
 fn invalid_nonsemantic_classification_fails_closed() {
     let f = linked();
     f.approve("c1", "evt-1");
+    complete_prerequisite(&f);
     assert_eq!(progress(&f, WaypointState::InProgress).status, "ok");
     let revision = f.plan().revision;
     let lifecycle = MissionLifecycle::open(&f.ws);
-    let path = f.ws.join(".workflow-tools/mission/missions").join(f.id.to_string()).join("evidence-bindings.json");
+    let path =
+        f.ws.join(".workflow-tools/mission/missions")
+            .join(f.id.to_string())
+            .join("evidence-bindings.json");
     let original = fs::read(&path).unwrap();
     let cases = [
-        (format!("{{\"entries\":[],\"nonsemantic_revisions\":[{revision},{revision}]}}"), "invalid_evidence_ledger"),
-        ("{\"entries\":[],\"nonsemantic_revisions\":[0]}".into(), "invalid_evidence_ledger"),
-        (format!("{{\"entries\":[],\"nonsemantic_revisions\":[{}]}}", revision + 5), "projection_diverged"),
-        ("{\"entries\":[],\"nonsemantic_revisions\":[1],\"extra\":1}".into(), "invalid_evidence_ledger"),
-        (format!("{{\"entries\":[{{\"result_sha256\":\"{}\",\"plan_digest\":\"{}\",\"revision\":{revision}}}],\"nonsemantic_revisions\":[{revision}]}}",
-            "a".repeat(64), "b".repeat(64)), "invalid_evidence_ledger"),
+        (
+            format!("{{\"entries\":[],\"nonsemantic_revisions\":[{revision},{revision}]}}"),
+            "invalid_evidence_ledger",
+        ),
+        (
+            "{\"entries\":[],\"nonsemantic_revisions\":[0]}".into(),
+            "invalid_evidence_ledger",
+        ),
+        (
+            format!(
+                "{{\"entries\":[],\"nonsemantic_revisions\":[{}]}}",
+                revision + 5
+            ),
+            "projection_diverged",
+        ),
+        (
+            "{\"entries\":[],\"nonsemantic_revisions\":[1],\"extra\":1}".into(),
+            "invalid_evidence_ledger",
+        ),
+        (
+            format!(
+                "{{\"entries\":[{{\"result_sha256\":\"{}\",\"plan_digest\":\"{}\",\"revision\":{revision}}}],\"nonsemantic_revisions\":[{revision}]}}",
+                "a".repeat(64),
+                "b".repeat(64)
+            ),
+            "invalid_evidence_ledger",
+        ),
     ];
     for (body, expected) in cases {
         fs::write(&path, body).unwrap();
-        assert_eq!(lifecycle.review_plan(f.id).unwrap_err().diagnostics().unwrap()[0].code, expected);
+        assert_eq!(
+            lifecycle
+                .review_plan(f.id)
+                .unwrap_err()
+                .diagnostics()
+                .unwrap()[0]
+                .code,
+            expected
+        );
         assert_eq!(f.code(EntryPath::Resume), "approval_authority_unavailable");
-        let failed = execute(&f.ws, Operation::RecordProgress {
-            mission_id: f.id, waypoint_id: "b".into(), state: WaypointState::Blocked,
-            expected_current_revision: revision,
-        });
+        let failed = execute(
+            &f.ws,
+            Operation::RecordProgress {
+                mission_id: f.id,
+                waypoint_id: "b".into(),
+                state: WaypointState::Blocked,
+                expected_current_revision: revision,
+            },
+        );
         assert_eq!(code(&failed), expected);
     }
     fs::write(&path, original).unwrap();
@@ -186,6 +293,11 @@ fn unapproved_in_progress_is_refused_on_exposed_native_routes() {
 fn approved_native_progress_and_results_keep_grant() {
     let f = linked();
     f.approve("c1", "evt-1");
+    assert_eq!(
+        code(&progress(&f, WaypointState::InProgress)),
+        "prerequisite_evidence_required"
+    );
+    complete_prerequisite(&f);
     let digest = f.plan().plan_digest;
     let entered = progress(&f, WaypointState::InProgress);
     assert_eq!(entered.status, "ok", "{:?}", entered.diagnostics);

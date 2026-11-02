@@ -218,6 +218,7 @@ impl MissionLifecycle {
         publish: bool,
         plan: &plan_operations::PlanWrite<'_>,
     ) -> Result<(), MissionError> {
+        crate::lifecycle::ensure_control_settled(&self.mission_directory(draft.mission_id))?;
         validate_typed(draft, publish)?;
         let current = match self.get_mission_source(draft.mission_id) {
             Ok(source) => Some(source),

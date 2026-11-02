@@ -52,10 +52,10 @@ fn lifecycle_owns_create_and_mutations() {
         )
         .unwrap();
     lifecycle
-        .record_progress(id, "first", WaypointState::Completed, 5)
+        .record_progress(id, "first", WaypointState::Blocked, 5)
         .unwrap();
     lifecycle
-        .record_progress(id, "second", WaypointState::Completed, 6)
+        .record_progress(id, "second", WaypointState::Blocked, 6)
         .unwrap();
     lifecycle
         .record_result(
@@ -102,7 +102,10 @@ fn lifecycle_rejects_external_waypoint_mutation() {
     let mut bundle = accepted.bundle;
     let waypoint = &mut bundle.waypoints[0];
     let ticket_id = uuid::Uuid::new_v4();
-    let path = temp.path().join(".workflow-tools/ticket/tickets").join(ticket_id.to_string());
+    let path = temp
+        .path()
+        .join(".workflow-tools/ticket/tickets")
+        .join(ticket_id.to_string());
     std::fs::create_dir_all(&path).unwrap();
     std::fs::write(path.join("ticket.toml"), format!(
         "id = \"{ticket_id}\"\ncreated_at = \"2026-10-29T00:00:00Z\"\ntitle = \"Existing Ticket\"\nstate = \"ready\"\n"
