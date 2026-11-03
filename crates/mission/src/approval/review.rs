@@ -6,6 +6,28 @@ impl<'a> MissionApproval<'a> {
         id: Uuid,
         input: ReviewInput,
     ) -> Result<ReviewRecord, ApprovalError> {
+        self.record_review_inner(id, input, None)
+    }
+
+    /// Record or replay one current-snapshot review under the provider lock.
+    pub fn record_review_with_request_id(
+        &self,
+        id: Uuid,
+        input: ReviewInput,
+        request_id: &str,
+    ) -> Result<ReviewRecord, ApprovalError> {
+        if request_id.trim().is_empty() {
+            return Err(required("a nonblank review request identity is required"));
+        }
+        self.record_review_inner(id, input, Some(request_id.to_owned()))
+    }
+
+    fn record_review_inner(
+        &self,
+        id: Uuid,
+        input: ReviewInput,
+        request_id: Option<String>,
+    ) -> Result<ReviewRecord, ApprovalError> {
         let tx = self.begin(id)?;
         let plan = tx.review_plan()?;
         if input.revision != plan.revision
@@ -18,6 +40,25 @@ impl<'a> MissionApproval<'a> {
             return Err(required("a named reviewer is required"));
         }
         let mut journal = read_journal(&tx)?;
+        if let Some(request_id) = request_id.as_ref()
+            && let Some(record) = reviews(&journal)
+                .into_iter()
+                .find(|record| record.request_id.as_ref() == Some(request_id))
+        {
+            if record.revision == input.revision
+                && record.plan_digest == input.plan_digest
+                && record.evidence_identity == input.evidence_identity
+                && record.kind == input.kind
+                && record.verdict == input.verdict
+                && record.reviewer == input.reviewer
+                && record.cold_review_id == input.cold_review_id
+            {
+                return Ok(record.clone());
+            }
+            return Err(conflict(
+                "review request identity was reused with different content",
+            ));
+        }
         match input.kind {
             ReviewKind::ColdWalkthrough if input.cold_review_id.is_some() => {
                 return Err(required(
@@ -52,6 +93,7 @@ impl<'a> MissionApproval<'a> {
         }
         let record = ReviewRecord {
             review_id: format!("review-{:08}", journal.len() + 1),
+            request_id,
             kind: input.kind,
             verdict: input.verdict,
             reviewer: input.reviewer,

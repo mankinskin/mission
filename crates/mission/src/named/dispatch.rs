@@ -163,6 +163,34 @@ pub(super) fn run(tool: &str, arguments: Value) -> Result<Outcome, Error> {
                 PlanOperation::ReorderWaypoints { order: i.order },
             )
         }
+        "mission_plan_record_review" => {
+            let i: RecordReviewInput = parse(arguments)?;
+            let root = root(&i.workspace_root)?;
+            let id = id(&i.mission_id)?;
+            nonempty(&i.request_id, "request_id")?;
+            let store = session(&root, i.session_root.as_deref())?;
+            let review = MissionApproval::open(&root, &store)
+                .with_expected_revision(i.expected_revision)
+                .record_review_with_request_id(
+                    id,
+                    crate::approval::ReviewInput {
+                        kind: i.kind,
+                        verdict: i.verdict,
+                        reviewer: i.reviewer,
+                        revision: i.expected_revision,
+                        plan_digest: i.plan_digest,
+                        evidence_identity: i.evidence_identity,
+                        cold_review_id: i.cold_review_id,
+                    },
+                    &i.request_id,
+                )?;
+            Ok((
+                id,
+                review.revision,
+                workspace(&root, Some(id)),
+                value(review)?,
+            ))
+        }
         "mission_plan_prepare_review" => {
             let i: ReviewInput = parse(arguments)?;
             let root = root(&i.workspace_root)?;

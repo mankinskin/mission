@@ -34,6 +34,7 @@ Initialized `tools/list` exposes capability `mission.native-planning`, version
 |---|---|
 | Intake and reads | `mission_intake_create`, `mission_workspace_get`, `mission_plan_get` |
 | Planning | `mission_plan_update`, `mission_waypoint_create`, `mission_waypoint_update`, `mission_waypoint_remove`, `mission_waypoint_reorder` |
+| Review evidence | `mission_plan_record_review` |
 | Requester decisions | `mission_plan_prepare_review`, `mission_plan_approve`, `mission_plan_replan` |
 | Lifecycle | `mission_waypoint_complete`, `mission_pause`, `mission_resume`, `mission_handoff`, `mission_cancel`, `mission_complete` |
 | Results and correction | `mission_review_results_add_waypoints`, `mission_reopen_most_recent_completed` |
@@ -62,6 +63,17 @@ W3's existing `draft-not-ready` checks are preserved. Plan updates select
 `set_goal`, `set_requirements`, or `record_evidence` through their `operation`.
 Waypoint operations use inline typed content, not handwritten manifests.
 Schema-v2 legacy and schema-v3 planned-outcome rules remain provider-owned.
+
+`mission_plan_record_review` accepts `kind` (`cold_walkthrough` or `formal`),
+`verdict` (`pass` or `fail`), a nonblank `reviewer`, current `plan_digest` and
+`evidence_identity`, and optional `cold_review_id`. Formal reviews require
+a passing cold review of the same snapshot by a different reviewer.
+Its nonblank stable `request_id` is persisted by the approval provider:
+identical current retries return the same review ID without appending;
+divergent reuse returns `approval_conflict`, and stale snapshots fail even
+on replay. Recording does not change the plan revision or mint a grant.
+Legacy Rust `record_review` callers keep append-only behavior, and records
+without a request identity remain readable.
 
 Review preparation requires the recorded passing cold and distinct formal
 reviews. Its `request_id` becomes the persisted challenge identity; the result

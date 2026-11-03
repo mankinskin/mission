@@ -59,6 +59,15 @@ mutation!(UpdateInput {
 mutation!(RemoveInput { waypoint_id: String, replacement: Option<TypedWaypoint> });
 mutation!(ReorderInput { order: Vec<String> });
 mutation!(ReviewInput { session_root: Option<PathBuf>, session_id: String });
+mutation!(RecordReviewInput {
+    session_root: Option<PathBuf>,
+    kind: crate::approval::ReviewKind,
+    verdict: crate::approval::ReviewVerdict,
+    reviewer: String,
+    plan_digest: String,
+    evidence_identity: String,
+    cold_review_id: Option<String>
+});
 mutation!(DecisionInput { session_root: Option<PathBuf>, decision: DecisionRef });
 fn uuid_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
     schemars::json_schema!({"type":"string", "format":"uuid"})

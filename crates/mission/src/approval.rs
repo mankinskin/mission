@@ -85,12 +85,14 @@ fn sha(input: &str) -> String {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "mcp", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ReviewKind {
     ColdWalkthrough,
     Formal,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "mcp", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ReviewVerdict {
     Pass,
@@ -122,6 +124,8 @@ pub struct ReviewInput {
 #[serde(deny_unknown_fields)]
 pub struct ReviewRecord {
     pub review_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
     pub kind: ReviewKind,
     pub verdict: ReviewVerdict,
     pub reviewer: String,

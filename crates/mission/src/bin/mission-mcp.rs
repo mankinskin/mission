@@ -166,6 +166,16 @@ impl MissionServer {
 #[tool_router]
 impl MissionServer {
     #[tool(
+        name = "mission_plan_record_review",
+        description = "capability=mission.native-planning version=1. Record a current cold or distinct formal review with provider-owned revision checks and idempotent request replay; reviewer evidence never grants requester approval."
+    )]
+    async fn plan_record_review(
+        &self,
+        Parameters(i): Parameters<Input<named::RecordReviewInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_plan_record_review", i)
+    }
+    #[tool(
         name = "mission_intake_create",
         description = "capability=mission.native-planning version=1. Idempotently create a managed Mission from immutable Session input in explicit owning roots."
     )]

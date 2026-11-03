@@ -40,7 +40,7 @@ fn cli_and_live_mcp_preserve_typed_v3_plans_and_reject_missing_plans_identically
         .as_array()
         .unwrap()
         .iter()
-        .find(|tool| tool["inputSchema"]["properties"].get("operation").is_some())
+        .find(|tool| tool["name"] == "mission_operation")
         .unwrap();
     assert!(tool["inputSchema"].to_string().contains("outcome_plan"));
     let name = tool["name"].as_str().unwrap();

@@ -10,11 +10,13 @@ mod host_hook;
 mod lifecycle;
 #[path = "named_mcp/planning_and_errors.rs"]
 mod planning_and_errors;
+#[path = "named_mcp/review_recording.rs"]
+mod review_recording;
 
 use direct_transports::{Mcp, TempDir, json};
 use session_api::{SessionRuntimeInitRequest, SessionStoreConfig};
 
-const NAMED_TOOLS: [&str; 19] = [
+const NAMED_TOOLS: [&str; 20] = [
     "mission_intake_create",
     "mission_workspace_get",
     "mission_plan_get",
@@ -24,6 +26,7 @@ const NAMED_TOOLS: [&str; 19] = [
     "mission_waypoint_remove",
     "mission_waypoint_reorder",
     "mission_plan_prepare_review",
+    "mission_plan_record_review",
     "mission_plan_approve",
     "mission_plan_replan",
     "mission_pause",
