@@ -1,0 +1,16 @@
+[profile]
+id = "mission-native-guidance"
+
+[[corpus]]
+id = "mission-native-route"
+paths = [
+  ".agents/prompts/refine-ingest.prompt.md",
+  ".agents/prompts/execute-ingest.prompt.md",
+  ".agents/prompts/execute-roadmap.prompt.md",
+  "workflow-tools/.agents/instructions/workflow/prompt-ingestion.instructions.md",
+  "workflow-tools/.agents/instructions/workflow/roadmap-authoring.instructions.md",
+  "workflow-tools/.agents/instructions/workflow/roadmap-execution.instructions.md",
+]
+
+[destination]
+scope = "repo"

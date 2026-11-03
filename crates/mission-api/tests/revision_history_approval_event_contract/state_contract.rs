@@ -27,7 +27,7 @@ fn publication_preserves_whole_states_at_shared_revision_labels() {
     assert!(history.contains("revision-3"));
     assert_eq!(
         history,
-        include_str!("../snapshots/revision-history-1-and-3.md")
+        include_str!("../snapshots/revision-history-1-and-3.md.snap")
     );
     store.verify_output_history(id).unwrap();
 }
