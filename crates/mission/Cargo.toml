@@ -40,3 +40,7 @@ tempfile = "3"
 [[test]]
 name = "approval_native_routes"
 required-features = ["cli"]
+
+[[test]]
+name = "named_mcp"
+required-features = ["cli", "mcp"]

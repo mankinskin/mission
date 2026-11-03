@@ -343,6 +343,7 @@ pub struct MissionApproval<'a> {
     workspace_root: PathBuf,
     lifecycle: MissionLifecycle,
     session: &'a SessionStoreConfig,
+    expected_revision: Option<u64>,
 }
 impl<'a> MissionApproval<'a> {
     pub fn open(workspace_root: &Path, session: &'a SessionStoreConfig) -> Self {
@@ -350,10 +351,25 @@ impl<'a> MissionApproval<'a> {
             workspace_root: workspace_root.to_path_buf(),
             lifecycle: MissionLifecycle::open(workspace_root),
             session,
+            expected_revision: None,
         }
     }
+    /// Check transport revision preconditions under the approval transaction lock.
+    pub fn with_expected_revision(mut self, revision: u64) -> Self {
+        self.expected_revision = Some(revision);
+        self
+    }
     fn begin(&self, id: Uuid) -> Result<ApprovalTransaction<'_>, ApprovalError> {
-        Ok(self.lifecycle.begin_approval_transaction(id)?)
+        let tx = self.lifecycle.begin_approval_transaction(id)?;
+        if let Some(expected) = self.expected_revision
+            && tx.review_plan()?.revision != expected
+        {
+            return Err(ApprovalError::new(
+                "revision_conflict",
+                "plan revision changed",
+            ));
+        }
+        Ok(tx)
     }
 }
 

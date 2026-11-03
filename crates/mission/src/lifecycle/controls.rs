@@ -33,6 +33,7 @@ impl WorkspaceLifecycle {
         tx: &ApprovalTransaction<'_>,
         request: &ControlRequest,
     ) -> Result<MissionControlState, LifecycleError> {
+        self.check_revision(tx)?;
         let state = tx.control_state()?;
         let journal = LifecycleJournal::read(&self.workspace_root, tx.mission_id())?;
         let sequence = state.sequence + journal.projection()?.last_seq;

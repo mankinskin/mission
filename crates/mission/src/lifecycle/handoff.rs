@@ -15,6 +15,7 @@ impl WorkspaceLifecycle {
         let tx = lifecycle
             .begin_approval_transaction(id)
             .map_err(api_error)?;
+        self.check_revision(&tx)?;
         let mut state = tx.control_state()?;
         if let Some(pending) = &state.pending_handoff {
             if pending.operation_id != request.op_id

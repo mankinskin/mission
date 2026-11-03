@@ -23,6 +23,7 @@ const PROVIDER: &str = "workspace lifecycle adapter";
 /// Lifecycle read/transition adapter over one explicit workspace root.
 pub struct WorkspaceLifecycle {
     workspace_root: PathBuf,
+    expected_revision: Option<u64>,
 }
 
 struct TicketRead {
@@ -42,7 +43,29 @@ impl WorkspaceLifecycle {
     pub fn open(workspace_root: &Path) -> Self {
         Self {
             workspace_root: workspace_root.to_path_buf(),
+            expected_revision: None,
         }
+    }
+
+    /// Add a plan-revision precondition checked under the provider's write lock.
+    pub fn with_expected_revision(mut self, revision: u64) -> Self {
+        self.expected_revision = Some(revision);
+        self
+    }
+
+    fn check_revision(
+        &self,
+        tx: &mission_api::ApprovalTransaction<'_>,
+    ) -> Result<(), LifecycleError> {
+        if let Some(expected) = self.expected_revision
+            && tx.review_plan().map_err(controls::api_error)?.revision != expected
+        {
+            return Err(mission_api::control_error(
+                "stale_plan_revision",
+                "plan revision changed",
+            ));
+        }
+        Ok(())
     }
 
     fn ticket_store(&self) -> Result<TicketStore, LifecycleError> {

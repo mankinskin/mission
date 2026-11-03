@@ -109,7 +109,14 @@ fn workspace_mcp_explicit_configured_and_cwd_roots_are_selected() {
     );
     explicit_mcp.initialize();
     let tools = explicit_mcp.request(2, "tools/list", json!({}));
-    let name = tools["tools"][0]["name"].as_str().expect("tool name");
+    let name = tools["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "mission_operation")
+        .unwrap()["name"]
+        .as_str()
+        .expect("compatibility tool name");
     assert_eq!(
         explicit_mcp.call(
             3,
@@ -130,7 +137,14 @@ fn workspace_mcp_explicit_configured_and_cwd_roots_are_selected() {
     let mut configured_mcp = Mcp::start_with(cwd, None, Some(OsStr::new("configured")));
     configured_mcp.initialize();
     let tools = configured_mcp.request(2, "tools/list", json!({}));
-    let name = tools["tools"][0]["name"].as_str().expect("tool name");
+    let name = tools["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "mission_operation")
+        .unwrap()["name"]
+        .as_str()
+        .expect("compatibility tool name");
     assert_eq!(
         configured_mcp.call(
             3,
@@ -143,7 +157,14 @@ fn workspace_mcp_explicit_configured_and_cwd_roots_are_selected() {
     let mut cwd_mcp = Mcp::start(&nested);
     cwd_mcp.initialize();
     let tools = cwd_mcp.request(2, "tools/list", json!({}));
-    let name = tools["tools"][0]["name"].as_str().expect("tool name");
+    let name = tools["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "mission_operation")
+        .unwrap()["name"]
+        .as_str()
+        .expect("compatibility tool name");
     assert_eq!(
         cwd_mcp.call(3, name, json!({"operation":"get", "mission_id":nested_id}))["status"],
         "ok"

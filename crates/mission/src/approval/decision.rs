@@ -197,4 +197,26 @@ impl<'a> MissionApproval<'a> {
             })
             .collect())
     }
+
+    /// Resolve captured decisions for this Mission's persisted challenges.
+    /// Session remains the receipt authority; this never creates a decision.
+    pub fn captured_decisions(&self, id: Uuid) -> Result<Vec<RequesterDecisionRef>, ApprovalError> {
+        let tx = self.begin(id)?;
+        let mut references = Vec::new();
+        for record in read_journal(&tx)? {
+            if let Entry::Challenge(challenge) = record.entry
+                && let Some(receipt) = self
+                    .session
+                    .find_requester_decision_for_challenge(
+                        &challenge.session_id,
+                        &challenge.challenge_id,
+                    )
+                    .map_err(session_error)?
+            {
+                self.verify_receipt(id, &receipt.reference)?;
+                references.push(receipt.reference);
+            }
+        }
+        Ok(references)
+    }
 }

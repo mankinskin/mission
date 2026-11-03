@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use mission::named::{self, Input};
 use mission::{
     CommitCheckpoint, DirectWaypoint, MISSION_WORKSPACE_ENV, Operation, OperatorResult,
     RepairRequest, TypedDraft, ValidationGate, WaypointState, execute_mcp, resolve_workspace,
@@ -148,10 +149,212 @@ impl MissionServer {
             tool_router: Self::tool_router(),
         }
     }
+
+    fn named<T>(&self, name: &str, input: Input<T>) -> Result<CallToolResult, McpError> {
+        let envelope = named::call(name, input.0);
+        let failed = envelope.code != "ok";
+        let text = serde_json::to_string(&envelope)
+            .map_err(|error| McpError::internal_error(error.to_string(), None))?;
+        Ok(if failed {
+            CallToolResult::error(vec![Content::text(text)])
+        } else {
+            CallToolResult::success(vec![Content::text(text)])
+        })
+    }
 }
 
 #[tool_router]
 impl MissionServer {
+    #[tool(
+        name = "mission_intake_create",
+        description = "capability=mission.native-planning version=1. Idempotently create a managed Mission from immutable Session input in explicit owning roots."
+    )]
+    async fn intake_create(
+        &self,
+        Parameters(i): Parameters<Input<named::IntakeInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_intake_create", i)
+    }
+    #[tool(
+        name = "mission_workspace_get",
+        description = "capability=mission.native-planning version=1. Resolve authoritative managed workspace paths by Session intake identity and explicit roots."
+    )]
+    async fn workspace_get(
+        &self,
+        Parameters(i): Parameters<Input<named::WorkspaceInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_workspace_get", i)
+    }
+    #[tool(
+        name = "mission_plan_get",
+        description = "capability=mission.native-planning version=1. Read the plan, reviews, grants and captured Session decision references from explicit owning roots."
+    )]
+    async fn plan_get(
+        &self,
+        Parameters(i): Parameters<Input<named::ReadInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_plan_get", i)
+    }
+    #[tool(
+        name = "mission_plan_update",
+        description = "capability=mission.native-planning version=1. Revision-checked goal, requirement or evidence update delegated to Mission planning; semantic edits require fresh approval."
+    )]
+    async fn plan_update(
+        &self,
+        Parameters(i): Parameters<Input<named::PlanInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_plan_update", i)
+    }
+    #[tool(
+        name = "mission_waypoint_create",
+        description = "capability=mission.native-planning version=1. Create one stable typed waypoint with request identity and revision CAS."
+    )]
+    async fn waypoint_create(
+        &self,
+        Parameters(i): Parameters<Input<named::CreateInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_waypoint_create", i)
+    }
+    #[tool(
+        name = "mission_waypoint_update",
+        description = "capability=mission.native-planning version=1. Replace one stable typed waypoint with request identity and revision CAS."
+    )]
+    async fn waypoint_update(
+        &self,
+        Parameters(i): Parameters<Input<named::UpdateInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_waypoint_update", i)
+    }
+    #[tool(
+        name = "mission_waypoint_remove",
+        description = "capability=mission.native-planning version=1. Remove or replace one stable waypoint through checked Mission planning."
+    )]
+    async fn waypoint_remove(
+        &self,
+        Parameters(i): Parameters<Input<named::RemoveInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_waypoint_remove", i)
+    }
+    #[tool(
+        name = "mission_waypoint_reorder",
+        description = "capability=mission.native-planning version=1. Reorder stable waypoints through the provider's serial dependency validation."
+    )]
+    async fn waypoint_reorder(
+        &self,
+        Parameters(i): Parameters<Input<named::ReorderInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_waypoint_reorder", i)
+    }
+    #[tool(
+        name = "mission_waypoint_complete",
+        description = "capability=mission.native-planning version=1. Complete a waypoint through W5 approval, evidence, prerequisite, Ticket and CAS guards. request_id is a non-nil UUID mapped to ControlRequest.op_id. Replays preserve provider stale/conflict rejection without duplicate completion."
+    )]
+    async fn waypoint_complete(
+        &self,
+        Parameters(i): Parameters<Input<named::CompleteInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_waypoint_complete", i)
+    }
+    #[tool(
+        name = "mission_plan_prepare_review",
+        description = "capability=mission.native-planning version=1. Persist a revision-bound pending challenge and return exact host decision prompts. request_id is the challenge identity, not approval."
+    )]
+    async fn prepare_review(
+        &self,
+        Parameters(i): Parameters<Input<named::ReviewInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_plan_prepare_review", i)
+    }
+    #[tool(
+        name = "mission_plan_approve",
+        description = "capability=mission.native-planning version=1. Consume only a resolvable Session host receipt reference with approve decision. request_id equals challenge_id. Actor text, booleans and raw decisions never grant authority."
+    )]
+    async fn approve(
+        &self,
+        Parameters(i): Parameters<Input<named::DecisionInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_plan_approve", i)
+    }
+    #[tool(
+        name = "mission_plan_replan",
+        description = "capability=mission.native-planning version=1. Consume a captured Session replan receipt, never execution approval. request_id equals challenge_id. Subsequent semantic edits require fresh review and approval."
+    )]
+    async fn replan(
+        &self,
+        Parameters(i): Parameters<Input<named::DecisionInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_plan_replan", i)
+    }
+    #[tool(
+        name = "mission_pause",
+        description = "capability=mission.native-planning version=1. Pause Mission eligibility without mutating linked Ticket state. UUID request_id and revision/control-sequence CAS required."
+    )]
+    async fn pause(
+        &self,
+        Parameters(i): Parameters<Input<named::ControlInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_pause", i)
+    }
+    #[tool(
+        name = "mission_resume",
+        description = "capability=mission.native-planning version=1. Resume through current approval and provider eligibility checks, with UUID identity and revision/control-sequence CAS."
+    )]
+    async fn resume(
+        &self,
+        Parameters(i): Parameters<Input<named::ControlInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_resume", i)
+    }
+    #[tool(
+        name = "mission_handoff",
+        description = "capability=mission.native-planning version=1. Transfer the active Session binding through journaled W5 handoff, retaining authoritative Session pins and recovery checks."
+    )]
+    async fn handoff(
+        &self,
+        Parameters(i): Parameters<Input<named::HandoffInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_handoff", i)
+    }
+    #[tool(
+        name = "mission_cancel",
+        description = "capability=mission.native-planning version=1. Cancel Mission eligibility through its control provider, without cascading linked Ticket edits."
+    )]
+    async fn cancel(
+        &self,
+        Parameters(i): Parameters<Input<named::ControlInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_cancel", i)
+    }
+    #[tool(
+        name = "mission_complete",
+        description = "capability=mission.native-planning version=1. Explicitly complete a Mission only with approval, all current outcomes and result review; UUID request_id and CAS required."
+    )]
+    async fn complete(
+        &self,
+        Parameters(i): Parameters<Input<named::ControlInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_complete", i)
+    }
+    #[tool(
+        name = "mission_review_results_add_waypoints",
+        description = "capability=mission.native-planning version=1. Record W5 result review then explicit W3 waypoint additions, each with its own request/revision. Partial failure reports persisted review/additions; retry failed additions with mission_waypoint_create. Semantic changes require fresh approval."
+    )]
+    async fn review_results(
+        &self,
+        Parameters(i): Parameters<Input<named::ResultsInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_review_results_add_waypoints", i)
+    }
+    #[tool(
+        name = "mission_reopen_most_recent_completed",
+        description = "capability=mission.native-planning version=1. Reopen greatest current completion sequence, not final route position, through audited W5 Ticket transition and approval invalidation."
+    )]
+    async fn reopen(
+        &self,
+        Parameters(i): Parameters<Input<named::ReopenInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_reopen_most_recent_completed", i)
+    }
     #[tool(
         name = "mission_operation",
         description = "Run typed create_draft, save_draft, publish_draft, get_mission_source, or render_mission with API-owned IDs and managed source references; or run legacy create_mission, edit_mission_objective, add_waypoint, edit_waypoint, order_waypoints, record_progress, record_validation_result, validate_mission, or publish_mission directly by stored ID. Draft input is inline typed source, never a client path or manifest. Existing get, validate-preview, import, render-preview, publish, check-generated and migrate-dossiers remain supported. Journaled repair adds repair_preview/repair_apply with repair_request, plus repair_journal/repair_resume/repair_rollback with journal_id. publish-with-inputs adds output_inputs (merged_request and create-new continuations). get-output-contract validates the full BOM; record-approval-event consumes strict approval_event_json (approve or changes-requested, current revision, signature digest link, actor and actor_source); get-approval-event reads by revision. Reactions are not cryptographic authentication, Mission mutation, execution authorization or product acceptance. Return a structured Mission status snapshot."
@@ -340,10 +543,14 @@ impl MissionServer {
                 "check-generated" => Operation::CheckGenerated {
                     mission_id: required_id()?,
                 },
-                "get-output-contract" => Operation::GetOutputContract { mission_id: required_id()? },
+                "get-output-contract" => Operation::GetOutputContract {
+                    mission_id: required_id()?,
+                },
                 "get-approval-event" => Operation::GetApprovalEvent {
                     mission_id: required_id()?,
-                    revision: input.revision.ok_or_else(|| McpError::invalid_params("revision is required", None))?,
+                    revision: input
+                        .revision
+                        .ok_or_else(|| McpError::invalid_params("revision is required", None))?,
                 },
                 "record-approval-event" => Operation::RecordApprovalEvent {
                     mission_id: required_id()?,
@@ -355,7 +562,9 @@ impl MissionServer {
                     expected_current_revision: input.expected_current_revision.ok_or_else(
                         || McpError::invalid_params("expected_current_revision is required", None),
                     )?,
-                    inputs: input.output_inputs.clone().ok_or_else(|| McpError::invalid_params("output_inputs is required", None))?,
+                    inputs: input.output_inputs.clone().ok_or_else(|| {
+                        McpError::invalid_params("output_inputs is required", None)
+                    })?,
                 },
                 "migrate-dossiers" => Operation::MigrateDossiers {
                     dossier_path: input.dossier_path.clone(),

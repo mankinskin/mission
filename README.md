@@ -25,6 +25,72 @@ The `mission` package provides the `mission` binary with feature `cli` and the
 [facade operations](crates/mission/src/lib.rs). No dossier, migration, or bundle
 file is required for direct authoring.
 
+### Named Mission-native MCP tools
+
+Initialized `tools/list` exposes capability `mission.native-planning`, version
+`1`, with typed schemas for these provider-backed tools:
+
+| Area | Tools |
+|---|---|
+| Intake and reads | `mission_intake_create`, `mission_workspace_get`, `mission_plan_get` |
+| Planning | `mission_plan_update`, `mission_waypoint_create`, `mission_waypoint_update`, `mission_waypoint_remove`, `mission_waypoint_reorder` |
+| Requester decisions | `mission_plan_prepare_review`, `mission_plan_approve`, `mission_plan_replan` |
+| Lifecycle | `mission_waypoint_complete`, `mission_pause`, `mission_resume`, `mission_handoff`, `mission_cancel`, `mission_complete` |
+| Results and correction | `mission_review_results_add_waypoints`, `mission_reopen_most_recent_completed` |
+
+Every named call requires an existing absolute `workspace_root`; the launch
+directory is never a substitute. Intake/workspace lookup identify immutable
+Session input by `session_id` and `request_id`. Plan reads require `mission_id`;
+they return the plan, lifecycle/control sequence, reviews, grants, pending
+approval state and captured `decision_refs`. Intake and approval accept an
+optional explicit `session_root`; otherwise they use the owning workspace's
+canonical `.workflow-tools/session` store. W5 lifecycle controls continue to
+use that canonical Session store.
+
+Mutations require `request_id` and `expected_revision`. Lifecycle request IDs
+are non-nil UUIDs, mapped unchanged to `ControlRequest.op_id`; controls also
+require `expected_control_sequence` and nonblank `evidence`. Completion adds
+the stable `waypoint_id` and delegates approval, current evidence, prerequisite
+and linked-Ticket completion checks to W5. A repeated completed control call
+retains W5's stale/conflict rejection, never appends a second completion.
+Revision checks run inside the provider's publication/approval lock, not as
+an unprotected transport pre-read.
+
+Intake creates an incomplete planning draft. Add its first complete waypoint
+through `mission_waypoint_create` before publishing goal/requirement edits;
+W3's existing `draft-not-ready` checks are preserved. Plan updates select
+`set_goal`, `set_requirements`, or `record_evidence` through their `operation`.
+Waypoint operations use inline typed content, not handwritten manifests.
+Schema-v2 legacy and schema-v3 planned-outcome rules remain provider-owned.
+
+Review preparation requires the recorded passing cold and distinct formal
+reviews. Its `request_id` becomes the persisted challenge identity; the result
+includes `host_prompt` and exact approve/reject/replan lines. The requester
+submits a line through host `UserPromptSubmit`. Approval/replan take only a
+resolvable `decision` reference (`session_id`, `challenge_id`, `decision_id`,
+`source_event_id`), with `request_id` equal to that challenge ID. They accept
+only the corresponding receipt kind. Raw actor text, booleans and decision
+strings do not grant approval. Semantic edits require a fresh bound challenge
+and receipt; the generic compatibility tool cannot substitute a grant.
+
+Result review records W5 review before the supplied `additions`, each an
+explicit W3 waypoint-create request with its own request ID and revision.
+This sequence is not atomic: failures include `persisted_review` and
+`persisted_additions` in `details`. Recover outstanding additions with their
+unchanged identities through `mission_waypoint_create`, not by repeating the
+completed review control. Handoff requires active source/destination Sessions
+and the source's authoritative Mission pin; it does not transfer worktrees.
+
+Success returns `code`, `message`, `mission_id`, current `revision`,
+`capability`, `version`, `tool`, authoritative `workspace` paths and `result`.
+Failures set MCP `isError` and use the same envelope with `details`, retaining
+provider codes/diagnostics. Missing or malformed arguments also return this
+tool envelope. Stale revision/control/completion preconditions map to
+`revision_conflict`; divergent request replay maps to `idempotency_conflict`.
+Other approval, intake, waypoint, Ticket and Session failures remain explicit.
+These source-level tools do not claim installed rollout or a real-requester
+pilot; those are separate acceptance steps.
+
 ### Bounded schema and read-only entity composition
 
 `mission-api::SharedEntity` is a validated, read-only intersection, **not** a

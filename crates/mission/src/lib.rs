@@ -16,6 +16,8 @@ pub mod approval;
 mod direct;
 pub mod intake;
 pub mod lifecycle;
+#[cfg(feature = "mcp")]
+pub mod named;
 mod migration;
 
 pub use direct::DirectWaypoint;
