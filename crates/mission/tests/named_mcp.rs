@@ -105,6 +105,77 @@ fn waypoint(id: &str) -> mission::TypedWaypoint {
 }
 
 #[test]
+fn tools_list_explains_optional_session_store_and_every_top_level_argument() {
+    let (_dir, workspace, _session_id) = fixture();
+    let mut mcp = Mcp::start(&workspace);
+    mcp.initialize();
+    let listed = mcp.request(2, "tools/list", json!({}));
+    let tools = listed["tools"].as_array().unwrap();
+    assert_eq!(tools.len(), NAMED_TOOLS.len() + 1);
+    for tool in tools {
+        let name = tool["name"].as_str().unwrap();
+        let schema = &tool["inputSchema"];
+        for (field, property) in schema["properties"].as_object().unwrap() {
+            assert!(
+                property["description"]
+                    .as_str()
+                    .is_some_and(|text| !text.trim().is_empty()),
+                "{name}.{field} has no tool-owned usage contract"
+            );
+        }
+        if schema["properties"].get("expected_revision").is_some() {
+            let description = schema["properties"]["request_id"]["description"]
+                .as_str()
+                .unwrap();
+            assert!(description.contains("1..=128 visible ASCII"));
+            assert!(description.contains("no spaces"));
+        }
+        if schema["properties"].get("session_root").is_some() {
+            let description = schema["properties"]["session_root"]["description"]
+                .as_str()
+                .unwrap();
+            for contract in [
+                "omit",
+                ".workflow-tools/session",
+                "store directory",
+                "repository root",
+            ] {
+                assert!(description.contains(contract), "{name}: missing {contract}");
+            }
+            assert!(
+                !schema["required"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&json!("session_root")),
+                "{name}: session_root must remain optional"
+            );
+        }
+    }
+}
+
+#[test]
+fn intake_session_store_omission_and_explicit_directory_match_but_repo_root_does_not() {
+    let (_dir, workspace, session_id) = fixture();
+    let mut mcp = Mcp::start(&workspace);
+    mcp.initialize();
+    let args = json!({
+        "workspace_root": workspace, "session_id": session_id,
+        "request_id": "store-contract", "input": "Preserve store selection."
+    });
+    let omitted = call(&mut mcp, 2, "mission_intake_create", args.clone());
+    assert_eq!(omitted["code"], "ok", "{omitted}");
+    let mut explicit = args.clone();
+    explicit["session_root"] = json!(workspace.join(".workflow-tools/session"));
+    let replayed = call(&mut mcp, 3, "mission_intake_create", explicit);
+    assert_eq!(replayed["code"], "ok", "{replayed}");
+    assert_eq!(replayed["mission_id"], omitted["mission_id"]);
+    let mut incorrect = args;
+    incorrect["session_root"] = json!(workspace);
+    let rejected = call(&mut mcp, 4, "mission_intake_create", incorrect);
+    assert_ne!(rejected["code"], "ok", "{rejected}");
+}
+
+#[test]
 fn stdio_named_tools_list_and_plan_calls_use_shared_envelopes() {
     let (_dir, workspace, session_id) = fixture();
     let mut mcp = Mcp::start(&workspace);

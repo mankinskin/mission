@@ -32,61 +32,90 @@ struct MissionServer {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 struct MissionOperationInput {
+    /// Exact operation name from the tool description; underscores and hyphens are not interchangeable. Missing operation-specific fields return invalid_params.
     operation: String,
+    /// Stored Mission UUID, required except create_draft, create_mission, validate-preview, migrate-dossiers and repair operations with their own request/journal identity.
     #[serde(default)]
     mission_id: Option<String>,
+    /// Manifest file for validate-preview/import/publish/publish-with-inputs. Not used for typed draft operations, which accept inline draft.
     #[serde(default)]
     manifest_path: Option<PathBuf>,
+    /// Exact current stored revision for revision-checked mutations; 0 only for a verified absent Mission in bundle import/publish. Omission does not disable a required CAS check.
     #[serde(default)]
     expected_current_revision: Option<u64>,
+    /// Optional selected classic dossier for migrate-dossiers; omission scans the configured workspace's transcript dossiers. Migration is a write unless dry_run=true.
     #[serde(default)]
     dossier_path: Option<PathBuf>,
+    /// migrate-dossiers preview flag only; defaults false. This is not a general mutation preview or repair dry-run flag.
     #[serde(default)]
     dry_run: bool,
+    /// Initial title required for create_draft/create_mission.
     #[serde(default)]
     title: Option<String>,
+    /// Objective required for create_draft/create_mission/edit_mission_objective.
     #[serde(default)]
     objective: Option<String>,
+    /// Complete inline typed Mission source for save_draft/publish_draft; not a client path or manifest.
     #[serde(default)]
     draft: Option<TypedDraft>,
+    /// Complete legacy waypoint collection required for create_mission; use draft for typed source operations.
     #[serde(default)]
     waypoints: Option<Vec<McpWaypoint>>,
+    /// Stable local waypoint ID for add_waypoint/edit_waypoint/record_progress/record_validation_result.
     #[serde(default)]
     waypoint_id: Option<String>,
+    /// Waypoint title required for add_waypoint/edit_waypoint.
     #[serde(default)]
     waypoint_title: Option<String>,
+    /// Local waypoint prerequisite IDs for add_waypoint/edit_waypoint; defaults empty, not cross-Mission URNs.
     #[serde(default)]
     depends_on: Vec<String>,
+    /// Complete waypoint prompt required for add_waypoint/edit_waypoint.
     #[serde(default)]
     prompt: Option<String>,
+    /// Validation command definitions required for add_waypoint/edit_waypoint; recording does not execute commands.
     #[serde(default)]
     validation: Option<Vec<McpValidationGate>>,
+    /// Commit message definition required for add_waypoint/edit_waypoint; does not create a commit.
     #[serde(default)]
     commit_checkpoint: Option<McpCheckpoint>,
+    /// Explicit waypoint exclusions for add_waypoint/edit_waypoint; defaults empty.
     #[serde(default)]
     non_goals: Vec<String>,
+    /// Complete ordered stable local waypoint IDs for order_waypoints; omission supplies an empty list, not the current order.
     #[serde(default)]
     execution_order: Vec<String>,
+    /// Local waypoint-to-prerequisite mapping for order_waypoints; defaults empty, not an unchanged-map sentinel.
     #[serde(default)]
     waypoint_dependencies: std::collections::BTreeMap<String, Vec<String>>,
+    /// record_progress state: pending, in-progress, completed or blocked. Progress records are not native lifecycle completion authority.
     #[serde(default)]
     state: Option<String>,
+    /// Result outcome text required for record_validation_result.
     #[serde(default)]
     outcome: Option<String>,
+    /// Command evidence required for record_validation_result; this tool records it, never runs it.
     #[serde(default)]
     operator_command: Option<String>,
+    /// Evidence location/identity required for record_validation_result.
     #[serde(default)]
     evidence_pointer: Option<String>,
+    /// Complete typed journaled repair request for repair_preview/repair_apply.
     #[serde(default)]
     repair_request: Option<RepairRequest>,
+    /// Proposal identity returned by matching repair_preview, required for repair_apply.
     #[serde(default)]
     proposal_id: Option<String>,
+    /// Existing repair journal UUID for repair_journal/repair_resume/repair_rollback.
     #[serde(default)]
     journal_id: Option<String>,
+    /// Complete merged request and create-new continuation inputs required for publish-with-inputs.
     #[serde(default)]
     output_inputs: Option<mission::MissionOutputInputs>,
+    /// Strict approval-event JSON required for record-approval-event; captured reaction metadata is not native host approval or execution authority.
     #[serde(default)]
     approval_event_json: Option<String>,
+    /// Accepted revision whose reaction is read by get-approval-event; required for that operation, not a mutation CAS field.
     #[serde(default)]
     revision: Option<u64>,
 }
@@ -94,13 +123,20 @@ struct MissionOperationInput {
 #[derive(Clone, Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct McpWaypoint {
+    /// Stable Mission-local waypoint identity, not a filename or Mission UUID.
     waypoint_id: String,
+    /// Human-readable waypoint title.
     title: String,
+    /// Local prerequisite waypoint IDs; defaults empty.
     #[serde(default)]
     depends_on: Vec<String>,
+    /// Complete execution prompt.
     prompt: String,
+    /// Stored validation definitions; no command is executed by creation/editing.
     validation: Vec<McpValidationGate>,
+    /// Stored commit-message definition; no commit is made by this operation.
     commit_checkpoint: McpCheckpoint,
+    /// Explicit scope exclusions; defaults empty.
     #[serde(default)]
     non_goals: Vec<String>,
 }
@@ -108,7 +144,9 @@ struct McpWaypoint {
 #[derive(Clone, Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct McpValidationGate {
+    /// Validation command text to store, not execute.
     command: String,
+    /// Optional command working directory retained for later validation.
     #[serde(default)]
     cwd: Option<String>,
 }
@@ -116,6 +154,7 @@ struct McpValidationGate {
 #[derive(Clone, Debug, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct McpCheckpoint {
+    /// Intended checkpoint commit message; recording it does not commit.
     message: String,
 }
 
@@ -167,7 +206,7 @@ impl MissionServer {
 impl MissionServer {
     #[tool(
         name = "mission_plan_record_review",
-        description = "capability=mission.native-planning version=1. Record a current cold or distinct formal review with provider-owned revision checks and idempotent request replay; reviewer evidence never grants requester approval."
+        description = "capability=mission.native-planning version=1. Record a revision/digest-bound cold_walkthrough or distinct formal review; formal references a passing current cold review. Replay identical request/evidence only. Reviewer evidence never grants requester approval. Normally omit session_root; an explicit value is the exact separate Session store directory, not a repo root. Returns JSON code/revision/result/details; code!=ok is an MCP tool error."
     )]
     async fn plan_record_review(
         &self,
@@ -177,7 +216,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_intake_create",
-        description = "capability=mission.native-planning version=1. Idempotently create a managed Mission from immutable Session input in explicit owning roots."
+        description = "capability=mission.native-planning version=1. Persist verbatim intake on an existing active Session and idempotently create a managed draft Mission at explicit workspace_root. Normally omit session_root to use workspace_root/.workflow-tools/session; set only to an exact explicitly separate Session store directory, never the repository root. Reuse session_id/request_id and identical input bytes for replay. Returns Mission identity/revision and managed paths in JSON; code!=ok is a tool error, with persisted subsets reported in details. Intake is not approval or execution."
     )]
     async fn intake_create(
         &self,
@@ -187,7 +226,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_workspace_get",
-        description = "capability=mission.native-planning version=1. Resolve authoritative managed workspace paths by Session intake identity and explicit roots."
+        description = "capability=mission.native-planning version=1. Read existing managed Mission paths using the original intake session_id/request_id and workspace_root; does not create a Mission. Normally omit session_root; an explicit value selects an exact separate Session store directory, not a repository root. Returns JSON managed paths, digest and generated plan state; a draft may be NotYetGenerated/nonexecutable. code!=ok is a tool error."
     )]
     async fn workspace_get(
         &self,
@@ -197,7 +236,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_plan_get",
-        description = "capability=mission.native-planning version=1. Read the plan, reviews, grants and captured Session decision references from explicit owning roots."
+        description = "capability=mission.native-planning version=1. Read plan, lifecycle, reviews, grants, pending challenges and captured decision_refs by Mission UUID and explicit workspace_root. Normally omit session_root; explicit values are exact separate Session store directories, not repo roots. Optional session_id filters only decision_refs, not the plan. Returns JSON code/revision/result/details; code!=ok is a tool error. Use returned revisions/sequences for subsequent checked mutations."
     )]
     async fn plan_get(
         &self,
@@ -207,7 +246,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_plan_update",
-        description = "capability=mission.native-planning version=1. Revision-checked goal, requirement or evidence update delegated to Mission planning; semantic edits require fresh approval."
+        description = "capability=mission.native-planning version=1. Apply tagged set_goal, set_requirements (complete replacement), or record_evidence (record only, never execute) at explicit workspace_root. Requires current expected_revision and stable request_id; changed replay payloads conflict. Semantic edits require fresh review/approval. Returns JSON updated revision/result or code!=ok tool error."
     )]
     async fn plan_update(
         &self,
@@ -217,7 +256,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_waypoint_create",
-        description = "capability=mission.native-planning version=1. Create one stable typed waypoint with request identity and revision CAS."
+        description = "capability=mission.native-planning version=1. Create a complete typed waypoint with matching stable local/Part identity, current expected_revision and stable request_id. after inserts after an existing local waypoint; omit/null appends. Provider validates serial route and references. Semantic changes require fresh review/approval; no execution. Returns JSON revision/result or code!=ok tool error."
     )]
     async fn waypoint_create(
         &self,
@@ -227,7 +266,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_waypoint_update",
-        description = "capability=mission.native-planning version=1. Replace one stable typed waypoint with request identity and revision CAS."
+        description = "capability=mission.native-planning version=1. Replace the complete existing typed waypoint identified by waypoint.waypoint_id, not a partial patch. Requires stable request_id and current expected_revision. Provider validates route/references; semantic changes require fresh review/approval. Returns JSON revision/result or code!=ok tool error; no execution."
     )]
     async fn waypoint_update(
         &self,
@@ -237,7 +276,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_waypoint_remove",
-        description = "capability=mission.native-planning version=1. Remove or replace one stable waypoint through checked Mission planning."
+        description = "capability=mission.native-planning version=1. Remove an existing local waypoint or replace it with a complete typed waypoint. Omit/null replacement removes only; completed/result-bearing history cannot be removed. Requires stable request_id/current expected_revision and provider route validation. Semantic changes require fresh review/approval. Returns JSON revision/result or code!=ok tool error."
     )]
     async fn waypoint_remove(
         &self,
@@ -247,7 +286,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_waypoint_reorder",
-        description = "capability=mission.native-planning version=1. Reorder stable waypoints through the provider's serial dependency validation."
+        description = "capability=mission.native-planning version=1. Replace route order with the complete ordered list of stable local waypoint IDs, not filenames or cross-Mission URNs. Requires stable request_id/current expected_revision; provider validates membership and serial dependencies. Semantic changes require fresh review/approval. Returns JSON revision/result or code!=ok tool error."
     )]
     async fn waypoint_reorder(
         &self,
@@ -257,7 +296,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_waypoint_complete",
-        description = "capability=mission.native-planning version=1. Complete a waypoint through W5 approval, evidence, prerequisite, Ticket and CAS guards. request_id is a non-nil UUID mapped to ControlRequest.op_id. Replays preserve provider stale/conflict rejection without duplicate completion."
+        description = "capability=mission.native-planning version=1. Complete a local waypoint through approval, outcome evidence, prerequisite, linked Ticket and revision/control-sequence guards. Uses canonical workspace_root/.workflow-tools/session, not an intake-time separate store. request_id is a non-nil UUID. Replays retain stale/conflict rejection without duplicate completion. Returns JSON lifecycle result or code!=ok tool error."
     )]
     async fn waypoint_complete(
         &self,
@@ -267,7 +306,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_plan_prepare_review",
-        description = "capability=mission.native-planning version=1. Persist a revision-bound pending challenge and return exact host decision prompts. request_id is the challenge identity, not approval."
+        description = "capability=mission.native-planning version=1. After passing current cold/formal reviews, persist a revision-bound requester challenge and return exact host decision prompts. request_id is challenge identity, never approval; host capture must supply the later receipt. Normally omit session_root; explicit values are exact separate Session store directories, not repo roots. Returns JSON challenge/revision/digests/prompts or code!=ok tool error; partial registration requires same-identity recovery."
     )]
     async fn prepare_review(
         &self,
@@ -277,7 +316,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_plan_approve",
-        description = "capability=mission.native-planning version=1. Consume only a resolvable Session host receipt reference with approve decision. request_id equals challenge_id. Actor text, booleans and raw decisions never grant authority."
+        description = "capability=mission.native-planning version=1. Consume a resolvable captured Session host approve receipt bound to current expected_revision/reviews. request_id must equal decision.challenge_id. Actor text, booleans and raw decisions never grant authority. Normally omit session_root; explicit values are exact separate Session store directories, not repo roots. Returns JSON accepted grant/replay status or code!=ok tool error."
     )]
     async fn approve(
         &self,
@@ -287,7 +326,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_plan_replan",
-        description = "capability=mission.native-planning version=1. Consume a captured Session replan receipt, never execution approval. request_id equals challenge_id. Subsequent semantic edits require fresh review and approval."
+        description = "capability=mission.native-planning version=1. Consume a captured Session host replan receipt at current expected_revision, never execution approval. request_id must equal decision.challenge_id. Normally omit session_root; explicit values are exact separate Session store directories, not repo roots. Subsequent semantic edits require fresh review/approval. Returns JSON receipt/replay result or code!=ok tool error."
     )]
     async fn replan(
         &self,
@@ -297,7 +336,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_pause",
-        description = "capability=mission.native-planning version=1. Pause Mission eligibility without mutating linked Ticket state. UUID request_id and revision/control-sequence CAS required."
+        description = "capability=mission.native-planning version=1. Pause Mission eligibility without mutating linked Ticket state. Requires non-nil UUID request_id, current expected_revision/expected_control_sequence and nonempty evidence. Uses canonical workspace_root/.workflow-tools/session. Returns JSON lifecycle snapshot or code!=ok tool error."
     )]
     async fn pause(
         &self,
@@ -307,7 +346,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_resume",
-        description = "capability=mission.native-planning version=1. Resume through current approval and provider eligibility checks, with UUID identity and revision/control-sequence CAS."
+        description = "capability=mission.native-planning version=1. Resume Mission eligibility through current approval and prerequisite checks; requires non-nil UUID request_id, current expected_revision/expected_control_sequence and nonempty evidence. Uses canonical workspace_root/.workflow-tools/session. Returns JSON lifecycle snapshot or code!=ok tool error."
     )]
     async fn resume(
         &self,
@@ -317,7 +356,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_handoff",
-        description = "capability=mission.native-planning version=1. Transfer the active Session binding through journaled W5 handoff, retaining authoritative Session pins and recovery checks."
+        description = "capability=mission.native-planning version=1. Transfer active binding from verified source_session to existing destination_session through journaled handoff and managed pin recovery. Requires non-nil UUID request_id/current plan and control sequence/nonempty evidence. Uses canonical workspace_root/.workflow-tools/session. Returns JSON lifecycle snapshot or code!=ok tool error."
     )]
     async fn handoff(
         &self,
@@ -327,7 +366,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_cancel",
-        description = "capability=mission.native-planning version=1. Cancel Mission eligibility through its control provider, without cascading linked Ticket edits."
+        description = "capability=mission.native-planning version=1. Cancel Mission eligibility without cascading linked Ticket edits. Requires non-nil UUID request_id, current expected_revision/expected_control_sequence and nonempty evidence. Uses canonical workspace_root/.workflow-tools/session. Returns JSON lifecycle snapshot or code!=ok tool error."
     )]
     async fn cancel(
         &self,
@@ -337,7 +376,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_complete",
-        description = "capability=mission.native-planning version=1. Explicitly complete a Mission only with approval, all current outcomes and result review; UUID request_id and CAS required."
+        description = "capability=mission.native-planning version=1. Explicitly complete a Mission only with current approval, all current outcomes and result review. Requires non-nil UUID request_id/current plan and control sequence/nonempty evidence. Uses canonical workspace_root/.workflow-tools/session. Returns JSON lifecycle snapshot or code!=ok tool error."
     )]
     async fn complete(
         &self,
@@ -347,7 +386,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_review_results_add_waypoints",
-        description = "capability=mission.native-planning version=1. Record W5 result review then explicit W3 waypoint additions, each with its own request/revision. Partial failure reports persisted review/additions; retry failed additions with mission_waypoint_create. Semantic changes require fresh approval."
+        description = "capability=mission.native-planning version=1. Persist lifecycle result review, then ordered typed waypoint additions, each with its own request_id/expected_revision. Requires non-nil outer UUID request_id/current control sequence/evidence. Uses canonical workspace_root/.workflow-tools/session. Partial errors report persisted review/additions in JSON details; retry only failed additions with mission_waypoint_create. Semantic changes require fresh review/approval. code!=ok is a tool error."
     )]
     async fn review_results(
         &self,
@@ -357,7 +396,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_reopen_most_recent_completed",
-        description = "capability=mission.native-planning version=1. Reopen greatest current completion sequence, not final route position, through audited W5 Ticket transition and approval invalidation."
+        description = "capability=mission.native-planning version=1. Reopen the greatest current completion sequence, not final route position, with audited linked Ticket transition and approval invalidation. Requires non-nil UUID request_id/current plan, control and completion sequences/nonempty evidence. Uses canonical workspace_root/.workflow-tools/session. Returns JSON lifecycle snapshot or code!=ok tool error."
     )]
     async fn reopen(
         &self,
@@ -367,7 +406,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_operation",
-        description = "Run typed create_draft, save_draft, publish_draft, get_mission_source, or render_mission with API-owned IDs and managed source references; or run legacy create_mission, edit_mission_objective, add_waypoint, edit_waypoint, order_waypoints, record_progress, record_validation_result, validate_mission, or publish_mission directly by stored ID. Draft input is inline typed source, never a client path or manifest. Existing get, validate-preview, import, render-preview, publish, check-generated and migrate-dossiers remain supported. Journaled repair adds repair_preview/repair_apply with repair_request, plus repair_journal/repair_resume/repair_rollback with journal_id. publish-with-inputs adds output_inputs (merged_request and create-new continuations). get-output-contract validates the full BOM; record-approval-event consumes strict approval_event_json (approve or changes-requested, current revision, signature digest link, actor and actor_source); get-approval-event reads by revision. Reactions are not cryptographic authentication, Mission mutation, execution authorization or product acceptance. Return a structured Mission status snapshot."
+        description = "Compatibility multiplexer using the server launch workspace (--workspace, then MISSION_WORKSPACE, then cwd), unlike named tools' explicit workspace_root. Run typed create_draft, save_draft, publish_draft, get_mission_source, render_mission; legacy create_mission, edit_mission_objective, add_waypoint, edit_waypoint, order_waypoints, record_progress, record_validation_result, validate_mission, publish_mission; get/get_mission, validate-preview, import, render-preview, publish, check-generated, migrate-dossiers; repair_preview/repair_apply/repair_journal/repair_resume/repair_rollback; publish-with-inputs, get-output-contract, record-approval-event, get-approval-event. See field descriptions for operation-specific required inputs and effects. Typed drafts are inline source, not paths. import accepts without projections; publish generates them. dry_run applies only to migration and defaults false. Reactions/progress are not native requester approval or execution authority. Returns JSON StatusSnapshot: inspect status and diagnostics even when MCP isError is absent; invalid operation/missing fields return invalid_params. Prefer named tools for native planning/lifecycle."
     )]
     async fn operation(
         &self,

@@ -371,6 +371,19 @@ fn native_discovery_and_fresh_intake_stop_before_requester_approval() {
     let error: Value = serde_json::from_slice(&old_capability.stderr).unwrap();
     assert_eq!(error["code"], "native_capability_unavailable");
     assert_eq!(error["fallback"], Value::Null);
+    let mut conflicting_review = listed.clone();
+    let review = conflicting_review["tools"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|tool| tool["name"] == "mission_plan_record_review")
+        .unwrap();
+    review["inputSchema"]["properties"]["kind"]["enum"] = json!(["formal"]);
+    fs::write(&discovery, serde_json::to_vec(&conflicting_review).unwrap()).unwrap();
+    assert!(
+        !route(&arguments).status.success(),
+        "descriptive $ref siblings are allowed, but conflicting validation keywords are not"
+    );
     fs::write(&discovery, serde_json::to_vec(&listed).unwrap()).unwrap();
 
     let intake = mcp.call(3, "mission_intake_create", json!({
