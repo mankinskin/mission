@@ -6,6 +6,18 @@ impl MissionStore {
         fs::create_dir_all(&self.root)?;
         ensure_store_chain(&self.root)?;
         ensure_safe_path(&self.root, &self.root)?;
+        let store_root = self
+            .root
+            .parent()
+            .ok_or_else(|| std::io::Error::other("Mission entity directory has no store root"))?;
+        let ignore_path = store_root.join(".gitignore");
+        match fs::symlink_metadata(&ignore_path) {
+            Ok(_) => ensure_safe_path(store_root, &ignore_path)?,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+        memory_kernel::storage::ensure_gitignore_entries(store_root, &[])
+            .map_err(std::io::Error::other)?;
         Ok(())
     }
 

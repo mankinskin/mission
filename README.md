@@ -1,5 +1,15 @@
 # Mission
 
+## Store-local Git ignores
+
+Initialization and write preparation maintain
+`.workflow-tools/mission/.gitignore` using the shared
+[memory-kernel policy](../memory-kernel/README.md#store-local-git-ignores).
+Hidden advisory locks (including typed and ticket-link `.flock` files) and temporary
+write files are ignored; missing defaults are appended without replacing custom
+rules. Mission sources, accepted bundles, generated projections and recovery
+journals remain trackable. Opening a store alone remains read-only.
+
 ## Review a generated Mission
 
 **Novice path:** Start from the Mission's `generated/README.md` and choose the

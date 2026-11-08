@@ -3,3 +3,11 @@ tickets.db
 tickets.db-shm
 tickets.db-wal
 search_index/
+.*.lock
+*.flock
+.*-lock
+*.tmp
+.*.tmp-*
+.tmp-*
+move-locks/
+scan_fingerprints.json

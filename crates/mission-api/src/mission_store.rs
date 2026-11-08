@@ -71,7 +71,7 @@ impl MissionStore {
 
     pub fn init(workspace_root: &Path) -> Result<Self, MissionError> {
         let store = Self::at_workspace(workspace_root);
-        fs::create_dir_all(&store.root)?;
+        store.prepare_write()?;
         Ok(store)
     }
 
