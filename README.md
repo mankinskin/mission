@@ -118,6 +118,29 @@ only the corresponding receipt kind. Raw actor text, booleans and decision
 strings do not grant approval. Semantic edits require a fresh bound challenge
 and receipt; the generic compatibility tool cannot substitute a grant.
 
+Recording reviews, preparing a challenge, and accepting approval validate the
+complete published output and every available archived output state under the
+publication lock, including file inventories, byte digests, sizes, typed source,
+bundle/child/reference validation, provenance, generated projections and settled
+controls. Invalid state returns `mission_integrity_invalid` without issuing a
+challenge or writing/consuming a grant. Errors identify the failed checks.
+
+Reviews bind the immutable output-contract bytes. The requester challenge
+additionally binds the exact preceding review-journal bytes into its snapshot
+digest; changing documents, contracts or supporting reviews cannot reuse that
+challenge. Legacy reviews/challenges without these bindings remain readable but
+require fresh reviews and a new challenge before approval or entry.
+
+Current output inventories permit only validated append-only approval/control
+journal progression. Snapshotted records and control-event prefixes remain
+immutable; archived inventories stay exact. A legitimate grant does not create
+output drift. Entry rechecks output/history integrity and the bound grant, but
+does not treat legal external Ticket progress as an edit to the reviewed plan.
+If external status changes make a generated planning projection stale before
+reapproval (for example after reopening), explicitly republish the projection
+through the domain API, then review and challenge the refreshed state. Integrity
+checks never repair, refresh or approve it implicitly.
+
 Result review records W5 review before the supplied `additions`, each an
 explicit W3 waypoint-create request with its own request ID and revision.
 This sequence is not atomic: failures include `persisted_review` and

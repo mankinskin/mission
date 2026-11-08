@@ -209,6 +209,23 @@ pub(super) fn validate_contract(
     mission_id: Uuid,
     revision: u64,
 ) -> Result<MissionOutputContract, MissionError> {
+    validate_contract_inner(directory, mission_id, revision, false)
+}
+
+pub(super) fn validate_live_contract(
+    directory: &Path,
+    mission_id: Uuid,
+    revision: u64,
+) -> Result<MissionOutputContract, MissionError> {
+    validate_contract_inner(directory, mission_id, revision, true)
+}
+
+fn validate_contract_inner(
+    directory: &Path,
+    mission_id: Uuid,
+    revision: u64,
+    allow_journal_appends: bool,
+) -> Result<MissionOutputContract, MissionError> {
     typed_source::ensure_safe_path(directory, &directory.join("output-contract.json"))?;
     let contract: MissionOutputContract =
         serde_json::from_slice(&fs::read(directory.join("output-contract.json"))?)?;
@@ -224,9 +241,19 @@ pub(super) fn validate_contract(
             "Contract metadata does not match the requested state.",
         ));
     }
-    let files = inventory(directory)?;
+    let mut files = inventory(directory)?;
+    if allow_journal_appends {
+        validate_native_journal(&files, mission_id)?;
+        validate_control_appends(directory, &contract, &mut files)?;
+    }
     let actual: Vec<_> = files
         .iter()
+        .filter(|(name, _)| {
+            !allow_journal_appends
+                || !(name.starts_with("approvals/journal/")
+                    || name.starts_with("approvals/controls/"))
+                || contract.files.iter().any(|file| file.path == **name)
+        })
         .map(|(name, bytes)| file_record(name, bytes))
         .collect();
     if contract.files != actual {
@@ -243,4 +270,97 @@ pub(super) fn validate_contract(
         return Err(invalid("Contract authority identity mismatch."));
     }
     Ok(contract)
+}
+
+fn validate_control_appends(
+    directory: &Path,
+    contract: &MissionOutputContract,
+    files: &mut BTreeMap<String, Vec<u8>>,
+) -> Result<(), MissionError> {
+    let controls: BTreeMap<_, _> = files
+        .iter()
+        .filter_map(|(path, bytes)| {
+            path.strip_prefix("approvals/controls/")
+                .map(|name| (name.to_owned(), bytes.clone()))
+        })
+        .collect();
+    crate::lifecycle::replay_controls(controls.keys().cloned().collect(), |name| {
+        controls
+            .get(name)
+            .cloned()
+            .ok_or_else(|| crate::LifecycleError::JournalCorrupt(name.into()))
+    })
+    .map_err(|error| invalid(&format!("Invalid native control journal: {error}")))?;
+    let path = crate::lifecycle::LIFECYCLE_JOURNAL_FILE;
+    if let Some(bytes) = files.get(path) {
+        let journal = crate::LifecycleJournal::from_json(
+            std::str::from_utf8(bytes).map_err(|_| invalid("Control journal must be UTF-8."))?,
+        )
+        .map_err(|error| invalid(&error.to_string()))?;
+        if let Some(record) = contract.files.iter().find(|file| file.path == path) {
+            let archived = directory
+                .join("history/states")
+                .join(&contract.revision_label)
+                .join(path);
+            typed_source::ensure_safe_path(directory, &archived)?;
+            let baseline = fs::read(&archived)?;
+            if file_record(path, &baseline) != *record {
+                return Err(invalid(
+                    "Archived control journal does not match the output contract.",
+                ));
+            }
+            let previous = crate::LifecycleJournal::from_json(
+                std::str::from_utf8(&baseline)
+                    .map_err(|_| invalid("Archived control journal must be UTF-8."))?,
+            )
+            .map_err(|error| invalid(&error.to_string()))?;
+            if !journal.events.starts_with(&previous.events) {
+                return Err(invalid(
+                    "Control journal changed its snapshotted event prefix.",
+                ));
+            }
+            files.insert(path.into(), baseline);
+        } else {
+            files.remove(path);
+        }
+    }
+    Ok(())
+}
+
+fn validate_native_journal(
+    files: &BTreeMap<String, Vec<u8>>,
+    mission_id: Uuid,
+) -> Result<(), MissionError> {
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct JournalRecord {
+        schema_version: u32,
+        mission_id: Uuid,
+        seq: u64,
+        entry: serde_json::Value,
+    }
+    for (index, (path, bytes)) in files
+        .iter()
+        .filter(|(path, _)| path.starts_with("approvals/journal/"))
+        .enumerate()
+    {
+        let seq = index as u64 + 1;
+        let record: JournalRecord = serde_json::from_slice(bytes).map_err(|error| {
+            invalid(&format!("Invalid native approval journal {path}: {error}"))
+        })?;
+        if *path != format!("approvals/journal/{seq:08}.json")
+            || record.schema_version != 1
+            || record.mission_id != mission_id
+            || record.seq != seq
+            || !matches!(
+                record.entry.get("type").and_then(serde_json::Value::as_str),
+                Some("review" | "challenge" | "grant" | "decision" | "invalidated")
+            )
+        {
+            return Err(invalid(&format!(
+                "Invalid native approval journal identity: {path}"
+            )));
+        }
+    }
+    Ok(())
 }

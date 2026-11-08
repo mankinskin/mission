@@ -18,11 +18,29 @@ impl MissionStore {
     pub fn output_contract(&self, mission_id: Uuid) -> Result<MissionOutputContract, MissionError> {
         typed_source::ensure_safe_path(&self.root, &self.root.join(mission_id.to_string()))?;
         let accepted = self.get(mission_id)?;
-        validate_contract(
+        validate_live_contract(
             &self.root.join(mission_id.to_string()),
             mission_id,
             accepted.bundle.manifest.revision,
         )
+    }
+
+    /// Exact immutable contract identity for a validated archived revision.
+    pub fn archived_output_contract_binding(
+        &self,
+        mission_id: Uuid,
+        revision: u64,
+    ) -> Result<String, MissionError> {
+        let directory = self.root.join(mission_id.to_string());
+        let archive = directory
+            .join("history/states")
+            .join(format!("revision-{revision}"));
+        typed_source::ensure_safe_path(&directory, &archive)?;
+        validate_contract(&archive, mission_id, revision)?;
+        Ok(format!(
+            "sha256:{}",
+            digest(&fs::read(archive.join("output-contract.json"))?)
+        ))
     }
 
     /// Validate current and every available archived state; never repair or fabricate.

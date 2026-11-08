@@ -47,6 +47,9 @@ fn complete_prerequisite(f: &Fx) {
             },
         )
         .unwrap();
+    MissionStore::open(&f.ws)
+        .verify_output_history(f.id)
+        .unwrap();
 }
 fn progress(f: &Fx, state: WaypointState) -> StatusSnapshot {
     execute(

@@ -68,6 +68,19 @@ fn completed() -> Fx {
     f
 }
 
+fn refresh_reopened_projection(f: &Fx) {
+    assert!(
+        f.approval()
+            .prepare_challenge(f.id, SESSION, "stale-projection")
+            .is_err()
+    );
+    let lifecycle = MissionLifecycle::open(&f.ws);
+    let source = lifecycle.get_mission_source(f.id).unwrap();
+    lifecycle
+        .publish_draft(f.id, source, f.plan().revision)
+        .unwrap();
+}
+
 #[test]
 fn mandatory_linked_done_to_ready_reopen_preserves_history_and_invalidates_approval() {
     let f = completed();
@@ -101,6 +114,7 @@ fn mandatory_linked_done_to_ready_reopen_preserves_history_and_invalidates_appro
         "stale_control_sequence"
     );
     drop(store);
+    refresh_reopened_projection(&f);
     f.approve("after-reopen", "after-reopen-event");
     assert!(
         f.approval()
@@ -218,6 +232,7 @@ fn completion_cas_is_serialized_and_reopen_uses_sequence_not_final_route_positio
         state(&f).latest_completion().unwrap_err().code(),
         "no_completed_waypoint"
     );
+    refresh_reopened_projection(&f);
     f.approve("repeat", "repeat-event");
     TicketStore::open(&f.ws)
         .unwrap()
@@ -421,6 +436,7 @@ fn pending_reopen_prevents_route_replacement_and_descendant_entry_needs_evidence
     adapter
         .reopen_most_recent_completed(f.id, revision, 1, &req, None)
         .unwrap();
+    refresh_reopened_projection(&f);
     f.approve("fresh", "fresh-event");
     let guard = f.approval();
     let guard = guard.guard_entry(f.id, EntryPath::Dispatch).unwrap();

@@ -205,7 +205,7 @@ impl ApprovalTransaction<'_> {
     }
 }
 
-fn replay_controls(
+pub(crate) fn replay_controls(
     names: Vec<String>,
     read: impl Fn(&str) -> Result<Vec<u8>, LifecycleError>,
 ) -> Result<MissionControlState, LifecycleError> {

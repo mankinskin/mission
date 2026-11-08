@@ -63,6 +63,93 @@ impl ApprovalTransaction<'_> {
         self.lifecycle.review_plan_unlocked(self.mission_id)
     }
 
+    /// Check the complete published state while retaining the publication lock.
+    pub fn verify_integrity(&self) -> Result<String, MissionError> {
+        self.verify_integrity_inner(true)
+    }
+
+    /// Entry validates the immutable output, not a fresh projection of mutable
+    /// external Ticket status. Legal Ticket progress must not revoke approval.
+    pub fn verify_entry_integrity(&self) -> Result<String, MissionError> {
+        self.verify_integrity_inner(false)
+    }
+
+    fn verify_integrity_inner(&self, check_projection: bool) -> Result<String, MissionError> {
+        let store = &self.lifecycle.store;
+        self.control_state()
+            .and_then(|state| state.ensure_settled())
+            .map_err(|error| record_error("mission-control-invalid", &error.to_string()))?;
+        store.verify_output_history(self.mission_id)?;
+        let accepted = store.get(self.mission_id)?;
+        let workspace = store.root.ancestors().nth(3).unwrap_or(&store.root);
+        crate::LifecycleJournal::read(workspace, self.mission_id)
+            .and_then(|journal| {
+                journal.validate_waypoint_targets(
+                    &accepted
+                        .bundle
+                        .waypoints
+                        .iter()
+                        .map(|waypoint| waypoint.waypoint_id.clone())
+                        .collect(),
+                )
+            })
+            .map_err(|error| record_error("mission-control-invalid", &error.to_string()))?;
+        validate_bundle(&accepted.bundle)
+            .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
+        store
+            .validate_child_missions(self.mission_id, &accepted.bundle)
+            .map_err(|diagnostics| MissionError::Validation(diagnostics.len(), diagnostics))?;
+        store.validate_requirement_references(&accepted.bundle)?;
+        store.validate_artifact_references(self.mission_id, &accepted.bundle)?;
+        waypoint_relationships::resolve_bundle(workspace, &accepted.bundle)?;
+        let source = self.lifecycle.get_mission_source(self.mission_id)?;
+        typed_source::validate_typed(&source, true)?;
+        if typed_source::accepted_from_typed(&source, Some(&accepted))? != accepted {
+            return Err(record_error(
+                "authority-diverged",
+                "Typed source and accepted Mission content differ.",
+            ));
+        }
+        if (check_projection || self.mission_dir().join("mission.md").exists())
+            && fs::read(self.mission_dir().join("mission.md"))?
+                != self.lifecycle.render_typed(&source).as_bytes()
+        {
+            return Err(record_error(
+                "generated-changed",
+                "mission.md differs from the typed source.",
+            ));
+        }
+        store.get_artifact_provenance(self.mission_id, accepted.bundle.manifest.revision)?;
+        if check_projection {
+            let rendered = store.render_projection(&accepted.bundle, self.mission_id, None)?;
+            let diagnostics = rendered.check_generated(&self.mission_dir().join("generated"))?;
+            if !diagnostics.is_empty() {
+                return Err(MissionError::Validation(diagnostics.len(), diagnostics));
+            }
+        }
+        let review_plan = self.review_plan()?;
+        if (check_projection
+            || self
+                .mission_dir()
+                .join(plan_operations::REVIEW_PLAN_FILE)
+                .exists())
+            && fs::read(self.mission_dir().join(plan_operations::REVIEW_PLAN_FILE))?
+                != serde_json::to_vec_pretty(&review_plan)?
+        {
+            return Err(record_error(
+                "projection-diverged",
+                "Persisted review plan differs from current authority.",
+            ));
+        }
+        store.output_contract_binding(self.mission_id)
+    }
+
+    pub fn archived_output_contract_binding(&self, revision: u64) -> Result<String, MissionError> {
+        self.lifecycle
+            .store
+            .archived_output_contract_binding(self.mission_id, revision)
+    }
+
     /// Evidence-only appends preserve this revision; edit/revert advances it.
     pub fn semantic_revision(&self) -> Result<u64, MissionError> {
         self.lifecycle.semantic_revision_unlocked(self.mission_id)

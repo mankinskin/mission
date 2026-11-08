@@ -306,7 +306,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_plan_prepare_review",
-        description = "capability=mission.native-planning version=1. After passing current cold/formal reviews, persist a revision-bound requester challenge and return exact host decision prompts. request_id is challenge identity, never approval; host capture must supply the later receipt. Normally omit session_root; explicit values are exact separate Session store directories, not repo roots. Returns JSON challenge/revision/digests/prompts or code!=ok tool error; partial registration requires same-identity recovery."
+        description = "capability=mission.native-planning version=1. After passing current cold/formal reviews and complete published output/history integrity checks, persist a challenge bound to the reviewed output contract and journal bytes and return exact host decision prompts. Integrity failure never issues a challenge. request_id is challenge identity, never approval; host capture must supply the later receipt. Normally omit session_root; explicit values are exact separate Session store directories, not repo roots. Returns JSON challenge/revision/digests/prompts or code!=ok tool error; partial registration requires same-identity recovery."
     )]
     async fn prepare_review(
         &self,
@@ -316,7 +316,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_plan_approve",
-        description = "capability=mission.native-planning version=1. Consume a resolvable captured Session host approve receipt bound to current expected_revision/reviews. request_id must equal decision.challenge_id. Actor text, booleans and raw decisions never grant authority. Normally omit session_root; explicit values are exact separate Session store directories, not repo roots. Returns JSON accepted grant/replay status or code!=ok tool error."
+        description = "capability=mission.native-planning version=1. Recheck complete published output/history integrity and reviewed contract/journal bindings before consuming a captured Session host approve receipt bound to current expected_revision/reviews. Integrity failure never grants approval. request_id must equal decision.challenge_id. Actor text, booleans and raw decisions never grant authority. Normally omit session_root; explicit values are exact separate Session store directories, not repo roots. Returns JSON accepted grant/replay status or code!=ok tool error."
     )]
     async fn approve(
         &self,

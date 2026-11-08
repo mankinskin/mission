@@ -29,6 +29,7 @@ impl<'a> MissionApproval<'a> {
         request_id: Option<String>,
     ) -> Result<ReviewRecord, ApprovalError> {
         let tx = self.begin(id)?;
+        let output_binding = self.verify_integrity(&tx)?;
         let plan = tx.review_plan()?;
         if input.revision != plan.revision
             || input.plan_digest != plan.plan_digest
@@ -52,6 +53,7 @@ impl<'a> MissionApproval<'a> {
                 && record.verdict == input.verdict
                 && record.reviewer == input.reviewer
                 && record.cold_review_id == input.cold_review_id
+                && record.output_contract_binding.as_deref() == Some(output_binding.as_str())
             {
                 return Ok(record.clone());
             }
@@ -78,6 +80,7 @@ impl<'a> MissionApproval<'a> {
                             && r.revision == plan.revision
                             && r.plan_digest == plan.plan_digest
                             && r.evidence_identity == plan.evidence_identity
+                            && r.output_contract_binding.as_deref() == Some(output_binding.as_str())
                     })
                     .ok_or_else(|| {
                         required("no passing cold walkthrough of this snapshot exists")
@@ -101,6 +104,7 @@ impl<'a> MissionApproval<'a> {
             plan_digest: plan.plan_digest,
             evidence_identity: plan.evidence_identity,
             cold_review_id: input.cold_review_id,
+            output_contract_binding: Some(output_binding),
         };
         append(&tx, &mut journal, Entry::Review(record.clone()))?;
         Ok(record)

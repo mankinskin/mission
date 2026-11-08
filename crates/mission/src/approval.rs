@@ -77,6 +77,22 @@ fn unavailable(message: &str) -> ApprovalError {
 fn corrupt(message: String) -> ApprovalError {
     ApprovalError::new("approval_journal_corrupt", message)
 }
+fn integrity_error(error: MissionError) -> ApprovalError {
+    let message = match error.diagnostics() {
+        Some(diagnostics) => diagnostics
+            .iter()
+            .map(|diagnostic| {
+                format!(
+                    "{}: {} ({})",
+                    diagnostic.code, diagnostic.message, diagnostic.source
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("; "),
+        None => error.to_string(),
+    };
+    ApprovalError::new("mission_integrity_invalid", message)
+}
 fn sha(input: &str) -> String {
     Sha256::digest(input.as_bytes())
         .iter()
@@ -133,6 +149,8 @@ pub struct ReviewRecord {
     pub plan_digest: String,
     pub evidence_identity: String,
     pub cold_review_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_contract_binding: Option<String>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -145,6 +163,10 @@ struct ChallengeBinding {
     review_snapshot_digest: String,
     cold_review_id: String,
     formal_review_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    output_contract_binding: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    review_journal_digest: Option<String>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -330,12 +352,21 @@ fn digest_from(
     evidence: &str,
     cold: &str,
     formal: &str,
+    bindings: (&str, &str),
 ) -> String {
+    let (output_binding, journal_digest) = bindings;
     sha(&format!(
-        "mission-review-snapshot/1\n{id}\n{revision}\n{plan}\n{evidence}\n{cold}\n{formal}"
+        "mission-review-snapshot/2\n{id}\n{revision}\n{plan}\n{evidence}\n{cold}\n{formal}\n{output_binding}\n{journal_digest}"
     ))
 }
-fn snapshot_digest(id: Uuid, plan: &ReviewPlan, cold: &str, formal: &str) -> String {
+fn snapshot_digest(
+    id: Uuid,
+    plan: &ReviewPlan,
+    cold: &str,
+    formal: &str,
+    output_binding: &str,
+    journal_digest: &str,
+) -> String {
     digest_from(
         id,
         plan.revision,
@@ -343,7 +374,20 @@ fn snapshot_digest(id: Uuid, plan: &ReviewPlan, cold: &str, formal: &str) -> Str
         &plan.evidence_identity,
         cold,
         formal,
+        (output_binding, journal_digest),
     )
+}
+fn journal_digest(tx: &ApprovalTransaction<'_>, count: usize) -> Result<String, ApprovalError> {
+    let mut digest = Sha256::new();
+    digest.update(b"mission-review-journal/1\n");
+    for seq in 1..=count {
+        let bytes = tx
+            .read_record(&format!("journal/{seq:08}.json"))?
+            .ok_or_else(|| corrupt(format!("review journal record {seq} vanished")))?;
+        digest.update((bytes.len() as u64).to_be_bytes());
+        digest.update(bytes);
+    }
+    Ok(format!("{:x}", digest.finalize()))
 }
 fn disposition_id(prefix: &str, id: Uuid, r: &RequesterDecisionRef) -> String {
     let digest = sha(&format!(
@@ -360,6 +404,10 @@ pub struct MissionApproval<'a> {
     expected_revision: Option<u64>,
 }
 impl<'a> MissionApproval<'a> {
+    fn verify_integrity(&self, tx: &ApprovalTransaction<'_>) -> Result<String, ApprovalError> {
+        tx.verify_integrity().map_err(integrity_error)
+    }
+
     pub fn open(workspace_root: &Path, session: &'a SessionStoreConfig) -> Self {
         Self {
             workspace_root: workspace_root.to_path_buf(),

@@ -4,6 +4,61 @@ use mission::{LifecycleRead, WaypointIdentity, WorkspaceLifecycle};
 use ticket_api::storage::store::TicketStore;
 use uuid::Uuid;
 
+#[test]
+fn stdio_integrity_failure_never_returns_a_challenge_or_grants_approval() {
+    let f = linked();
+    f.reviewed();
+    let mut mcp = Mcp::start(&f.ws);
+    mcp.initialize();
+    let path =
+        f.ws.join(".workflow-tools/mission/missions")
+            .join(f.id.to_string())
+            .join("mission.md");
+    let original = std::fs::read(&path).unwrap();
+    std::fs::write(&path, "inconsistent planning document").unwrap();
+    let args = json!({
+        "workspace_root": f.ws, "mission_id": f.id, "session_id": SESSION,
+        "request_id": "integrity", "expected_revision": f.plan().revision,
+    });
+    let denied = call(&mut mcp, 2, "mission_plan_prepare_review", args.clone());
+    assert_eq!(denied["code"], "mission_integrity_invalid", "{denied}");
+    assert!(denied["result"].is_null());
+    std::fs::write(&path, original).unwrap();
+    let prepared = call(&mut mcp, 3, "mission_plan_prepare_review", args);
+    assert_eq!(prepared["code"], "ok", "{prepared}");
+    assert!(
+        host_hook::run(
+            &f.ws,
+            SESSION,
+            json!({
+                "hook_event_name": "UserPromptSubmit",
+                "prompt": prepared["result"]["host_prompt"], "message_id": "integrity-event",
+            })
+        )
+        .status
+        .success()
+    );
+    let reference = f
+        .session
+        .find_requester_decision_for_challenge(SESSION, "integrity")
+        .unwrap()
+        .unwrap()
+        .reference;
+    std::fs::write(&path, "changed after challenge").unwrap();
+    let denied = call(
+        &mut mcp,
+        4,
+        "mission_plan_approve",
+        json!({
+            "workspace_root": f.ws, "mission_id": f.id,
+            "request_id": "integrity", "expected_revision": f.plan().revision,
+            "decision": reference,
+        }),
+    );
+    assert_eq!(denied["code"], "mission_integrity_invalid", "{denied}");
+    assert!(f.approval().grants(f.id).unwrap().is_empty());
+}
+
 pub(super) fn control(f: &approval_fixture::Fx, evidence: &str) -> serde_json::Value {
     json!({
         "workspace_root":f.ws, "mission_id":f.id, "request_id":Uuid::new_v4(),

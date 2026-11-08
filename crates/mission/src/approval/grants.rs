@@ -70,7 +70,7 @@ impl<'a> MissionApproval<'a> {
                 "granting Session finished; handoff requires a fresh challenge",
             ));
         }
-        self.verify_chain(tx.mission_id(), &journal, index, &grant)?;
+        self.verify_chain(tx, &journal, index, &grant)?;
         let receipt = self.verify_receipt(tx.mission_id(), &grant.decision)?;
         if receipt.kind != DecisionKind::Approve
             || receipt.revision != grant.revision
@@ -83,11 +83,12 @@ impl<'a> MissionApproval<'a> {
     }
     fn verify_chain(
         &self,
-        id: Uuid,
+        tx: &ApprovalTransaction<'_>,
         journal: &[Record],
         index: usize,
         grant: &ApprovalGrant,
     ) -> Result<(), ApprovalError> {
+        let id = tx.mission_id();
         let broken = |what: &str| corrupt(format!("grant {} chain: {what}", grant.grant_id));
         if grant.challenge_id != grant.decision.challenge_id
             || grant.grant_id != disposition_id("g", id, &grant.decision)
@@ -112,6 +113,18 @@ impl<'a> MissionApproval<'a> {
             .ok_or_else(|| broken("missing preceding cold review"))?;
         let formal = review(&binding.formal_review_id)
             .ok_or_else(|| broken("missing preceding formal review"))?;
+        let output_binding = binding.output_contract_binding.as_deref().ok_or_else(|| {
+            stale("legacy challenge lacks output integrity binding; fresh approval required")
+        })?;
+        if tx.archived_output_contract_binding(binding.revision)? != output_binding {
+            return Err(stale(
+                "reviewed output contract changed; fresh approval required",
+            ));
+        }
+        let review_journal_digest = journal_digest(tx, ci)?;
+        if binding.review_journal_digest.as_deref() != Some(review_journal_digest.as_str()) {
+            return Err(broken("review journal bytes changed after the challenge"));
+        }
         if cold.kind != ReviewKind::ColdWalkthrough
             || formal.kind != ReviewKind::Formal
             || cold.verdict != ReviewVerdict::Pass
@@ -122,6 +135,7 @@ impl<'a> MissionApproval<'a> {
                 r.revision != binding.revision
                     || r.plan_digest != binding.plan_digest
                     || r.evidence_identity != binding.evidence_identity
+                    || r.output_contract_binding.as_deref() != Some(output_binding)
             })
         {
             return Err(broken("supporting reviews are not a distinct passing pair"));
@@ -139,6 +153,7 @@ impl<'a> MissionApproval<'a> {
                 &binding.evidence_identity,
                 &binding.cold_review_id,
                 &binding.formal_review_id,
+                (output_binding, &review_journal_digest),
             ) != grant.review_snapshot_digest
         {
             return Err(broken("grant, challenge and recomputed snapshot disagree"));
@@ -167,6 +182,7 @@ impl<'a> MissionApproval<'a> {
     pub fn guard_entry(&self, id: Uuid, _path: EntryPath) -> Result<EntryGuard<'_>, ApprovalError> {
         let tx = self.begin(id)?;
         let grant = self.effective_grant(&tx)?;
+        tx.verify_entry_integrity().map_err(integrity_error)?;
         let runtime = tx
             .control_state()
             .map_err(|e| ApprovalError::new(e.code(), e.to_string()))?;

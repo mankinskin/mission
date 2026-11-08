@@ -20,20 +20,41 @@ impl<'a> MissionApproval<'a> {
             return Err(unavailable("the Mission root must be absolute"));
         }
         let tx = self.begin(id)?;
+        let output_binding = self.verify_integrity(&tx)?;
         let plan = tx.review_plan()?;
         let mut journal = read_journal(&tx)?;
         let (cold, formal) = current_reviews(&journal, &plan).ok_or_else(|| {
             required("passing current cold and distinct formal reviews are required")
         })?;
+        if [&cold, &formal].iter().any(|review| {
+            review.output_contract_binding.as_deref() != Some(output_binding.as_str())
+        }) {
+            return Err(stale(
+                "reviews do not bind the current output contract; fresh reviews are required",
+            ));
+        }
+        let prefix_length = journal.iter().position(|record| {
+            matches!(&record.entry, Entry::Challenge(c) if c.challenge_id == challenge_id)
+        }).unwrap_or(journal.len());
+        let review_journal_digest = journal_digest(&tx, prefix_length)?;
         let binding = ChallengeBinding {
             challenge_id: challenge_id.into(),
             session_id: session_id.into(),
             revision: plan.revision,
             plan_digest: plan.plan_digest.clone(),
             evidence_identity: plan.evidence_identity.clone(),
-            review_snapshot_digest: snapshot_digest(id, &plan, &cold.review_id, &formal.review_id),
+            review_snapshot_digest: snapshot_digest(
+                id,
+                &plan,
+                &cold.review_id,
+                &formal.review_id,
+                &output_binding,
+                &review_journal_digest,
+            ),
             cold_review_id: cold.review_id,
             formal_review_id: formal.review_id,
+            output_contract_binding: Some(output_binding),
+            review_journal_digest: Some(review_journal_digest),
         };
         let existing = journal.iter().find_map(|r| match &r.entry {
             Entry::Challenge(c) if c.challenge_id == challenge_id => Some(c.clone()),

@@ -43,6 +43,41 @@ impl<'a> MissionApproval<'a> {
             return Err(conflict("receipt and Session/Mission challenges disagree"));
         }
         let approve = receipt.kind == DecisionKind::Approve;
+        if approve {
+            let current_binding = self.verify_integrity(&tx)?;
+            let reviewed_binding = record.output_contract_binding.as_deref()
+                .ok_or_else(|| stale("challenge has no output integrity binding; fresh reviews and challenge required"))?;
+            let archived_binding = tx.archived_output_contract_binding(record.revision)?;
+            let prefix_length = journal.iter().position(|r| {
+                matches!(&r.entry, Entry::Challenge(c) if c.challenge_id == reference.challenge_id)
+            }).ok_or_else(|| corrupt("prepared challenge vanished".into()))?;
+            let review_journal_digest = journal_digest(&tx, prefix_length)?;
+            if record.review_journal_digest.as_deref() != Some(review_journal_digest.as_str()) {
+                return Err(corrupt("review journal changed after the challenge".into()));
+            }
+            if reviewed_binding != archived_binding
+                || (tx.review_plan()?.revision == record.revision
+                    && reviewed_binding != current_binding)
+            {
+                return Err(stale(
+                    "reviewed output contract changed after the challenge",
+                ));
+            }
+            if digest_from(
+                id,
+                record.revision,
+                &record.plan_digest,
+                &record.evidence_identity,
+                &record.cold_review_id,
+                &record.formal_review_id,
+                (reviewed_binding, &review_journal_digest),
+            ) != record.review_snapshot_digest
+            {
+                return Err(corrupt(
+                    "challenge snapshot binding disagrees with reviewed outputs".into(),
+                ));
+            }
+        }
         let disposition = disposition_id(if approve { "g" } else { "d" }, id, reference);
         let grant_now = ApprovalGrant {
             grant_id: disposition.clone(),
