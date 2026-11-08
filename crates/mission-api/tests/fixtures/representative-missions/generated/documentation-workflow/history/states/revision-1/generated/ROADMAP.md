@@ -1,6 +1,6 @@
 # Synthetic documentation workflow fixture
 
-<!-- mission: 00000000-0000-4000-8000-000000001001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{} -->
+<!-- mission: 00000000-0000-4000-8000-000000001001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{"ce://default/ticket/00000000-0000-4000-8000-000000001002":"done"} -->
 
 ## Objective
 
@@ -127,7 +127,7 @@ Descriptive only; not acceptance criteria, branching, progress, prerequisites, s
 | **Mode** | "execution-side-effect" |
 | **Scope** | Ticket-backed: \`ce://default/ticket/00000000-0000-4000-8000-000000001002\` |
 | **Child mission** | None |
-| **State** | Owned externally |
+| **State** | completed |
 | **Prerequisites** | code-map |
 | **Session package** | w8-semantic-review |
 | **Prompt** | Fixture-only adaptation: Compare normalized documented intent to find likely redundant behavior and missing abstraction opportunities. Preserve the boundary: Similarity narrows the search; evidence must retain element links and candidates remain distinct from confirmed redundancy. |

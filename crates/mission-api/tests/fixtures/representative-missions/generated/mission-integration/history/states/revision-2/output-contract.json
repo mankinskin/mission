@@ -37,78 +37,78 @@
     },
     {
       "path": "generated/README.md",
-      "size_bytes": 1614,
-      "sha256": "2516aa388c8c59687507392261018851f4eb7b1514b30a9cf141419177047593",
+      "size_bytes": 1696,
+      "sha256": "ec0e096226201b61968f072513e9b4c3d4569ec694f2005c888358baa2e695a7",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/ROADMAP.md",
-      "size_bytes": 16329,
-      "sha256": "8642e0959460c551c7a902d8aff028aad32aa0aa364209b9753c23c69c6b1c56",
+      "size_bytes": 16387,
+      "sha256": "fee046fc85e386b3035ed97aa3a7134595efd36338cc483f959fcc65b4ea6436",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/01-mission-spec.md",
-      "size_bytes": 2470,
-      "sha256": "c721b2eacbec8a842b449a4b7c8072562290ce3da19ea87513d9d0ca3f34c4b3",
+      "size_bytes": 2535,
+      "sha256": "37e5d193971d93ef555c149647dac4d1c1e4eecc80ed695e01adebf3872df207",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/02-ticket-set.md",
-      "size_bytes": 2359,
-      "sha256": "d93eb5799c565c65a704fdb08067050fcc772714dde02bd067e02387798b23ea",
+      "size_bytes": 2424,
+      "sha256": "6818d31bc3913498867136be9128d834986e78b12673649fb2ef1e1ff6817a80",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/03-roadmap-contract.md",
-      "size_bytes": 2400,
-      "sha256": "06a95ce5da9ad0a4221ec5aa614126940eac5b3bf41c0352d018c2e15ea44ad5",
+      "size_bytes": 2465,
+      "sha256": "dd6897adf8b244f5daac46a9252dcdf22e097e94a0b315dcd7ad8a6f6337de1e",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/04-mission-api.md",
-      "size_bytes": 3432,
-      "sha256": "35e4b4a8fcd1c005c8a77eee8f5e27dc563fef874116f41ed1de108d31172fe9",
+      "size_bytes": 3490,
+      "sha256": "0393a9a6aff01e77d96a18a51476632f01d8ae510080b30798e67ad08268a634",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/05-mission-transports.md",
-      "size_bytes": 2270,
-      "sha256": "5d900a5d88fd15f186756a1731b85ee1419521b7a76bac625017fe0d4bada9a7",
+      "size_bytes": 2335,
+      "sha256": "0150b702399ee3c579494d5b48544bcd8b2ad1d487ad3d6d44d910340845bef6",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/06-session-attachment.md",
-      "size_bytes": 2284,
-      "sha256": "fe978208fe506e54de1653d9526beec0e04acd566e90e2b3a6be4fdf44d0502e",
+      "size_bytes": 2349,
+      "sha256": "c612969d0447f166ad2c0ebf83b792c074d0cb1358c53241df1e9ebcdfe05983",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/07-dossier-migration.md",
-      "size_bytes": 2563,
-      "sha256": "d1ead12ad70eb662964e45eff59d9865eb1879851173c94939fb0b6a785809b2",
+      "size_bytes": 2628,
+      "sha256": "dc817a3c9a5fa24f631f88446a97274b60b4c7f4aea1df0f65f756e4f17781f1",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/08-guidance-retarget.md",
-      "size_bytes": 2358,
-      "sha256": "d46cb9f97cf849ef8b8d34ebdfb5e4715fd36eedbda52cc65fc1ac213b977dff",
+      "size_bytes": 2423,
+      "sha256": "299aa4bd33d79d13f434cea60079ea5a6603620bb018c6f182a39e3959e86b93",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/09-validation-closure.md",
-      "size_bytes": 2347,
-      "sha256": "8ce31e68ed5f934c0a481e8e91f820ab534cecad02c2c2ca9266cc7e0f43b1a5",
+      "size_bytes": 2412,
+      "sha256": "c959cdafac3ec5ac6c13ab0c7bd961fa0ec77e37d9935588324b606fc3d3462c",
       "role": "generated",
       "format": "markdown"
     },

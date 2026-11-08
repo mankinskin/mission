@@ -1,6 +1,8 @@
 use super::*;
+use ticket_api::storage::store::TicketStore;
 
-pub(crate) fn ticket_snapshot(
+/// Resolve current Ticket statuses, including recursively accepted child Missions.
+pub fn ticket_snapshot(
     workspace_root: &Path,
     mission_store: &MissionStore,
     mission_id: Uuid,
@@ -127,12 +129,13 @@ pub(super) fn collect_ticket_references(
     Ok(())
 }
 
-pub(crate) fn parse_reference(
+/// Resolve a local entity reference with Ticket-status diagnostics.
+pub fn parse_reference(
     workspace_root: &Path,
     reference: &str,
     kind: &str,
 ) -> Result<Uuid, MissionError> {
-    mission_api::local_entity_reference_id(workspace_root, reference, kind).map_err(|error| {
+    local_entity_reference_id(workspace_root, reference, kind).map_err(|error| {
         let message = error
             .diagnostics()
             .and_then(|diagnostics| diagnostics.first())
@@ -166,7 +169,8 @@ pub(crate) fn validation_error(
     )
 }
 
-pub(crate) fn snapshot_states(
+/// Map externally owned Ticket statuses to ephemeral Mission waypoint states.
+pub fn snapshot_states(
     snapshot: &BTreeMap<String, String>,
 ) -> Result<BTreeMap<String, WaypointState>, MissionError> {
     snapshot
@@ -189,7 +193,8 @@ pub(crate) fn snapshot_states(
         .collect()
 }
 
-pub(crate) fn snapshot_id(snapshot: &BTreeMap<String, String>) -> Result<String, MissionError> {
+/// Canonical status-snapshot identity used by every generated projection.
+pub fn snapshot_id(snapshot: &BTreeMap<String, String>) -> Result<String, MissionError> {
     Ok(format!(
         "ticket-status-v1:{}",
         serde_json::to_string(snapshot)?

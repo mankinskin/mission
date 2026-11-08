@@ -124,6 +124,10 @@ publication lock, including file inventories, byte digests, sizes, typed source,
 bundle/child/reference validation, provenance, generated projections and settled
 controls. Invalid state returns `mission_integrity_invalid` without issuing a
 challenge or writing/consuming a grant. Errors identify the failed checks.
+Typed-draft and bundle publication, `check-generated`, and these approval gates
+use the same status-aware projection, resolving Ticket states from the explicit
+owning workspace, including child Missions. Missing or unmapped Ticket states
+fail explicitly; publication never substitutes authored or default states.
 
 Reviews bind the immutable output-contract bytes. The requester challenge
 additionally binds the exact preceding review-journal bytes into its snapshot
@@ -573,10 +577,12 @@ consumer_path, reference)` produces a consumer-relative link so each supported
 Markdown destination resolves from its actual location.
 
 Publication, repair fingerprints and verification share one generated inventory
-containing the README, roadmap, history, waypoint map and Parts. An absent external-status snapshot and
-the empty snapshot have the same explicit empty representation, so typed
-publication and subsequent verification agree byte-for-byte. Transport success
-does not imply acceptance of historical review rows.
+containing the README, roadmap, history, waypoint map and Parts. Store publication
+captures current Ticket statuses in that projection; typed-draft publication
+uses the same resolver and renderer as bundle publication and verification.
+The low-level pure renderer can still render an explicitly supplied snapshot;
+an absent snapshot and an empty snapshot have the same empty representation.
+Transport success does not imply acceptance of historical review rows.
 The projection renderer is `mission-api/5` for unlinked native v1,
 `mission-api/6` for unlinked outcome-bearing native v2, and `mission-api/7`
 when relationships are present. Older generated output reports drift until
@@ -587,6 +593,13 @@ explicitly republished through the owning Mission operation.
 separately. The latter includes redirected generated files or destinations
 outside the owning workspace. Checks are read-only; regenerate through the
 owning publication operation rather than editing projections.
+`check-generated` compares against current Ticket statuses. Status-only changes
+can therefore report projection drift while output-history integrity still
+passes. Before review, challenge preparation, or approval acceptance, that stale
+snapshot blocks approval and requires explicit publication and fresh review.
+After approval, legal Ticket progress does not revoke the bound plan or require
+republishing: entry checks retain byte/history protection without comparing a
+fresh status projection to the reviewed snapshot.
 
 ### Representative generated fixture corpus
 

@@ -1,6 +1,6 @@
 # W4. Implement durable Mission persistence (`mission-api`)
 
-<!-- mission: 00000000-0000-4000-8000-000000002001; revision: 2; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{} -->
+<!-- mission: 00000000-0000-4000-8000-000000002001; revision: 2; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{"ce://default/ticket/00000000-0000-4000-8000-000000002002":"done"} -->
 
 Previous: [03-roadmap-contract.md](03-roadmap-contract.md) | Next: [05-mission-transports.md](05-mission-transports.md)
 
@@ -11,7 +11,7 @@ Previous: [03-roadmap-contract.md](03-roadmap-contract.md) | Next: [05-mission-t
 | **Mode** | "execution-side-effect" |
 | **Scope** | Ticket-backed: \`ce://default/ticket/00000000-0000-4000-8000-000000002002\` |
 | **Child mission** | None |
-| **State** | Owned externally |
+| **State** | completed |
 | **Prerequisites** | roadmap-contract |
 | **Session package** | mission-api |
 | **Prompt** | Fixture-only adaptation: Implement UUID-backed validation, import, revision, archive, provenance, relationship resolution, and complete generated output in the internal API. Preserve the boundary: Use \`.workflow-tools/mission/\`; preserve typed Parts and original source records; keep transports out of the internal crate. |

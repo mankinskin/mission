@@ -1,6 +1,6 @@
 # W3. Extract maps from verified rustdoc data (`code-map`)
 
-<!-- mission: 00000000-0000-4000-8000-000000001001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{} -->
+<!-- mission: 00000000-0000-4000-8000-000000001001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{"ce://default/ticket/00000000-0000-4000-8000-000000001002":"done"} -->
 
 Previous: [02-health-check.md](02-health-check.md) | Next: [04-semantic-review.md](04-semantic-review.md)
 

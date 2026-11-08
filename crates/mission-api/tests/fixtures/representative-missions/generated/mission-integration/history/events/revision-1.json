@@ -5,7 +5,7 @@
   "recorded_at_unix_ms": 1798000000000,
   "revision": 1,
   "decision": "changes-requested",
-  "signature": "sha256:342603737d25dc3f8dfa9dc3699fd25c1c9de2bd999fdcecd264c2990aa1bc5e",
+  "signature": "sha256:a643f98d7e6860e4b870eb3ad0017acb8d62543a8e9124e62561cdde3d23554b",
   "actor": "synthetic fixture reviewer",
   "actor_source": "fixture-authored",
   "metadata": {

@@ -1,6 +1,6 @@
 # W5. Expose the Mission facade (`mission-transports`)
 
-<!-- mission: 00000000-0000-4000-8000-000000002001; revision: 3; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{} -->
+<!-- mission: 00000000-0000-4000-8000-000000002001; revision: 3; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{"ce://default/ticket/00000000-0000-4000-8000-000000002002":"done"} -->
 
 Previous: [04-mission-api.md](04-mission-api.md) | Next: [06-session-attachment.md](06-session-attachment.md)
 

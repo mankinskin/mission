@@ -1,6 +1,6 @@
 # W4. Report missing-prefix search scope (`missing-prefix`)
 
-<!-- mission: 00000000-0000-4000-8000-000000003001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{} -->
+<!-- mission: 00000000-0000-4000-8000-000000003001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{"ce://default/ticket/00000000-0000-4000-8000-000000003002":"done"} -->
 
 Previous: [03-residual-test-scope.md](03-residual-test-scope.md) | Next: [05-descendant-refs.md](05-descendant-refs.md)
 

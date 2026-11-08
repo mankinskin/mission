@@ -1,6 +1,6 @@
 # Synthetic Mission integration fixture
 
-<!-- mission: 00000000-0000-4000-8000-000000002001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{} -->
+<!-- mission: 00000000-0000-4000-8000-000000002001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{"ce://default/ticket/00000000-0000-4000-8000-000000002002":"done"} -->
 
 ## Objective
 
@@ -115,7 +115,7 @@ Descriptive only; not acceptance criteria, branching, progress, prerequisites, s
 | **Mode** | "execution-side-effect" |
 | **Scope** | Ticket-backed: \`ce://default/ticket/00000000-0000-4000-8000-000000002002\` |
 | **Child mission** | None |
-| **State** | Owned externally |
+| **State** | completed |
 | **Prerequisites** | roadmap-contract |
 | **Session package** | mission-api |
 | **Prompt** | Fixture-only adaptation: Implement UUID-backed validation, import, revision, archive, provenance, relationship resolution, and complete generated output in the internal API. Preserve the boundary: Use \`.workflow-tools/mission/\`; preserve typed Parts and original source records; keep transports out of the internal crate. |

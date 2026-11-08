@@ -1,6 +1,6 @@
 # W9. Align store-index output fixtures (`index-output`)
 
-<!-- mission: 00000000-0000-4000-8000-000000003001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{} -->
+<!-- mission: 00000000-0000-4000-8000-000000003001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{"ce://default/ticket/00000000-0000-4000-8000-000000003002":"done"} -->
 
 Previous: [08-move-fixtures.md](08-move-fixtures.md) | Next: [10-update-fixture.md](10-update-fixture.md)
 

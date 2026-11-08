@@ -1,6 +1,6 @@
 # W10. Correct update MCP workspace fixtures (`update-fixture`)
 
-<!-- mission: 00000000-0000-4000-8000-000000003001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{} -->
+<!-- mission: 00000000-0000-4000-8000-000000003001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{"ce://default/ticket/00000000-0000-4000-8000-000000003002":"done"} -->
 
 Previous: [09-index-output.md](09-index-output.md) | Next: [11-test-gate.md](11-test-gate.md)
 

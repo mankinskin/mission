@@ -1,6 +1,6 @@
 # W1. Establish the part-write contract (`part-write`)
 
-<!-- mission: 00000000-0000-4000-8000-000000003001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{} -->
+<!-- mission: 00000000-0000-4000-8000-000000003001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{"ce://default/ticket/00000000-0000-4000-8000-000000003002":"done"} -->
 
 Next: [02-recoverable-publication.md](02-recoverable-publication.md)
 

@@ -4,15 +4,18 @@ use super::*;
 fn goal_create_update_and_reorder_publish_coherent_revisions_and_total_order() {
     let f = seeded(3, &["a", "b", "c"]);
     let ticket = Uuid::from_u128(0x3300);
-    let ticket_dir = f
-        .root()
-        .join(".workflow-tools/ticket/tickets")
-        .join(ticket.to_string());
-    fs::create_dir_all(&ticket_dir).unwrap();
-    fs::write(
-        ticket_dir.join("ticket.toml"),
-        format!("id = \"{ticket}\"\ncreated_at = \"2026-10-29T00:00:00Z\"\ntitle = \"Existing Ticket\"\nstate = \"ready\"\n"),
-    ).unwrap();
+    ticket_api::storage::TicketStore::init(f.root())
+        .unwrap()
+        .create(
+            Some(ticket),
+            "tracker-improvement",
+            Some("Existing Ticket"),
+            Some("ready"),
+            BTreeMap::new(),
+            None,
+            Some("Planning fixture."),
+        )
+        .unwrap();
     assert_eq!(
         apply(
             &f,

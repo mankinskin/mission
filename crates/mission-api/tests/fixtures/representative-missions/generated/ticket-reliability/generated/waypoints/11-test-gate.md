@@ -1,6 +1,6 @@
 # W11. Repair the full Ticket test gate (`test-gate`)
 
-<!-- mission: 00000000-0000-4000-8000-000000003001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{} -->
+<!-- mission: 00000000-0000-4000-8000-000000003001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{"ce://default/ticket/00000000-0000-4000-8000-000000003002":"done"} -->
 
 Previous: [10-update-fixture.md](10-update-fixture.md) | Next: [12-part-layout.md](12-part-layout.md)
 

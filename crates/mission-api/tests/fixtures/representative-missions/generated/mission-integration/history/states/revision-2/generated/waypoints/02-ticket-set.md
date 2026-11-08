@@ -1,6 +1,6 @@
 # W2. Prepare bounded implementation Tickets (`ticket-set`)
 
-<!-- mission: 00000000-0000-4000-8000-000000002001; revision: 2; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{} -->
+<!-- mission: 00000000-0000-4000-8000-000000002001; revision: 2; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{"ce://default/ticket/00000000-0000-4000-8000-000000002002":"done"} -->
 
 Previous: [01-mission-spec.md](01-mission-spec.md) | Next: [03-roadmap-contract.md](03-roadmap-contract.md)
 

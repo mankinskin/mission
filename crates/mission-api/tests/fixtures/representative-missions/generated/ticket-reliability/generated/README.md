@@ -46,6 +46,6 @@ Evidence: unknown (none declared).
 - What was delivered? Follow the generated inventory and declared evidence above.
 - What was verified? See the roadmap's validation gates and operator results; missing results are unknown.
 
-External status: `{}`.
+External status: `ticket-status-v1:{"ce://default/ticket/00000000-0000-4000-8000-000000003002":"done"}`.
 
 Publication transport success is not acceptance. Product readiness and historical review acceptance are unknown unless explicitly evidenced. Run `mission check-generated` for current file and destination diagnostics; this entry does not assert that verification passed.

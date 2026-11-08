@@ -1,6 +1,6 @@
 # W7. Repair board MCP workspace fixtures (`board-fixtures`)
 
-<!-- mission: 00000000-0000-4000-8000-000000003001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{} -->
+<!-- mission: 00000000-0000-4000-8000-000000003001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{"ce://default/ticket/00000000-0000-4000-8000-000000003002":"done"} -->
 
 Previous: [06-default-workspace.md](06-default-workspace.md) | Next: [08-move-fixtures.md](08-move-fixtures.md)
 

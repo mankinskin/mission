@@ -1,6 +1,6 @@
 # W1. Define the mission-domain contract (`mission-spec`)
 
-<!-- mission: 00000000-0000-4000-8000-000000002001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{} -->
+<!-- mission: 00000000-0000-4000-8000-000000002001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{"ce://default/ticket/00000000-0000-4000-8000-000000002002":"done"} -->
 
 Next: [02-ticket-set.md](02-ticket-set.md)
 

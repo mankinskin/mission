@@ -1,6 +1,6 @@
 # W9. Close with evidence and dispositions (`validation-closure`)
 
-<!-- mission: 00000000-0000-4000-8000-000000002001; revision: 2; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{} -->
+<!-- mission: 00000000-0000-4000-8000-000000002001; revision: 2; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{"ce://default/ticket/00000000-0000-4000-8000-000000002002":"done"} -->
 
 Previous: [08-guidance-retarget.md](08-guidance-retarget.md)
 

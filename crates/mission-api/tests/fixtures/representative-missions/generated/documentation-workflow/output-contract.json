@@ -37,43 +37,43 @@
     },
     {
       "path": "generated/README.md",
-      "size_bytes": 1372,
-      "sha256": "f390401fe020db94ee9c36d03e287bfd6231b4845294a803075d2f5c3cf3ba33",
+      "size_bytes": 1454,
+      "sha256": "44f893f91f947e8d988fb09303c571bf9cc90eae1559bd64997f7658b973a1ae",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/ROADMAP.md",
-      "size_bytes": 8187,
-      "sha256": "bbd2dd0bda8af80a8bd406a1f3359e4aa786c40657292e49a2cc6fd4f0ec7ca7",
+      "size_bytes": 8245,
+      "sha256": "e3aa1c159ca1d6d40ad47bc7a9ccb9d1c576b135e2e4bac22818fd27faf90ca3",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/01-doc-contract.md",
-      "size_bytes": 2694,
-      "sha256": "aded70e29eba1cc682c9e3fe29209a1d42ce64cef5f9edc92ffe786ea56a7c24",
+      "size_bytes": 2759,
+      "sha256": "2d2764f36ede42dd3a4eacdb2e172075f69234650410abbcf6d7813a4ec8e67e",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/02-health-check.md",
-      "size_bytes": 2628,
-      "sha256": "04dd94cec6b37fef49f73dbf99f22058b2dfefdacc78189ba443db5391a6a1bc",
+      "size_bytes": 2693,
+      "sha256": "3e54984eeaacfd83755d946ae10fbd073b032258d4dd4790f2aae428980bc86a",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/03-code-map.md",
-      "size_bytes": 2942,
-      "sha256": "60b343375580645f6b54a4f1eb064bb42679deabed93e2f20eae1d2535d2acc7",
+      "size_bytes": 3007,
+      "sha256": "f53a7c2e4a163c253a70bdad172f62c75f55bba84e9b24650d6aeb789132cf12",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/04-semantic-review.md",
-      "size_bytes": 3659,
-      "sha256": "43cfad0002c300f7690b662b1d45554beff8e229d3d885896e3bf507704abf94",
+      "size_bytes": 3717,
+      "sha256": "dc374f518e42f1537bb6011894bc004b8e03ba067f9fc1bdb6f48d1262276687",
       "role": "generated",
       "format": "markdown"
     },

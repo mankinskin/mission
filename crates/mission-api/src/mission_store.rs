@@ -7,6 +7,16 @@ impl MissionStore {
         mission_id: Uuid,
         snapshot_id: Option<&str>,
     ) -> Result<RenderedRoadmap, MissionError> {
+        if snapshot_id.is_none() {
+            let workspace = self.root.ancestors().nth(3).unwrap_or(&self.root);
+            let snapshot = ticket_snapshot(workspace, self, mission_id, bundle)?;
+            return self.render_bundle_with_status_snapshot(
+                mission_id,
+                bundle,
+                &snapshot_states(&snapshot)?,
+                &crate::snapshot_id(&snapshot)?,
+            );
+        }
         let generated_directory = Path::new(".workflow-tools")
             .join("mission")
             .join("missions")

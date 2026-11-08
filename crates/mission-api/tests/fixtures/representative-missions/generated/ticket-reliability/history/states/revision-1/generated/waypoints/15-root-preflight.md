@@ -1,6 +1,6 @@
 # W15. Run root-store preflight (`root-preflight`)
 
-<!-- mission: 00000000-0000-4000-8000-000000003001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{} -->
+<!-- mission: 00000000-0000-4000-8000-000000003001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{"ce://default/ticket/00000000-0000-4000-8000-000000003002":"done"} -->
 
 Previous: [14-migration-scope.md](14-migration-scope.md) | Next: [16-approved-apply.md](16-approved-apply.md)
 
@@ -11,7 +11,7 @@ Previous: [14-migration-scope.md](14-migration-scope.md) | Next: [16-approved-ap
 | **Mode** | "execution-side-effect" |
 | **Scope** | Ticket-backed: \`ce://default/ticket/00000000-0000-4000-8000-000000003002\` |
 | **Child mission** | None |
-| **State** | Owned externally |
+| **State** | completed |
 | **Prerequisites** | migration-scope |
 | **Session package** | w8-root-preflight |
 | **Prompt** | Fixture-only adaptation: Check freshness, candidate identity, and preservation for the selected root and nested Ticket stores. Preserve the boundary: The root board ownership query fails with OS error 3; retain that uncertainty and do not apply. |

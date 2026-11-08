@@ -37,134 +37,134 @@
     },
     {
       "path": "generated/README.md",
-      "size_bytes": 1837,
-      "sha256": "28e6b55469e76a3a7b6f900be125c7c6b773c2e979a51550e606f8325a4cd5b1",
+      "size_bytes": 1919,
+      "sha256": "26a665811e1f1615e6b408996290439b636fdedf8c34ce3698a500a0f5942094",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/ROADMAP.md",
-      "size_bytes": 26490,
-      "sha256": "a15c15d1426a9e20313ffb8b147837f17022c75d873f5e6c70adfe67eb05f569",
+      "size_bytes": 26548,
+      "sha256": "b5e5b3a351496b94151831e12299ad5c4df6e35719510c1e9c2f8f81036047d1",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/01-part-write.md",
-      "size_bytes": 2401,
-      "sha256": "0fe8020d219f285ed41d1c746e0052e27d33ec9088a54b03f3137620f75ccd64",
+      "size_bytes": 2466,
+      "sha256": "1b84248145dd99a81e7afce0f72988d2db6b522a6827ba5cbf1f1ff2780538fd",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/02-recoverable-publication.md",
-      "size_bytes": 2551,
-      "sha256": "d945ad0245d623c73f84171b7672f974c494368714bb78794502856b0f590a6a",
+      "size_bytes": 2616,
+      "sha256": "1c7ce9ee7e3462f36063cfd2a0f188a6b1d4effb72bc66ef24223f0af19470cd",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/03-residual-test-scope.md",
-      "size_bytes": 2573,
-      "sha256": "3e5ae17c18beea33a4d104a9ae49013c3e3d684dfc1bf8502bf7d17928ff1464",
+      "size_bytes": 2638,
+      "sha256": "f83bb0e7528555f1f0d7ac067819994bc36cd67b41d2e07b23a705858610a7a4",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/04-missing-prefix.md",
-      "size_bytes": 2428,
-      "sha256": "688c8356095b650d3830743cd7b9983b75a827d31727b643da1b6f7b3202d98c",
+      "size_bytes": 2493,
+      "sha256": "930fd361688ff3a6491183f31bc73d8425969ef7cc144ef6cbf89967a39be7fc",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/05-descendant-refs.md",
-      "size_bytes": 2346,
-      "sha256": "dfe7b8d4c4f4d45c87228226946566bf0b9fbd3c8f6bf459a4f18ae1b85c3f6d",
+      "size_bytes": 2411,
+      "sha256": "f22d76812970e7df1213ca4b43c14e770615330924901b5654e0da50ac1ac0c1",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/06-default-workspace.md",
-      "size_bytes": 2464,
-      "sha256": "5628a5138d003804eeee8c1e61ceef1a33cd83714f3d96b039aacb71f9d7d72a",
+      "size_bytes": 2529,
+      "sha256": "45a2a4371eb8c14dc37122079a7f7de5e4f4fea2a714f924c74386c335da4ad1",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/07-board-fixtures.md",
-      "size_bytes": 2363,
-      "sha256": "4f0a3bcf13e25508373874b84c07f1931653667fbe12bf2a8bddd61eba0caa62",
+      "size_bytes": 2428,
+      "sha256": "6235792979cbf9516f49eb7feecd51e98a8ccd3b985e4382c4e54ad305ec7e7b",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/08-move-fixtures.md",
-      "size_bytes": 2342,
-      "sha256": "d5221abdc3dd8604f5fbca962332f3d5dbdbab73f4aa6e0a40f9426eb3103576",
+      "size_bytes": 2407,
+      "sha256": "8ca66e7f1bc6bfef1283caf43b5de01e817332a06ae520c2705fbb216f6730eb",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/09-index-output.md",
-      "size_bytes": 2411,
-      "sha256": "9a0cd1bc017ff748779b7248e0885d442328f5bf466ca15a13e6964a163dfd08",
+      "size_bytes": 2476,
+      "sha256": "002ffdb7b2832c2a541ae91910ae189a5dc354ca08513751b87d0638a5672e38",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/10-update-fixture.md",
-      "size_bytes": 2319,
-      "sha256": "156d4e44184bd7f8f72aa4186ccc91625e30584c6e8f434f15c5202cdfee65f2",
+      "size_bytes": 2384,
+      "sha256": "ab85a5e84425fa0f9685590b7fc46fd385c6a0a0c6e3356345c0e6ca52b8f5c5",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/11-test-gate.md",
-      "size_bytes": 2611,
-      "sha256": "fb591c9a96a15a0b48343a67550254725e8a84fa6f352fb51f32c6d1f17ae5fa",
+      "size_bytes": 2676,
+      "sha256": "636188b9c538c22189cf0d3ac977bf4d8e0f0480b3e26f492d096356f679f6ba",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/12-part-layout.md",
-      "size_bytes": 2473,
-      "sha256": "160a6e3c6ada4bcf5f2008d25fb6fe8b08c693969106a11a569607d4719f9e21",
+      "size_bytes": 2538,
+      "sha256": "4144b400a19c8c150cb3d6ac8b17bd856c98243f82998aedaf1633b7770cca27",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/13-cli-dispatch.md",
-      "size_bytes": 2335,
-      "sha256": "c3f1a19884200e426401bb935c7185701c6ee7ed7293e88a24aba9b546379ece",
+      "size_bytes": 2400,
+      "sha256": "f83526c3e0c83704b2dad8acd8fe86041d389a3507bddf88f409f732d58c7216",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/14-migration-scope.md",
-      "size_bytes": 2461,
-      "sha256": "a3526eef96b065e270d610711d469bd07deded0621ffb4c6c131f6228de4976a",
+      "size_bytes": 2526,
+      "sha256": "5327bc639cd4d43464224fafe7cf19d723c91edf6ee29ae221cf5623afed7891",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/15-root-preflight.md",
-      "size_bytes": 3522,
-      "sha256": "38d9709d1a9309f17b50a44be4118b9c8776527edd73dea5be9e47e8a4ef1462",
+      "size_bytes": 3580,
+      "sha256": "69a2f3050219a2e796f8c2ad921c3da8c75c7be81947d91e9ac28983763e999c",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/16-approved-apply.md",
-      "size_bytes": 2543,
-      "sha256": "b247cd64551c1b57b829c39829ba1a26a62b1c3fa4af083152b3910a6d5d941d",
+      "size_bytes": 2608,
+      "sha256": "9fd2769db81ed5b814870f71e074ce73df233dce8e613e5ac57e6cf99af7c936",
       "role": "generated",
       "format": "markdown"
     },
     {
       "path": "generated/waypoints/17-transport-docs.md",
-      "size_bytes": 2395,
-      "sha256": "61202035e3da42539fdbac734fc47649bc4597e849029fadd01ecd6c87ea2850",
+      "size_bytes": 2460,
+      "sha256": "d0f676fc006666ae710866a35eca3092d0a36240f83f7fc27c617efc75c497f1",
       "role": "generated",
       "format": "markdown"
     },

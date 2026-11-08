@@ -1,6 +1,6 @@
 # W5. Resolve descendant Ticket references (`descendant-refs`)
 
-<!-- mission: 00000000-0000-4000-8000-000000003001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{} -->
+<!-- mission: 00000000-0000-4000-8000-000000003001; revision: 1; renderer: mission-api/7; external-status-snapshot: ticket-status-v1:{"ce://default/ticket/00000000-0000-4000-8000-000000003002":"done"} -->
 
 Previous: [04-missing-prefix.md](04-missing-prefix.md) | Next: [06-default-workspace.md](06-default-workspace.md)
 

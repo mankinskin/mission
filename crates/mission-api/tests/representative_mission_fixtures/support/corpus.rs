@@ -156,6 +156,9 @@ fn references_for_draft(draft: &TypedDraft) -> ReferenceInventory {
 }
 
 fn seed_reference_stores(root: &Path, references: &ReferenceInventory) {
+    if !references.ticket_ids.is_empty() {
+        ticket_api::storage::TicketStore::init(root).unwrap();
+    }
     let mut spec_store = SpecStore::init(&root.join(".workflow-tools/spec")).unwrap();
     for id in &references.specification_ids {
         let criteria = references
