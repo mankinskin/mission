@@ -46,7 +46,7 @@ Initialized `tools/list` exposes capability `mission.native-planning`, version
 | Planning | `mission_plan_update`, `mission_waypoint_create`, `mission_waypoint_update`, `mission_waypoint_remove`, `mission_waypoint_reorder` |
 | Review evidence | `mission_plan_record_review` |
 | Requester decisions | `mission_plan_prepare_review`, `mission_plan_approve`, `mission_plan_replan` |
-| Lifecycle | `mission_waypoint_complete`, `mission_pause`, `mission_resume`, `mission_handoff`, `mission_cancel`, `mission_complete` |
+| Lifecycle | `mission_waypoint_activate`, `mission_waypoint_complete`, `mission_pause`, `mission_resume`, `mission_handoff`, `mission_cancel`, `mission_complete` |
 | Results and correction | `mission_review_results_add_waypoints`, `mission_reopen_most_recent_completed` |
 
 Every named call requires an existing absolute `workspace_root`; the launch
@@ -58,8 +58,31 @@ optional explicit `session_root`; otherwise they use the owning workspace's
 canonical `.workflow-tools/session` store. W5 lifecycle controls continue to
 use that canonical Session store.
 
+`mission_waypoint_activate` activates a **Ticket-backed** waypoint by calling
+the guarded `WorkspaceLifecycle::transition` to `in-implementation`. It checks
+current requester approval for every Mission linking the Ticket, waypoint
+prerequisites, and the Ticket's legal transition rules before writing Ticket
+history. Its selected Mission `expected_revision` is checked while holding
+the approval lock. Single-session and child-Mission waypoints return an
+unsupported-capability error; `mission_resume` only resumes Mission eligibility
+and does not activate a linked Ticket.
+
+The equivalent CLI uses the same named envelope and exits nonzero on rejection:
+
+```text
+mission --workspace <absolute-root> activate-waypoint <mission-uuid> <waypoint-id> \
+  --request-id <non-nil-uuid> --expected-revision <current-revision> \
+  [--author <ticket-history-author>]
+```
+
+Activation takes no control sequence or evidence field: it is an ordinary
+guarded Ticket transition, not a journaled Mission control. `request_id` maps
+to `TransitionRequest.op_id` but does not provide idempotent replay. Read back
+Ticket state before retrying; optional `author` is history metadata, never
+approval authority. Omit/null selects the Ticket default.
+
 Mutations require `request_id` and `expected_revision`. Lifecycle request IDs
-are non-nil UUIDs, mapped unchanged to `ControlRequest.op_id`; controls also
+are non-nil UUIDs; journaled controls map them to `ControlRequest.op_id` and also
 require `expected_control_sequence` and nonblank `evidence`. Completion adds
 the stable `waypoint_id` and delegates approval, current evidence, prerequisite
 and linked-Ticket completion checks to W5. A repeated completed control call

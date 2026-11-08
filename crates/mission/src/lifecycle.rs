@@ -466,6 +466,15 @@ impl LifecycleTransition for WorkspaceLifecycle {
                     let guard = approval
                         .guard_entry(*mission_id, crate::approval::EntryPath::Activation)
                         .map_err(Self::gate_error)?;
+                    if let WaypointIdentity::Waypoint {
+                        mission_id: selected,
+                        ..
+                    } = identity
+                        && selected == mission_id
+                        && let Some(expected) = self.expected_revision
+                    {
+                        guard.check_revision(expected).map_err(Self::gate_error)?;
+                    }
                     self.guard_ticket_prerequisites(&guard, *mission_id, ticket_id)?;
                     _entry_guards.push(guard);
                 }

@@ -209,6 +209,16 @@ pub struct EntryGuard<'a> {
     pub grant: ApprovalGrant,
 }
 impl EntryGuard<'_> {
+    pub(crate) fn check_revision(&self, expected: u64) -> Result<(), ApprovalError> {
+        if self._tx.review_plan()?.revision != expected {
+            return Err(ApprovalError::new(
+                "stale_plan_revision",
+                "plan revision changed",
+            ));
+        }
+        Ok(())
+    }
+
     pub(crate) fn check_waypoint_entry(&self, waypoint_id: &str) -> Result<(), ApprovalError> {
         let runtime = self
             ._tx

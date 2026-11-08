@@ -136,6 +136,12 @@ mutation!(CompleteInput [schemars(schema_with = "uuid_schema")] {
     /// Existing stable local waypoint ID being completed, not its route position.
     waypoint_id: String
 });
+mutation!(ActivateInput [schemars(schema_with = "uuid_schema")] {
+    /// Existing stable local waypoint ID whose linked Ticket is activated. Single-session and child-Mission waypoints are unsupported.
+    waypoint_id: String,
+    /// Optional Ticket history author, not approval authority. Omit/null to use the Ticket provider default.
+    author: Option<String>
+});
 mutation!(HandoffInput [schemars(schema_with = "uuid_schema")] {
     /// Exact current lifecycle control_sequence from mission_plan_get.
     expected_control_sequence: u64,

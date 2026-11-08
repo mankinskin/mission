@@ -20,6 +20,18 @@ struct Command {
 
 #[derive(Subcommand)]
 enum CommandOperation {
+    /// Activate a Ticket-backed waypoint through Mission approval and prerequisite guards.
+    ActivateWaypoint {
+        mission_id: Uuid,
+        waypoint_id: String,
+        #[arg(long)]
+        request_id: Uuid,
+        #[arg(long)]
+        expected_revision: u64,
+        /// Ticket history metadata, not approval authority.
+        #[arg(long)]
+        author: Option<String>,
+    },
     CreateMission {
         title: String,
         objective: String,
@@ -119,10 +131,18 @@ enum CommandOperation {
         mission_id: Uuid,
     },
     /// Validate and read the complete pre-reaction output inventory.
-    GetOutputContract { mission_id: Uuid },
-    GetApprovalEvent { mission_id: Uuid, revision: u64 },
+    GetOutputContract {
+        mission_id: Uuid,
+    },
+    GetApprovalEvent {
+        mission_id: Uuid,
+        revision: u64,
+    },
     /// Record one reaction JSON object; signature is a digest link, not authentication.
-    RecordApprovalEvent { mission_id: Uuid, json: String },
+    RecordApprovalEvent {
+        mission_id: Uuid,
+        json: String,
+    },
     /// Publish with a JSON object containing merged_request and independent continuations.
     PublishWithInputs {
         mission_id: Uuid,
@@ -228,6 +248,27 @@ fn main() -> Result<ExitCode, HarnessError> {
     let mut succeeded = false;
     transport_harness::cli::run(|command: Command| {
         let operation = match command.operation {
+            CommandOperation::ActivateWaypoint {
+                mission_id,
+                waypoint_id,
+                request_id,
+                expected_revision,
+                author,
+            } => {
+                let envelope = mission::named::call(
+                    "mission_waypoint_activate",
+                    serde_json::json!({
+                        "workspace_root": workspace,
+                        "mission_id": mission_id,
+                        "waypoint_id": waypoint_id,
+                        "request_id": request_id,
+                        "expected_revision": expected_revision,
+                        "author": author,
+                    }),
+                );
+                succeeded = envelope.code == "ok";
+                return Output::json(envelope);
+            }
             CommandOperation::CreateMission {
                 title,
                 objective,
@@ -389,10 +430,25 @@ fn main() -> Result<ExitCode, HarnessError> {
             CommandOperation::CheckGenerated { mission_id } => {
                 Operation::CheckGenerated { mission_id }
             }
-            CommandOperation::GetOutputContract { mission_id } => Operation::GetOutputContract { mission_id },
-            CommandOperation::GetApprovalEvent { mission_id, revision } => Operation::GetApprovalEvent { mission_id, revision },
-            CommandOperation::RecordApprovalEvent { mission_id, json } => Operation::RecordApprovalEvent { mission_id, json },
-            CommandOperation::PublishWithInputs { mission_id, manifest, expected_current_revision, inputs } => Operation::PublishWithInputs {
+            CommandOperation::GetOutputContract { mission_id } => {
+                Operation::GetOutputContract { mission_id }
+            }
+            CommandOperation::GetApprovalEvent {
+                mission_id,
+                revision,
+            } => Operation::GetApprovalEvent {
+                mission_id,
+                revision,
+            },
+            CommandOperation::RecordApprovalEvent { mission_id, json } => {
+                Operation::RecordApprovalEvent { mission_id, json }
+            }
+            CommandOperation::PublishWithInputs {
+                mission_id,
+                manifest,
+                expected_current_revision,
+                inputs,
+            } => Operation::PublishWithInputs {
                 mission_id,
                 manifest_path: manifest,
                 expected_current_revision,

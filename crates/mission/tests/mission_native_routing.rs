@@ -14,7 +14,7 @@ use std::{
 };
 
 const SESSION: &str = "11111111-1111-4111-8111-111111111111";
-const NATIVE_TOOLS: [&str; 20] = [
+const NATIVE_TOOLS: [&str; 21] = [
     "mission_intake_create",
     "mission_workspace_get",
     "mission_plan_get",
@@ -24,6 +24,7 @@ const NATIVE_TOOLS: [&str; 20] = [
     "mission_waypoint_remove",
     "mission_waypoint_reorder",
     "mission_waypoint_complete",
+    "mission_waypoint_activate",
     "mission_plan_prepare_review",
     "mission_plan_approve",
     "mission_plan_replan",

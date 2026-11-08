@@ -355,6 +355,16 @@ impl MissionServer {
         self.named("mission_resume", i)
     }
     #[tool(
+        name = "mission_waypoint_activate",
+        description = "capability=mission.native-planning version=1. Activate a Ticket-backed waypoint by transitioning its linked Ticket to in-implementation through WorkspaceLifecycle approval, prerequisite and Ticket legal-state checks. Requires non-nil UUID request_id and current expected_revision checked under the approval lock. Optional author is Ticket history metadata, never approval authority. Uses canonical workspace_root/.workflow-tools/session. Single-session/child-Mission waypoints are unsupported. This is a Ticket transition, not a Mission resume or journaled control: no control_sequence/evidence field and no idempotent replay guarantee. Read the returned lifecycle snapshot before retrying. Returns JSON snapshot or code!=ok tool error."
+    )]
+    async fn waypoint_activate(
+        &self,
+        Parameters(i): Parameters<Input<named::ActivateInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_waypoint_activate", i)
+    }
+    #[tool(
         name = "mission_handoff",
         description = "capability=mission.native-planning version=1. Transfer active binding from verified source_session to existing destination_session through journaled handoff and managed pin recovery. Requires non-nil UUID request_id/current plan and control sequence/nonempty evidence. Uses canonical workspace_root/.workflow-tools/session. Returns JSON lifecycle snapshot or code!=ok tool error."
     )]

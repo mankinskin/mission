@@ -8,6 +8,8 @@ mod direct_transports;
 mod host_hook;
 #[path = "named_mcp/lifecycle.rs"]
 mod lifecycle;
+#[path = "named_mcp/activation.rs"]
+mod activation;
 #[path = "named_mcp/planning_and_errors.rs"]
 mod planning_and_errors;
 #[path = "named_mcp/review_recording.rs"]
@@ -16,7 +18,7 @@ mod review_recording;
 use direct_transports::{Mcp, TempDir, json};
 use session_api::{SessionRuntimeInitRequest, SessionStoreConfig};
 
-const NAMED_TOOLS: [&str; 20] = [
+const NAMED_TOOLS: [&str; 21] = [
     "mission_intake_create",
     "mission_workspace_get",
     "mission_plan_get",
@@ -37,6 +39,7 @@ const NAMED_TOOLS: [&str; 20] = [
     "mission_review_results_add_waypoints",
     "mission_reopen_most_recent_completed",
     "mission_waypoint_complete",
+    "mission_waypoint_activate",
 ];
 
 fn fixture() -> (TempDir, std::path::PathBuf, String) {

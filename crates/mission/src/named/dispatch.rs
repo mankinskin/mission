@@ -2,8 +2,8 @@ use super::*;
 use crate::approval::MissionApproval;
 use crate::{
     CancellationCapability, CompletionCapability, ControlRequest, LifecycleRead,
-    PauseResumeCapability, PlanOperation, PlanOperationRequest, WaypointIdentity,
-    WorkspaceLifecycle,
+    LifecycleTransition, PauseResumeCapability, PlanOperation, PlanOperationRequest,
+    TransitionRequest, WaypointIdentity, WorkspaceLifecycle,
 };
 
 type Outcome = (Uuid, u64, Value, Value);
@@ -244,6 +244,30 @@ pub(super) fn run(tool: &str, arguments: Value) -> Result<Outcome, Error> {
                 json!({"kind":accepted.kind, "grant":accepted.grant,
                 "replayed":accepted.replayed}),
             )
+        }
+        "mission_waypoint_activate" => {
+            let i: ActivateInput = parse(arguments)?;
+            let root = root(&i.workspace_root)?;
+            let id = id(&i.mission_id)?;
+            nonempty(&i.waypoint_id, "waypoint_id")?;
+            if let Some(author) = &i.author {
+                nonempty(author, "author")?;
+            }
+            let request = TransitionRequest {
+                op_id: self::id(&i.request_id)?,
+                to_native_state: "in-implementation".into(),
+                author: i.author,
+            };
+            let snapshot = WorkspaceLifecycle::open(&root)
+                .with_expected_revision(i.expected_revision)
+                .transition(
+                    &WaypointIdentity::Waypoint {
+                        mission_id: id,
+                        waypoint_id: i.waypoint_id,
+                    },
+                    &request,
+                )?;
+            result(&root, id, value(snapshot)?)
         }
         "mission_waypoint_complete" => {
             let i: CompleteInput = parse(arguments)?;
