@@ -10,6 +10,12 @@ paths = [
   "workflow-tools/.agents/instructions/workflow/prompt-ingestion.instructions.md",
   "workflow-tools/.agents/instructions/workflow/roadmap-authoring.instructions.md",
   "workflow-tools/.agents/instructions/workflow/roadmap-execution.instructions.md",
+  ".agents/instructions/workflow/mission-tooling.instructions.md",
+  "workflow-tools/ticket/.agents/instructions/ticket/workflow.instructions.md",
+  "workflow-tools/spec/.agents/instructions/spec/spec-system.instructions.md",
+  "workflow-tools/mission/docs/provider-evidence.md",
+  "workflow-tools/mission/docs/intent-authority.md",
+  "workflow-tools/mission/docs/README.md",
 ]
 
 [destination]
