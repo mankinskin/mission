@@ -105,12 +105,15 @@ pub(super) fn run(tool: &str, arguments: Value) -> Result<Outcome, Error> {
                 .into_iter()
                 .filter(|r| i.session_id.as_ref().is_none_or(|sid| &r.session_id == sid))
                 .collect::<Vec<_>>();
+            let effective_intent = crate::MissionStore::open(&root)
+                .effective_intent(id, &crate::intent::SessionIntentProvider::new(&root)?)?;
             result(
                 &root,
                 id,
                 json!({"plan":MissionLifecycle::open(&root).review_plan(id)?,
                 "lifecycle":WorkspaceLifecycle::open(&root).read_lifecycle(
                     &WaypointIdentity::Mission { mission_id:id })?,
+                "effective_intent":effective_intent,
                 "reviews":approval.reviews(id)?, "grants":approval.grants(id)?,
                 "pending":approval.pending(id)?.iter().map(|p| json!({
                     "challenge_id":p.challenge_id,"stage":p.stage})).collect::<Vec<_>>(),
@@ -193,6 +196,8 @@ pub(super) fn run(tool: &str, arguments: Value) -> Result<Outcome, Error> {
                         plan_digest: i.plan_digest,
                         evidence_identity: i.evidence_identity,
                         cold_review_id: i.cold_review_id,
+                        goal_coverage_findings: i.goal_coverage_findings,
+                        terminal_outcome_finding: i.terminal_outcome_finding,
                     },
                     &i.request_id,
                 )?;

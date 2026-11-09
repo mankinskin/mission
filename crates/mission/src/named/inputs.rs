@@ -110,7 +110,13 @@ mutation!(RecordReviewInput {
     /// Nonempty identity/location of review evidence retained by the reviewer.
     evidence_identity: String,
     /// Required for formal review: ID of its passing current cold_walkthrough; omit/null for a cold review.
-    cold_review_id: Option<String>
+    cold_review_id: Option<String>,
+    /// One source-to-outcome disposition per confirmed baseline/amendment requirement.
+    #[serde(default)]
+    goal_coverage_findings: Vec<crate::approval::GoalCoverageFindingV4>,
+    /// Source, intent-chain and plan-bound conclusion for this independent review.
+    #[serde(default)]
+    terminal_outcome_finding: Option<crate::approval::TerminalOutcomeFindingV4>
 });
 mutation!(DecisionInput {
     /// Optional exact Session store directory, not a repository root. Normally omit (or null) to use workspace_root/.workflow-tools/session; set only to select an explicitly separate store directory. No suffix is appended.

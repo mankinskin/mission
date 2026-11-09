@@ -8,6 +8,7 @@ pub(crate) fn output_result(
         Ok(record) => {
             let revision = match &record {
                 OutputRecord::Intent { revision, .. } => *revision,
+                OutputRecord::Review { revision, .. } => *revision,
                 OutputRecord::Contract { contract, .. } => contract.revision,
                 OutputRecord::ApprovalEvent(event) => event.reaction.revision,
             };

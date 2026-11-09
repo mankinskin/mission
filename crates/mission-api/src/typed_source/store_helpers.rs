@@ -57,6 +57,7 @@ pub(crate) fn stored_source(draft: &TypedDraft) -> StoredSource {
             .iter()
             .map(|waypoint| StoredWaypoint {
                 outcome_plan: waypoint.outcome_plan.clone(),
+                work_kind: waypoint.work_kind,
                 waypoint_id: waypoint.waypoint_id.clone(),
                 title: waypoint.title.clone(),
                 prompt: waypoint.prompt.clone(),

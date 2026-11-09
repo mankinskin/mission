@@ -63,6 +63,15 @@ impl ApprovalTransaction<'_> {
         self.lifecycle.review_plan_unlocked(self.mission_id)
     }
 
+    pub fn effective_intent(
+        &self,
+        provider: &impl IntentReceiptProvider,
+    ) -> Result<Option<EffectiveIntentV4>, MissionError> {
+        self.lifecycle
+            .store
+            .effective_intent_under_approval_lock(self.mission_id, provider)
+    }
+
     /// Check the complete published state while retaining the publication lock.
     pub fn verify_integrity(&self) -> Result<String, MissionError> {
         self.verify_integrity_inner(true)

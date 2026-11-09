@@ -145,6 +145,33 @@ on replay. Recording does not change the plan revision or mint a grant.
 Legacy Rust `record_review` callers keep append-only behavior, and records
 without a request identity remain readable.
 
+When schema-v4 requester intent is confirmed, both review kinds also require a
+`terminal_outcome_finding` and exactly one `goal_coverage_findings` disposition
+for every baseline/amendment requirement. Fulfilled findings cite the immutable
+source span, observable target outcome, existing owner waypoint IDs, and
+planned acceptance commands/evidence classes. Exclusions must name the
+receipt-verified amendment and prior requirement ID; non-goals do not authorize
+an exclusion. The provider recomputes source, baseline, amendment-chain, plan,
+and record identities. Passing findings require reviewers to conclude that all
+successful waypoints reach the requester target; this structural check does
+not replace their semantic comparison.
+
+Typed waypoints may declare `work_kind` as `implementation`, `documentation`,
+or `research`. A `working_behavior` finding must cite an implementation
+waypoint and a declared executable behavior check; mocked checks are compatible
+only when the confirmed evidence policy allows them. A deliberate
+documentation-only `artifact` goal remains valid with deterministic artifact
+checks. Decision and research outcomes use their matching captured evidence
+classes. Legacy sources without `work_kind` remain readable and unchanged.
+`mission_plan_get` exposes provider-verified `effective_intent` alongside review
+records, whose source-goal findings are retained in the JSON projection.
+
+The CLI can record the same typed review through
+`mission record-review <mission-uuid> <request-id> '<ReviewInput JSON>'`.
+The generic MCP `mission_operation` accepts `operation: "record_review"` with
+`request_id`, `expected_current_revision`, and `review_input`; both use the same
+provider validation as the named `mission_plan_record_review` tool.
+
 Review preparation requires the recorded passing cold and distinct formal
 reviews. Its `request_id` becomes the persisted challenge identity; the result
 includes `host_prompt` and exact approve/reject/replan lines. The requester

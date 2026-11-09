@@ -85,6 +85,8 @@ pub struct ReviewEvidence {
 pub struct ReviewWaypoint {
     pub position: usize,
     pub waypoint_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_kind: Option<WaypointWorkKind>,
     pub title: String,
     pub prompt: String,
     pub part: Document,
@@ -167,6 +169,8 @@ struct DigestInput<'a> {
 #[derive(Serialize)]
 struct DigestWaypoint<'a> {
     waypoint_id: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    work_kind: Option<WaypointWorkKind>,
     title: &'a str,
     prompt: &'a str,
     part: &'a Document,

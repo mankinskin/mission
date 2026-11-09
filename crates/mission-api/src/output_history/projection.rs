@@ -8,11 +8,12 @@ pub(super) fn invalid(message: &str) -> MissionError {
 }
 
 /// Enumerate actual bytes, rejecting links and unsupported filesystem entries.
-fn inventory(root: &Path) -> Result<BTreeMap<String, Vec<u8>>, MissionError> {
+fn inventory(root: &Path, include_intent: bool) -> Result<BTreeMap<String, Vec<u8>>, MissionError> {
     typed_source::ensure_safe_path(root, root)?;
     fn visit(
         root: &Path,
         directory: &Path,
+        include_intent: bool,
         files: &mut BTreeMap<String, Vec<u8>>,
     ) -> Result<(), MissionError> {
         for entry in fs::read_dir(directory)? {
@@ -28,8 +29,11 @@ fn inventory(root: &Path) -> Result<BTreeMap<String, Vec<u8>>, MissionError> {
             if metadata.file_type().is_symlink() {
                 return Err(invalid("Output states must not contain symbolic links."));
             }
+            if !include_intent && relative == Path::new("intent") && metadata.is_dir() {
+                continue;
+            }
             if metadata.is_dir() {
-                visit(root, &path, files)?;
+                visit(root, &path, include_intent, files)?;
             } else if metadata.is_file() {
                 let name = relative
                     .to_str()
@@ -43,7 +47,7 @@ fn inventory(root: &Path) -> Result<BTreeMap<String, Vec<u8>>, MissionError> {
         Ok(())
     }
     let mut files = BTreeMap::new();
-    visit(root, root, &mut files)?;
+    visit(root, root, include_intent, &mut files)?;
     Ok(files)
 }
 
@@ -109,7 +113,7 @@ pub(crate) fn capture(stage: &Path, accepted: &AcceptedMission) -> Result<(), Mi
     fs::create_dir_all(stage.join("history/states"))?;
     // create_dir, not create_dir_all: even an empty occupied label is a collision.
     fs::create_dir(&archive)?;
-    let files = inventory(stage)?;
+    let files = inventory(stage, false)?;
     let bytes = contract_bytes(accepted, &files)?;
     for (name, contents) in files {
         let target = archive.join(name);
@@ -153,7 +157,7 @@ pub(crate) fn projected_state(
     rendered: &RenderedRoadmap,
     mission_markdown: Option<String>,
 ) -> Result<BTreeMap<String, Vec<u8>>, MissionError> {
-    let mut files = inventory(directory)?;
+    let mut files = inventory(directory, false)?;
     files.retain(|name, _| {
         !name.starts_with("generated/")
             && !name.starts_with("parts/")
@@ -241,7 +245,11 @@ fn validate_contract_inner(
             "Contract metadata does not match the requested state.",
         ));
     }
-    let mut files = inventory(directory)?;
+    let includes_intent = contract
+        .files
+        .iter()
+        .any(|file| file.path == "intent" || file.path.starts_with("intent/"));
+    let mut files = inventory(directory, includes_intent)?;
     if allow_journal_appends {
         validate_native_journal(&files, mission_id)?;
         validate_control_appends(directory, &contract, &mut files)?;

@@ -197,6 +197,7 @@ pub(crate) fn typed_draft(identity: FixtureIdentity) -> TypedDraft {
             .iter()
             .map(|seed| TypedWaypoint {
                 outcome_plan: Some(outcome(seed)),
+                work_kind: None,
                 waypoint_id: seed.id.into(),
                 title: seed.title.into(),
                 prompt: format!(

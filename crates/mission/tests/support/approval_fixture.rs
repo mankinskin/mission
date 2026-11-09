@@ -87,6 +87,9 @@ pub fn ready_ticket(ws: &std::path::Path) -> Uuid {
     id
 }
 pub fn linked() -> Fx {
+    linked_with_input(b"plan me")
+}
+pub fn linked_with_input(input: &[u8]) -> Fx {
     let (dir, ws) = git_workspace();
     let ticket = ready_ticket(&ws);
     let session = SessionStoreConfig::new(ws.join(".workflow-tools/session"));
@@ -102,7 +105,7 @@ pub fn linked() -> Fx {
         workspace_root: &ws,
         session_id: SESSION,
         request_id: "w4gate",
-        input: b"plan me",
+        input,
     })
     .unwrap();
     let lifecycle = MissionLifecycle::open(&ws);
@@ -161,6 +164,8 @@ impl Fx {
                 plan_digest: plan.plan_digest,
                 evidence_identity: plan.evidence_identity,
                 cold_review_id,
+                goal_coverage_findings: Vec::new(),
+                terminal_outcome_finding: None,
             },
         )
     }

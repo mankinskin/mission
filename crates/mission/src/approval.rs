@@ -1,7 +1,8 @@
 //! Revision-bound requester approval at the trusted facade boundary.
 //! Session owns host ingress; Mission owns the append-only review/grant journal.
 use mission_api::{
-    AcceptedMission, ApprovalTransaction, MissionError, MissionLifecycle, ReviewPlan, WaypointState,
+    AcceptedMission, ApprovalTransaction, EffectiveIntentV4, MissionError, MissionLifecycle,
+    ReviewPlan, WaypointState,
 };
 use serde::{Deserialize, Serialize};
 use session_api::{
@@ -126,7 +127,9 @@ pub enum ApprovalStep {
     BeforeGrant,
     AfterGrant,
 }
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "mcp", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
 pub struct ReviewInput {
     pub kind: ReviewKind,
     pub verdict: ReviewVerdict,
@@ -135,6 +138,10 @@ pub struct ReviewInput {
     pub plan_digest: String,
     pub evidence_identity: String,
     pub cold_review_id: Option<String>,
+    #[serde(default)]
+    pub goal_coverage_findings: Vec<GoalCoverageFindingV4>,
+    #[serde(default)]
+    pub terminal_outcome_finding: Option<TerminalOutcomeFindingV4>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -151,6 +158,12 @@ pub struct ReviewRecord {
     pub cold_review_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_contract_binding: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub goal_coverage_findings: Vec<GoalCoverageFindingV4>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_outcome_finding: Option<TerminalOutcomeFindingV4>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_goal_binding_sha256: Option<String>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -287,6 +300,13 @@ fn read_journal(tx: &ApprovalTransaction<'_>) -> Result<Vec<Record>, ApprovalErr
         {
             return Err(corrupt(format!(
                 "journal entry {name} does not match its identity"
+            )));
+        }
+        if let Entry::Review(review) = &record.entry
+            && coverage::review_binding_sha256(review)? != review.source_goal_binding_sha256
+        {
+            return Err(corrupt(format!(
+                "journal entry {name} has a corrupt source-goal review binding"
             )));
         }
         out.push(record);
@@ -436,6 +456,12 @@ impl<'a> MissionApproval<'a> {
 }
 
 mod challenge;
+mod coverage;
 mod decision;
 mod grants;
 mod review;
+
+pub use coverage::{
+    GoalCoverageDispositionV4, GoalCoverageFindingV4, PlannedAcceptanceCheckV4,
+    PlannedEvidenceClassV4, TerminalOutcomeConclusionV4, TerminalOutcomeFindingV4,
+};

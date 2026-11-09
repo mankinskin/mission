@@ -1,4 +1,5 @@
 use super::*;
+use session_api::SessionStoreConfig;
 
 pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
     match operation {
@@ -14,6 +15,34 @@ pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
                 },
             ),
         ),
+        Operation::RecordReview {
+            mission_id,
+            request_id,
+            input,
+        } => {
+            let session =
+                SessionStoreConfig::new(workspace_root.join(".workflow-tools").join("session"));
+            let result = crate::approval::MissionApproval::open(workspace_root, &session)
+                .with_expected_revision(input.revision)
+                .record_review_with_request_id(mission_id, input, &request_id)
+                .map(|review| OutputRecord::Review {
+                    revision: review.revision,
+                    review: Box::new(review),
+                })
+                .map_err(|error| {
+                    MissionError::Validation(
+                        1,
+                        vec![Diagnostic {
+                            code: error.code(),
+                            source: "approval".into(),
+                            pointer: String::new(),
+                            waypoint_id: None,
+                            message: error.to_string(),
+                        }],
+                    )
+                });
+            output_result(mission_id, result)
+        }
         Operation::CreateMission {
             title,
             objective,

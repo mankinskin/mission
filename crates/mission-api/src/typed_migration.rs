@@ -302,6 +302,7 @@ pub(super) fn convert(
                     .transpose()?;
                 Ok(TypedWaypoint {
                     outcome_plan: w.outcome_plan.clone(),
+                    work_kind: None,
                     waypoint_id: w.waypoint_id.clone(),
                     title: w.title.clone(),
                     prompt: w.prompt.clone(),

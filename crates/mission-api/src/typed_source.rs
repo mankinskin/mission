@@ -23,6 +23,8 @@ pub struct TypedDraft {
 pub struct TypedWaypoint {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outcome_plan: Option<WaypointOutcomePlan>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_kind: Option<WaypointWorkKind>,
     pub waypoint_id: String,
     pub title: String,
     pub prompt: String,
@@ -39,6 +41,14 @@ pub struct TypedWaypoint {
     pub ownership_refs: OwnershipRefs,
     #[serde(default, skip_serializing_if = "WaypointRelationships::is_empty")]
     pub relationships: WaypointRelationships,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum WaypointWorkKind {
+    Implementation,
+    Documentation,
+    Research,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -79,6 +89,8 @@ pub(super) struct StoredSource {
 pub(super) struct StoredWaypoint {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) outcome_plan: Option<WaypointOutcomePlan>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) work_kind: Option<WaypointWorkKind>,
     pub(super) waypoint_id: String,
     pub(super) title: String,
     pub(super) prompt: String,

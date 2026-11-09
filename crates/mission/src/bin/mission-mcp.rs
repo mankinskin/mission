@@ -46,6 +46,12 @@ struct MissionOperationInput {
     /// Exact current stored revision for revision-checked mutations; 0 only for a verified absent Mission in bundle import/publish. Omission does not disable a required CAS check.
     #[serde(default)]
     expected_current_revision: Option<u64>,
+    /// Stable review replay identity required for operation=record_review.
+    #[serde(default)]
+    request_id: Option<String>,
+    /// Full reviewer finding submitted by operation=record_review.
+    #[serde(default)]
+    review_input: Option<mission::approval::ReviewInput>,
     /// Optional selected classic dossier for migrate-dossiers; omission scans the configured workspace's transcript dossiers. Migration is a write unless dry_run=true.
     #[serde(default)]
     dossier_path: Option<PathBuf>,
@@ -209,7 +215,7 @@ impl MissionServer {
 impl MissionServer {
     #[tool(
         name = "mission_plan_record_review",
-        description = "capability=mission.native-planning version=1. Record a revision/digest-bound cold_walkthrough or distinct formal review; formal references a passing current cold review. Replay identical request/evidence only. Reviewer evidence never grants requester approval. Normally omit session_root; an explicit value is the exact separate Session store directory, not a repo root. Returns JSON code/revision/result/details; code!=ok is an MCP tool error."
+        description = "capability=mission.native-planning version=1. Record a revision/digest-bound cold_walkthrough or distinct formal review; when confirmed intent exists, include complete goal_coverage_findings and a terminal_outcome_finding bound to its source, amendment chain and plan. Formal references a passing current cold review of that same snapshot. Replay identical request/evidence only. Reviewer evidence never grants requester approval. Normally omit session_root; an explicit value is the exact separate Session store directory, not a repo root. Returns JSON code/revision/result/details; code!=ok is an MCP tool error."
     )]
     async fn plan_record_review(
         &self,
@@ -239,7 +245,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_plan_get",
-        description = "capability=mission.native-planning version=1. Read plan, lifecycle, reviews, grants, pending challenges and captured decision_refs by Mission UUID and explicit workspace_root. Normally omit session_root; explicit values are exact separate Session store directories, not repo roots. Optional session_id filters only decision_refs, not the plan. Returns JSON code/revision/result/details; code!=ok is a tool error. Use returned revisions/sequences for subsequent checked mutations."
+        description = "capability=mission.native-planning version=1. Read plan, provider-verified effective_intent, lifecycle, source-goal review findings, grants, pending challenges and captured decision_refs by Mission UUID and explicit workspace_root. Normally omit session_root; explicit values are exact separate Session store directories, not repo roots. Optional session_id filters only decision_refs, not the plan. Returns JSON code/revision/result/details; code!=ok is a tool error. Use returned revisions/sequences for subsequent checked mutations."
     )]
     async fn plan_get(
         &self,
@@ -429,7 +435,7 @@ impl MissionServer {
     }
     #[tool(
         name = "mission_operation",
-        description = "Compatibility multiplexer using the server launch workspace (--workspace, then MISSION_WORKSPACE, then cwd), unlike named tools' explicit workspace_root. Run typed create_draft, save_draft, publish_draft, get_mission_source, render_mission; legacy create_mission, edit_mission_objective, add_waypoint, edit_waypoint, order_waypoints, record_progress, record_validation_result, validate_mission, publish_mission; get/get_mission, validate-preview, import, render-preview, publish, check-generated, migrate-dossiers; repair_preview/repair_apply/repair_journal/repair_resume/repair_rollback; publish-with-inputs, get-output-contract, record-approval-event, get-approval-event. See field descriptions for operation-specific required inputs and effects. Typed drafts are inline source, not paths. import accepts without projections; publish generates them. dry_run applies only to migration and defaults false. Reactions/progress are not native requester approval or execution authority. Returns JSON StatusSnapshot: inspect status and diagnostics even when MCP isError is absent; invalid operation/missing fields return invalid_params. Prefer named tools for native planning/lifecycle."
+        description = "Compatibility multiplexer using the server launch workspace (--workspace, then MISSION_WORKSPACE, then cwd), unlike named tools' explicit workspace_root. Run typed create_draft, save_draft, publish_draft, get_mission_source, render_mission; record_review with request_id, expected_current_revision and review_input; legacy create_mission, edit_mission_objective, add_waypoint, edit_waypoint, order_waypoints, record_progress, record_validation_result, validate_mission, publish_mission; get/get_mission, validate-preview, import, render-preview, publish, check-generated, migrate-dossiers; repair_preview/repair_apply/repair_journal/repair_resume/repair_rollback; publish-with-inputs, get-output-contract, record-approval-event, get-approval-event. See field descriptions for operation-specific required inputs and effects. Typed drafts are inline source, not paths. import accepts without projections; publish generates them. dry_run applies only to migration and defaults false. Reactions/progress are not native requester approval or execution authority. Returns JSON StatusSnapshot: inspect status and diagnostics even when MCP isError is absent; invalid operation/missing fields return invalid_params. Prefer named tools for native planning/lifecycle."
     )]
     async fn operation(
         &self,
@@ -514,6 +520,25 @@ impl MissionServer {
                         McpError::invalid_params("intent_action is required", None)
                     })?,
                 },
+                "record_review" => {
+                    let expected_revision = input.expected_current_revision.ok_or_else(|| {
+                        McpError::invalid_params("expected_current_revision is required", None)
+                    })?;
+                    let review_input = input.review_input.clone().ok_or_else(|| {
+                        McpError::invalid_params("review_input is required", None)
+                    })?;
+                    if review_input.revision != expected_revision {
+                        return Err(McpError::invalid_params(
+                            "review_input.revision must match expected_current_revision",
+                            None,
+                        ));
+                    }
+                    Operation::RecordReview {
+                        mission_id: required_id()?,
+                        request_id: required(&input.request_id, "request_id")?,
+                        input: review_input,
+                    }
+                }
                 "get_mission_source" => Operation::GetMissionSource {
                     mission_id: required_id()?,
                 },

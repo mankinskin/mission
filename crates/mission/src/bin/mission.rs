@@ -106,6 +106,16 @@ fn main() -> Result<ExitCode, HarnessError> {
                 operation: serde_json::from_str(&action)
                     .map_err(|error| HarnessError::Arguments(error.to_string()))?,
             },
+            CommandOperation::RecordReview {
+                mission_id,
+                request_id,
+                input,
+            } => Operation::RecordReview {
+                mission_id,
+                request_id,
+                input: serde_json::from_str(&input)
+                    .map_err(|error| HarnessError::Arguments(error.to_string()))?,
+            },
             CommandOperation::GetMissionSource { mission_id } => {
                 Operation::GetMissionSource { mission_id }
             }

@@ -375,6 +375,8 @@ fn symlinked_store_ancestor_fails_closed_for_consumers() {
                     plan_digest: "0".repeat(64),
                     evidence_identity: "0".repeat(64),
                     cold_review_id: None,
+                    goal_coverage_findings: Vec::new(),
+                    terminal_outcome_finding: None,
                 }
             )
             .is_err()

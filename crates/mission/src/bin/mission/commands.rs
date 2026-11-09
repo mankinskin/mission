@@ -7,6 +7,12 @@ pub(super) enum CommandOperation {
         mission_id: Uuid,
         action: String,
     },
+    /// Record one cold or formal review from strict JSON ReviewInput.
+    RecordReview {
+        mission_id: Uuid,
+        request_id: String,
+        input: String,
+    },
     /// Activate a Ticket-backed waypoint through Mission approval and prerequisite guards.
     ActivateWaypoint {
         mission_id: Uuid,

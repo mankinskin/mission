@@ -140,6 +140,7 @@ impl MissionLifecycle {
             })?;
             waypoints.push(TypedWaypoint {
                 outcome_plan: waypoint.outcome_plan,
+                work_kind: waypoint.work_kind,
                 waypoint_id: waypoint.waypoint_id,
                 title: waypoint.title,
                 prompt: waypoint.prompt,

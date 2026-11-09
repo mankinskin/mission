@@ -143,6 +143,8 @@ impl Fx {
                     plan_digest: plan.plan_digest.clone(),
                     evidence_identity: plan.evidence_identity.clone(),
                     cold_review_id,
+                    goal_coverage_findings: Vec::new(),
+                    terminal_outcome_finding: None,
                 },
             )
             .map(|_| ())
@@ -259,6 +261,8 @@ fn review_requires_cold_then_distinct_formal_on_current_digest() {
                 plan_digest: stale.plan_digest,
                 evidence_identity: stale.evidence_identity,
                 cold_review_id: None,
+                goal_coverage_findings: Vec::new(),
+                terminal_outcome_finding: None,
             },
         )
         .unwrap_err();

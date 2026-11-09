@@ -106,6 +106,80 @@ fn contract_bom_matches_all_canonical_bytes_and_archived_state() {
 }
 
 #[test]
+fn w2_intent_contract_remains_readable_without_rewriting_current_or_archive() {
+    let (_workspace, store, id, directory) = fixture();
+    store.publish(id, bundle(1), 0).unwrap();
+    let archive = directory.join("history/states/revision-1");
+    let intent = br#"{"schema_version":4,"fixture":"W2"}"#.to_vec();
+    let current_intent = directory.join("intent/baseline.json");
+    let archived_intent = archive.join("intent/baseline.json");
+    fs::create_dir_all(current_intent.parent().unwrap()).unwrap();
+    fs::create_dir_all(archived_intent.parent().unwrap()).unwrap();
+    fs::write(&current_intent, &intent).unwrap();
+    fs::write(&archived_intent, &intent).unwrap();
+
+    let mut contract = store.output_contract(id).unwrap();
+    contract.files.push(OutputFile {
+        path: "intent/baseline.json".into(),
+        size_bytes: intent.len() as u64,
+        sha256: format!("{:x}", Sha256::digest(&intent)),
+        role: "generated".into(),
+        format: "json".into(),
+    });
+    contract
+        .files
+        .sort_by(|left, right| left.path.cmp(&right.path));
+    let contract_bytes = serde_json::to_vec_pretty(&contract).unwrap();
+    fs::write(directory.join("output-contract.json"), &contract_bytes).unwrap();
+    fs::write(archive.join("output-contract.json"), &contract_bytes).unwrap();
+
+    let current_before = tree(&directory)
+        .into_iter()
+        .filter(|(path, _)| !path.starts_with("history/"))
+        .collect::<BTreeMap<_, _>>();
+    let archive_before = tree(&archive);
+    store.verify_output_history(id).unwrap();
+    assert_eq!(
+        tree(&directory)
+            .into_iter()
+            .filter(|(path, _)| !path.starts_with("history/"))
+            .collect::<BTreeMap<_, _>>(),
+        current_before
+    );
+    assert_eq!(tree(&archive), archive_before);
+    assert_eq!(fs::read(&current_intent).unwrap(), intent);
+    assert_eq!(fs::read(&archived_intent).unwrap(), intent);
+
+    fs::write(&archived_intent, b"{corrupt}").unwrap();
+    assert!(store.verify_output_history(id).is_err());
+    fs::write(&archived_intent, &intent).unwrap();
+    store.verify_output_history(id).unwrap();
+}
+
+#[test]
+fn new_capture_excludes_intent_sidecars_but_keeps_them_in_the_live_state() {
+    let (_workspace, store, id, directory) = fixture();
+    let intent = br#"{"schema_version":4,"fixture":"W3"}"#;
+    let current_intent = directory.join("intent/baseline.json");
+    fs::create_dir_all(current_intent.parent().unwrap()).unwrap();
+    fs::write(&current_intent, intent).unwrap();
+
+    store.publish(id, bundle(1), 0).unwrap();
+
+    let contract = store.output_contract(id).unwrap();
+    assert!(
+        contract
+            .files
+            .iter()
+            .all(|file| !file.path.starts_with("intent/"))
+    );
+    let archive = directory.join("history/states/revision-1");
+    assert!(!archive.join("intent/baseline.json").exists());
+    assert_eq!(fs::read(&current_intent).unwrap(), intent);
+    store.verify_output_history(id).unwrap();
+}
+
+#[test]
 fn occupied_revision_and_input_collisions_preserve_complete_previous_state() {
     for collision in ["state", "accepted-history", "input", "unsafe-input"] {
         let (_workspace, store, id, directory) = fixture();

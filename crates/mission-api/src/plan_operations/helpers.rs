@@ -234,6 +234,7 @@ pub(crate) fn build_review_plan(
             .iter()
             .map(|(waypoint, fragment, refs)| DigestWaypoint {
                 waypoint_id: &waypoint.waypoint_id,
+                work_kind: waypoint.work_kind,
                 title: &waypoint.title,
                 prompt: &waypoint.prompt,
                 part: &waypoint.part.document,
@@ -287,6 +288,7 @@ pub(crate) fn build_review_plan(
             ReviewWaypoint {
                 position: index + 1,
                 waypoint_id: waypoint.waypoint_id.clone(),
+                work_kind: waypoint.work_kind,
                 title: waypoint.title.clone(),
                 prompt: waypoint.prompt.clone(),
                 part: waypoint.part.document.clone(),

@@ -125,6 +125,11 @@ pub enum Operation {
         mission_id: Uuid,
         operation: intent::IntentOperation,
     },
+    RecordReview {
+        mission_id: Uuid,
+        request_id: String,
+        input: approval::ReviewInput,
+    },
     CreateMission {
         title: String,
         objective: String,
@@ -289,6 +294,10 @@ pub enum OutputRecord {
     Intent {
         revision: u64,
         result: Box<intent::IntentOutput>,
+    },
+    Review {
+        revision: u64,
+        review: Box<approval::ReviewRecord>,
     },
     Contract {
         contract: MissionOutputContract,

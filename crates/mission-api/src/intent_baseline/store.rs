@@ -220,6 +220,15 @@ impl MissionStore {
         self.read_intent(id, provider)
     }
 
+    pub(crate) fn effective_intent_under_approval_lock(
+        &self,
+        id: Uuid,
+        provider: &impl IntentReceiptProvider,
+    ) -> Result<Option<EffectiveIntentV4>, MissionError> {
+        self.intent_revision(id)?;
+        self.read_intent(id, provider)
+    }
+
     fn read_intent(
         &self,
         id: Uuid,
