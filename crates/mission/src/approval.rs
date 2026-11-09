@@ -249,47 +249,6 @@ pub struct PendingApproval {
     pub challenge_id: String,
     pub stage: String,
 }
-pub struct EntryGuard<'a> {
-    _tx: ApprovalTransaction<'a>,
-    pub grant: ApprovalGrant,
-}
-impl EntryGuard<'_> {
-    pub(crate) fn check_revision(&self, expected: u64) -> Result<(), ApprovalError> {
-        if self._tx.review_plan()?.revision != expected {
-            return Err(ApprovalError::new(
-                "stale_plan_revision",
-                "plan revision changed",
-            ));
-        }
-        Ok(())
-    }
-
-    pub(crate) fn check_waypoint_entry(&self, waypoint_id: &str) -> Result<(), ApprovalError> {
-        let runtime = self
-            ._tx
-            .control_state()
-            .map_err(|e| ApprovalError::new(e.code(), e.to_string()))?;
-        crate::WorkspaceLifecycle::check_prerequisites(
-            &runtime,
-            &self._tx.review_plan()?,
-            waypoint_id,
-        )
-        .map_err(|e| ApprovalError::new(e.code(), e.to_string()))
-    }
-
-    pub fn record_progress(
-        &self,
-        waypoint_id: &str,
-        state: WaypointState,
-        expected: u64,
-    ) -> Result<AcceptedMission, ApprovalError> {
-        if state == WaypointState::InProgress {
-            self.check_waypoint_entry(waypoint_id)?;
-        }
-        Ok(self._tx.record_progress(waypoint_id, state, expected)?)
-    }
-}
-
 fn read_journal(tx: &ApprovalTransaction<'_>) -> Result<Vec<Record>, ApprovalError> {
     let mut out = Vec::new();
     for (index, name) in tx.list_records("journal")?.iter().enumerate() {
@@ -434,11 +393,22 @@ fn disposition_id(prefix: &str, id: Uuid, r: &RequesterDecisionRef) -> String {
     format!("{prefix}-{}", &digest[..32])
 }
 
+/// Requester authority and execution-entry checks.
+#[cfg_attr(
+    not(feature = "test-evidence-provider"),
+    doc = "
+Default production builds cannot inject fixture providers:
+```compile_fail,E0599
+let _ = mission::approval::MissionApproval::with_test_evidence_provider;
+```
+"
+)]
 pub struct MissionApproval<'a> {
     workspace_root: PathBuf,
     lifecycle: MissionLifecycle,
     session: &'a SessionStoreConfig,
     expected_revision: Option<u64>,
+    evidence_admission: mission_api::EvidenceAdmissionV4,
 }
 impl<'a> MissionApproval<'a> {
     fn verify_integrity(&self, tx: &ApprovalTransaction<'_>) -> Result<String, ApprovalError> {
@@ -451,11 +421,28 @@ impl<'a> MissionApproval<'a> {
             lifecycle: MissionLifecycle::open(workspace_root),
             session,
             expected_revision: None,
+            evidence_admission: Default::default(),
         }
     }
     /// Check transport revision preconditions under the approval transaction lock.
     pub fn with_expected_revision(mut self, revision: u64) -> Self {
         self.expected_revision = Some(revision);
+        self
+    }
+    /// Typed disposable-test injection; production transports never call this.
+    #[cfg(feature = "test-evidence-provider")]
+    pub fn with_test_evidence_provider(
+        mut self,
+        provider: std::sync::Arc<dyn mission_api::ReadOnlyEvidenceProviderV4>,
+    ) -> Self {
+        self.evidence_admission = mission_api::EvidenceAdmissionV4::test_only(provider);
+        self
+    }
+    pub(crate) fn with_evidence_admission(
+        mut self,
+        admission: mission_api::EvidenceAdmissionV4,
+    ) -> Self {
+        self.evidence_admission = admission;
         self
     }
     fn begin(&self, id: Uuid) -> Result<ApprovalTransaction<'_>, ApprovalError> {
@@ -475,6 +462,7 @@ impl<'a> MissionApproval<'a> {
 mod challenge;
 mod coverage;
 mod decision;
+mod entry;
 mod fidelity;
 mod grants;
 mod review;
@@ -484,4 +472,5 @@ pub use coverage::{
     GoalCoverageDispositionV4, GoalCoverageFindingV4, PlannedAcceptanceCheckV4,
     PlannedEvidenceClassV4, TerminalOutcomeConclusionV4, TerminalOutcomeFindingV4,
 };
+pub use entry::EntryGuard;
 pub use fidelity::FidelityBindingV4;

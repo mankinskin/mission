@@ -411,25 +411,19 @@ dependency edges, scheduling, dispatch, or automatic recovery. Actual
 ### Bounded waypoint execution contracts
 
 Native bundle **v3** and typed source **v4** require one complete
-`execution_contract` per waypoint. It declares an outcome category separately
-from work kind; expected outcome and rationale; authoritative context;
-task/path boundary and dependencies; independently checkable preconditions and
-postconditions; acceptance, preflight and regression checks; evidence
-requirements; tool actions, permissions and read/write roots; environment and
-preflight; finite failure attempts and block/escalation handling; and either a
-producer/consumer handover or an explicit no-handover reason. Optional
-dependency, regression-check and provider routes likewise require an explicit
-reason when omitted. Unknown fields, missing contract content, invalid or
-duplicate IDs, unsafe roots and dangling references fail validation.
-
-Write roots must be equal to or nested within a declared boundary path
-(component-aware); read roots need not be so constrained. Handover producer
-checks must support a producer postcondition, consumer checks must support a
-consumer precondition, and the consumer must depend on the producer. Checks
-are descriptive command declarations with evidence classifications only. Mission
-does not run those commands, provide runtime isolation, or enforce tool permissions.
-W6 authority binding and W7 provider admission/completion enforcement are not
-implemented by this contract change.
+`execution_contract` per waypoint. Both reviews and every entry bind the complete
+contract to confirmed intent. See [contracts and provider evidence](docs/provider-evidence.md)
+for fields, digest rules, read-only adapter API, diagnostics and disposable examples.
+Runtime-dependent entries require current provider preflight; completion requires
+provider-resolved postconditions, all applicable checks and declared handovers.
+No production evidence adapter is delivered: affected routes fail with
+`capability_unavailable`, never execute locally or promote fixtures.
+Fixture injection APIs require the opt-in `test-evidence-provider` Cargo feature;
+default/ordinary `cli,mcp` builds omit them. Transports never select fixtures,
+even when that feature is compiled; it is an API test aid, not isolation.
+Explicit no-runtime/no-handover routes can enter without a runtime adapter;
+they still require trusted completion evidence. Mission is not a sandbox,
+command runner or tool-permission interceptor.
 
 `waypoint_execution_contract_digest` computes lowercase SHA-256 over compact
 JSON serialization of the complete typed contract. The review plan exposes
@@ -1055,11 +1049,17 @@ filesystem replacement.
 From the workflow-tools workspace:
 
 ```sh
-cargo test -p mission --features cli,mcp
-cargo test -p mission-api
+cargo test -p mission --features cli,mcp,test-evidence-provider
+cargo test -p mission-api --features test-evidence-provider
+cargo test -p mission-api -p mission --doc
+cargo test -p mission-api -p mission --features mission/cli,mission/mcp --doc
 cargo check -p mission --features cli,mcp
 cargo fmt --check -p mission -p mission-api
 ```
+
+The test feature is required for the provider, native lifecycle/MCP and reopen
+fixture targets; without it those targets are omitted, not validated. See the
+[feature-specific commands](docs/provider-evidence.md#validation-features).
 
 [Direct transport regressions](crates/mission/tests/direct_transports.rs)
 launch both real executables against isolated temporary workspaces and clean

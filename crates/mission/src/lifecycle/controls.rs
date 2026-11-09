@@ -65,6 +65,7 @@ impl WorkspaceLifecycle {
     ) -> Result<(), LifecycleError> {
         let session = self.session_store();
         crate::approval::MissionApproval::open(&self.workspace_root, &session)
+            .with_evidence_admission(self.evidence_admission.clone())
             .check_locked(tx)
             .map_err(Self::gate_error)?;
         Ok(())
@@ -93,6 +94,11 @@ impl WorkspaceLifecycle {
             ));
         }
         self.approve_locked(&tx)?;
+        crate::provider_evidence::EvidenceGate {
+            workspace: &self.workspace_root,
+            admission: &self.evidence_admission,
+        }
+        .entry(&tx)?;
         let expected = state.sequence;
         state.phase = LifecycleState::Active;
         state.phase_reason = request.evidence.clone();
@@ -216,6 +222,13 @@ impl WorkspaceLifecycle {
                 ));
             }
         }
+        let gate = crate::provider_evidence::EvidenceGate {
+            workspace: &self.workspace_root,
+            admission: &self.evidence_admission,
+        };
+        gate.preflight(&tx, waypoint_id)?;
+        let verified = gate.completion(&tx, waypoint_id, result_ref)?;
+        gate.pin(&tx, &verified)?;
         let expected = state.sequence;
         let sequence = state.completions.last().map_or(1, |c| c.sequence + 1);
         state.completions.push(CompletionRecord {
@@ -298,6 +311,11 @@ impl WorkspaceLifecycle {
         let mut state = self.check_cas(&tx, request)?;
         if kind == ControlKind::Resume {
             self.approve_locked(&tx)?;
+            crate::provider_evidence::EvidenceGate {
+                workspace: &self.workspace_root,
+                admission: &self.evidence_admission,
+            }
+            .entry(&tx)?;
             let control = LifecycleJournal::read(&self.workspace_root, id)?
                 .projection()?
                 .target(&ControlTarget::Mission);
@@ -337,6 +355,11 @@ impl WorkspaceLifecycle {
                     "all current outcomes and result review required",
                 ));
             }
+            crate::provider_evidence::EvidenceGate {
+                workspace: &self.workspace_root,
+                admission: &self.evidence_admission,
+            }
+            .completed(&tx)?;
             let expected = state.sequence;
             state.phase = LifecycleState::Completed;
             state.phase_reason = request.evidence.clone();

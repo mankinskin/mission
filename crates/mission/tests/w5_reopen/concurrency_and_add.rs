@@ -45,8 +45,9 @@ fn concurrent_completion_competitors_cannot_append_two_events() {
     let f = completed();
     let pointer = evidence(&f, "b");
     let request = request(&f, &pointer);
+    let adapter = provider_fixture::adapter(&f);
     let results = std::thread::scope(|scope| {
-        let run = || WorkspaceLifecycle::open(&f.ws).complete_waypoint(f.id, "b", &request);
+        let run = || adapter.complete_waypoint(f.id, "b", &request);
         let a = scope.spawn(run);
         let b = scope.spawn(run);
         vec![a.join().unwrap(), b.join().unwrap()]
@@ -96,8 +97,8 @@ fn concurrent_reopen_selects_one_current_completion_and_stale_competitor_fails()
 #[test]
 fn result_review_adds_work_only_through_w3_semantic_change_and_w4_reapproval() {
     let f = completed();
-    let adapter = WorkspaceLifecycle::open(&f.ws);
     let pointer = evidence(&f, "b");
+    let adapter = provider_fixture::adapter(&f);
     adapter
         .complete_waypoint(f.id, "b", &request(&f, &pointer))
         .unwrap();

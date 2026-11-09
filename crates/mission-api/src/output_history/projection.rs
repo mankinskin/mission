@@ -252,6 +252,7 @@ fn validate_contract_inner(
     let mut files = inventory(directory, includes_intent)?;
     if allow_journal_appends {
         validate_native_journal(&files, mission_id)?;
+        super::super::provider_evidence::validate_provider_receipt_pins(&files)?;
         validate_control_appends(directory, &contract, &mut files)?;
     }
     let actual: Vec<_> = files
@@ -259,7 +260,8 @@ fn validate_contract_inner(
         .filter(|(name, _)| {
             !allow_journal_appends
                 || !(name.starts_with("approvals/journal/")
-                    || name.starts_with("approvals/controls/"))
+                    || name.starts_with("approvals/controls/")
+                    || name.starts_with("approvals/runtime-evidence/"))
                 || contract.files.iter().any(|file| file.path == **name)
         })
         .map(|(name, bytes)| file_record(name, bytes))

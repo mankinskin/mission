@@ -21,6 +21,10 @@ mod operator_results;
 pub use intent_baseline::*;
 mod execution_contract;
 pub use execution_contract::*;
+// Representative fixtures include this library as a private module.
+#[cfg_attr(test, allow(dead_code))]
+mod provider_evidence;
+pub use provider_evidence::*;
 mod outcome_plan;
 pub use outcome_plan::*;
 mod output_history;

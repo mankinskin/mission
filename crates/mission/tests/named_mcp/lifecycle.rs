@@ -1,5 +1,5 @@
 use super::*;
-use approval_and_completion::{approve, control, evidence};
+use approval_and_completion::{approve, complete_trusted, control, evidence};
 use approval_fixture::{SESSION, linked};
 use ticket_api::storage::store::TicketStore;
 
@@ -15,7 +15,8 @@ fn completed(f: &approval_fixture::Fx, mcp: &mut Mcp) {
         let mut args = control(f, &pointer);
         args["waypoint_id"] = json!(id);
         let out = call(mcp, rpc, "mission_waypoint_complete", args);
-        assert_eq!(out["code"], "ok", "{out}");
+        assert_eq!(out["code"], "capability_unavailable", "{out}");
+        complete_trusted(f, id, &pointer);
     }
 }
 
@@ -53,8 +54,20 @@ fn stdio_result_review_mission_completion_and_latest_reopen_preserve_guards() {
         "mission_complete",
         control(&f, "accepted all outcomes"),
     );
-    assert_eq!(done["code"], "ok", "{done}");
-    assert_eq!(done["result"]["state"], "completed");
+    assert_eq!(done["code"], "capability_unavailable", "{done}");
+    use mission::CompletionCapability;
+    provider_fixture::adapter(&f)
+        .complete(
+            &mission::WaypointIdentity::Mission { mission_id: f.id },
+            &mission::ControlRequest {
+                op_id: uuid::Uuid::new_v4(),
+                expected_control_sequence: control(&f, "complete")["expected_control_sequence"]
+                    .as_u64()
+                    .unwrap(),
+                evidence: Some("accepted all outcomes".into()),
+            },
+        )
+        .unwrap();
     let mut reopen = control(&f, "review most recent completion");
     reopen["expected_completion_sequence"] = json!(2);
     let reopened = call(&mut mcp, 12, "mission_reopen_most_recent_completed", reopen);

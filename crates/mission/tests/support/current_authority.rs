@@ -105,7 +105,20 @@ fn apply(workspace: &Path, id: Uuid, intent: &EffectiveIntentV4, input: &mut Rev
                         waypoint_id: owner.waypoint_id.clone(),
                         command: gate.command.clone(),
                         cwd: gate.cwd.clone(),
-                        evidence_class: PlannedEvidenceClassV4::DeterministicArtifact,
+                        evidence_class: match requirement.evidence_policy {
+                            IntentEvidencePolicy::ExecutableBehavior { .. } => {
+                                PlannedEvidenceClassV4::ExecutableBehavior
+                            }
+                            IntentEvidencePolicy::DeterministicArtifact => {
+                                PlannedEvidenceClassV4::DeterministicArtifact
+                            }
+                            IntentEvidencePolicy::CapturedDecision => {
+                                PlannedEvidenceClassV4::CapturedDecision
+                            }
+                            IntentEvidencePolicy::ResearchRecord => {
+                                PlannedEvidenceClassV4::ResearchRecord
+                            }
+                        },
                     })
                     .collect(),
             },

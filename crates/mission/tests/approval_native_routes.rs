@@ -3,6 +3,8 @@
 mod approval_fixture;
 #[path = "support/host_hook.rs"]
 mod host_hook;
+#[path = "support/provider_fixture.rs"]
+mod provider_fixture;
 use approval_fixture::{Fx, SESSION, linked};
 use mission::approval::{EntryPath, ReviewInput, ReviewKind, ReviewVerdict};
 use mission::{
@@ -36,7 +38,7 @@ fn complete_prerequisite(f: &Fx) {
             },
         )
         .unwrap();
-    WorkspaceLifecycle::open(&f.ws)
+    provider_fixture::adapter(f)
         .complete_waypoint(
             f.id,
             "a",

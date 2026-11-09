@@ -69,6 +69,21 @@ pub(super) fn control(f: &approval_fixture::Fx, evidence: &str) -> serde_json::V
     })
 }
 
+pub(super) fn complete_trusted(f: &approval_fixture::Fx, waypoint: &str, pointer: &str) {
+    let args = control(f, pointer);
+    provider_fixture::adapter(f)
+        .complete_waypoint(
+            f.id,
+            waypoint,
+            &mission::ControlRequest {
+                op_id: Uuid::parse_str(args["request_id"].as_str().unwrap()).unwrap(),
+                expected_control_sequence: args["expected_control_sequence"].as_u64().unwrap(),
+                evidence: Some(pointer.into()),
+            },
+        )
+        .unwrap();
+}
+
 pub(super) fn evidence(
     f: &approval_fixture::Fx,
     mcp: &mut Mcp,
@@ -265,8 +280,8 @@ fn stdio_completion_preserves_approval_evidence_ticket_cas_and_provider_replay()
     );
 
     let completed = call(&mut mcp, 14, "mission_waypoint_complete", args.clone());
-    assert_eq!(completed["code"], "ok", "{completed}");
-    assert_eq!(completed["result"]["state"], "completed");
+    assert_eq!(completed["code"], "capability_unavailable", "{completed}");
+    complete_trusted(&f, "a", &pointer);
     let replay = call(&mut mcp, 15, "mission_waypoint_complete", args);
     assert_eq!(replay["code"], "revision_conflict", "{replay}");
     assert_eq!(replay["details"]["provider_code"], "stale_control_sequence");

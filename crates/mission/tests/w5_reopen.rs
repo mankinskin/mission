@@ -2,6 +2,8 @@
 mod approval_fixture;
 #[path = "support/host_hook.rs"]
 mod host_hook;
+#[path = "support/provider_fixture.rs"]
+mod provider_fixture;
 
 use approval_fixture::{Fx, SESSION, linked};
 use mission::approval::EntryPath;
@@ -62,7 +64,7 @@ fn completed() -> Fx {
     store.close(&f.ticket, "done", Some("w5-test")).unwrap();
     drop(store);
     let pointer = evidence(&f, "a");
-    adapter
+    provider_fixture::adapter(&f)
         .complete_waypoint(f.id, "a", &request(&f, &pointer))
         .unwrap();
     f
@@ -211,7 +213,7 @@ fn completion_cas_is_serialized_and_reopen_uses_sequence_not_final_route_positio
     let f = completed();
     let pointer = evidence(&f, "b");
     let request_b = request(&f, &pointer);
-    let adapter = WorkspaceLifecycle::open(&f.ws);
+    let adapter = provider_fixture::adapter(&f);
     adapter.complete_waypoint(f.id, "b", &request_b).unwrap();
     assert_eq!(
         adapter
@@ -348,7 +350,7 @@ fn pause_cancel_do_not_cascade_ticket_and_resume_requires_current_approval() {
 #[test]
 fn explicit_result_review_and_completion_require_all_current_waypoint_evidence() {
     let f = completed();
-    let adapter = WorkspaceLifecycle::open(&f.ws);
+    let adapter = provider_fixture::adapter(&f);
     let identity = WaypointIdentity::Mission { mission_id: f.id };
     assert_eq!(
         adapter
@@ -358,6 +360,7 @@ fn explicit_result_review_and_completion_require_all_current_waypoint_evidence()
         "result_review_required"
     );
     let pointer = evidence(&f, "b");
+    let adapter = provider_fixture::adapter(&f);
     adapter
         .complete_waypoint(f.id, "b", &request(&f, &pointer))
         .unwrap();

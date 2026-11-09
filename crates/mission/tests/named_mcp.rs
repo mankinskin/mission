@@ -12,6 +12,8 @@ mod host_hook;
 mod lifecycle;
 #[path = "named_mcp/planning_and_errors.rs"]
 mod planning_and_errors;
+#[path = "support/provider_fixture.rs"]
+mod provider_fixture;
 #[path = "named_mcp/review_recording.rs"]
 mod review_recording;
 

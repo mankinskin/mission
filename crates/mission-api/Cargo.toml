@@ -8,6 +8,15 @@ description = "Internal durable mission roadmap model, validation, storage, and 
 name = "mission_api"
 path = "src/lib.rs"
 
+[features]
+default = []
+# Disposable evidence fixtures only; never enabled by production transports.
+test-evidence-provider = []
+
+[[test]]
+name = "provider_evidence"
+required-features = ["test-evidence-provider"]
+
 [dependencies]
 memory-kernel = { git = "https://github.com/mankinskin/memory-kernel", branch = "main" }
 pulldown-cmark = "0.12"

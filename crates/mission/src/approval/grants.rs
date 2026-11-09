@@ -208,7 +208,18 @@ impl<'a> MissionApproval<'a> {
                 "Mission lifecycle denies entry",
             ));
         }
-        Ok(EntryGuard { _tx: tx, grant })
+        crate::provider_evidence::EvidenceGate {
+            workspace: &self.workspace_root,
+            admission: &self.evidence_admission,
+        }
+        .entry(&tx)
+        .map_err(|e| ApprovalError::new(e.code(), e.to_string()))?;
+        Ok(EntryGuard {
+            _tx: tx,
+            grant,
+            workspace: self.workspace_root.clone(),
+            evidence_admission: self.evidence_admission.clone(),
+        })
     }
 
     pub(crate) fn check_locked(

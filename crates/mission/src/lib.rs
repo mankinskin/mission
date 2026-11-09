@@ -20,6 +20,7 @@ pub mod lifecycle;
 mod migration;
 #[cfg(feature = "mcp")]
 pub mod named;
+mod provider_evidence;
 
 pub use direct::DirectWaypoint;
 pub use lifecycle::WorkspaceLifecycle;

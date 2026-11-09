@@ -21,9 +21,19 @@ pub use mission_api::lifecycle::*;
 const PROVIDER: &str = "workspace lifecycle adapter";
 
 /// Lifecycle read/transition adapter over one explicit workspace root.
+#[cfg_attr(
+    not(feature = "test-evidence-provider"),
+    doc = "
+Default production builds cannot inject fixture providers:
+```compile_fail,E0599
+let _ = mission::WorkspaceLifecycle::with_test_evidence_provider;
+```
+"
+)]
 pub struct WorkspaceLifecycle {
     workspace_root: PathBuf,
     expected_revision: Option<u64>,
+    evidence_admission: mission_api::EvidenceAdmissionV4,
 }
 
 struct TicketRead {
@@ -44,12 +54,22 @@ impl WorkspaceLifecycle {
         Self {
             workspace_root: workspace_root.to_path_buf(),
             expected_revision: None,
+            evidence_admission: Default::default(),
         }
     }
 
     /// Add a plan-revision precondition checked under the provider's write lock.
     pub fn with_expected_revision(mut self, revision: u64) -> Self {
         self.expected_revision = Some(revision);
+        self
+    }
+    /// Disposable typed API fixture injection, not selectable by CLI or MCP.
+    #[cfg(feature = "test-evidence-provider")]
+    pub fn with_test_evidence_provider(
+        mut self,
+        provider: std::sync::Arc<dyn mission_api::ReadOnlyEvidenceProviderV4>,
+    ) -> Self {
+        self.evidence_admission = mission_api::EvidenceAdmissionV4::test_only(provider);
         self
     }
 
@@ -427,93 +447,6 @@ impl WorkspaceLifecycle {
     }
 }
 
-impl LifecycleTransition for WorkspaceLifecycle {
-    /// Transitions only Ticket-owned state, through the Ticket domain's own
-    /// legal-state and history handling (single hop, no Mission-side write).
-    fn transition(
-        &self,
-        identity: &WaypointIdentity,
-        request: &TransitionRequest,
-    ) -> Result<LifecycleSnapshot, LifecycleError> {
-        let Some(ticket_id) = self.resolve_ticket(identity)? else {
-            return Err(LifecycleError::unsupported(
-                Capability::Transition,
-                PROVIDER,
-            ));
-        };
-        let session = SessionStoreConfig::new(self.workspace_root.join(".workflow-tools/session"));
-        let approval = crate::approval::MissionApproval::open(&self.workspace_root, &session);
-        let mut _entry_guards = Vec::new();
-        let mut _link_lock = None;
-        if matches!(
-            LifecycleState::from_ticket_state(&request.to_native_state),
-            Ok(LifecycleState::Active)
-        ) {
-            let lifecycle = mission_api::MissionLifecycle::open(&self.workspace_root);
-            let discover = || -> Result<BTreeSet<Uuid>, LifecycleError> {
-                let mut missions = self.missions_linking(ticket_id)?;
-                if let WaypointIdentity::Waypoint { mission_id, .. } = identity {
-                    missions.insert(*mission_id);
-                }
-                Ok(missions)
-            };
-            let mut settled = false;
-            for _ in 0..3 {
-                _link_lock = None;
-                _entry_guards.clear();
-                let missions = discover()?;
-                for mission_id in &missions {
-                    let guard = approval
-                        .guard_entry(*mission_id, crate::approval::EntryPath::Activation)
-                        .map_err(Self::gate_error)?;
-                    if let WaypointIdentity::Waypoint {
-                        mission_id: selected,
-                        ..
-                    } = identity
-                        && selected == mission_id
-                        && let Some(expected) = self.expected_revision
-                    {
-                        guard.check_revision(expected).map_err(Self::gate_error)?;
-                    }
-                    self.guard_ticket_prerequisites(&guard, *mission_id, ticket_id)?;
-                    _entry_guards.push(guard);
-                }
-                _link_lock = Some(lifecycle.lock_ticket_links(ticket_id).map_err(|error| {
-                    LifecycleError::ApprovalGate {
-                        code: "approval_authority_unavailable",
-                        message: error.to_string(),
-                    }
-                })?);
-                if discover()? == missions {
-                    settled = true;
-                    break;
-                }
-            }
-            if !settled {
-                return Err(LifecycleError::ApprovalGate {
-                    code: "approval_authority_unavailable",
-                    message: "Mission links kept changing during entry".into(),
-                });
-            }
-        }
-        self.ticket_store()?
-            .update_with_options(
-                &ticket_id,
-                Default::default(),
-                None,
-                Some(&request.to_native_state),
-                None,
-                None,
-                request.author.as_deref(),
-                true,
-            )
-            .map_err(|error| LifecycleError::TransitionRejected(error.to_string()))?;
-        drop(_link_lock);
-        drop(_entry_guards);
-        self.read_lifecycle(identity)
-    }
-}
-
 macro_rules! unsupported_capabilities {
     ($($trait:ident),+) => {$(
         impl $trait for WorkspaceLifecycle {}
@@ -526,4 +459,5 @@ mod controls;
 mod handoff;
 mod reopen;
 mod runtime_projection;
+mod transition;
 pub use reopen::ReopenStep;
