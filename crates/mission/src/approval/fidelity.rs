@@ -8,6 +8,12 @@ pub struct FidelityBindingV4 {
     pub amendment_chain_sha256: String,
     pub cold_review_binding_sha256: String,
     pub formal_review_binding_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_contracts_sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cold_scope_findings_sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub formal_scope_findings_sha256: Option<String>,
 }
 
 fn upgrade() -> ApprovalError {
@@ -47,8 +53,10 @@ impl MissionApproval<'_> {
                 cold_review_id: review.cold_review_id.clone(),
                 goal_coverage_findings: review.goal_coverage_findings.clone(),
                 terminal_outcome_finding: review.terminal_outcome_finding.clone(),
+                scope_findings: review.scope_findings.clone(),
             };
             coverage::validate_source_goal(Some(&intent), plan, &input)?;
+            scope::validate_scope_review(plan, &input)?;
         }
         if cold.kind != ReviewKind::ColdWalkthrough
             || formal.kind != ReviewKind::Formal
@@ -61,6 +69,11 @@ impl MissionApproval<'_> {
                 "fidelity requires a distinct passing cold/formal pair",
             ));
         }
+        let execution_contracts_sha256 = scope::contract_set_binding_sha256(plan)?;
+        let cold_scope_findings_sha256 =
+            scope::review_scope_binding_sha256(cold)?.ok_or_else(upgrade)?;
+        let formal_scope_findings_sha256 =
+            scope::review_scope_binding_sha256(formal)?.ok_or_else(upgrade)?;
         Ok(FidelityBindingV4 {
             source_sha256: intent.baseline.source_sha256,
             baseline_sha256: intent.baseline.baseline_sha256,
@@ -69,6 +82,9 @@ impl MissionApproval<'_> {
                 .ok_or_else(upgrade)?,
             formal_review_binding_sha256: coverage::review_binding_sha256(formal)?
                 .ok_or_else(upgrade)?,
+            execution_contracts_sha256: Some(execution_contracts_sha256),
+            cold_scope_findings_sha256: Some(cold_scope_findings_sha256),
+            formal_scope_findings_sha256: Some(formal_scope_findings_sha256),
         })
     }
 
@@ -79,6 +95,12 @@ impl MissionApproval<'_> {
         binding: &ChallengeBinding,
     ) -> Result<(), ApprovalError> {
         let recorded = binding.fidelity_binding.as_ref().ok_or_else(upgrade)?;
+        if recorded.execution_contracts_sha256.is_none()
+            || recorded.cold_scope_findings_sha256.is_none()
+            || recorded.formal_scope_findings_sha256.is_none()
+        {
+            return Err(upgrade());
+        }
         let find = |id: &str| {
             journal.iter().find_map(|record| match &record.entry {
                 Entry::Review(review) if review.review_id == id => Some(review),
@@ -97,7 +119,7 @@ impl MissionApproval<'_> {
         plan.revision = binding.revision;
         if self.fidelity_binding(tx, &plan, cold, formal)? != *recorded {
             return Err(stale(
-                "source, intent, amendments or coverage changed after challenge",
+                "source, intent, amendments, execution contracts or scope findings changed after challenge",
             ));
         }
         Ok(())

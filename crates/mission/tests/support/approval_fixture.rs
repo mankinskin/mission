@@ -8,7 +8,7 @@ use std::{collections::BTreeMap, fs, path::PathBuf, process::Command};
 use ticket_api::storage::store::TicketStore;
 use uuid::Uuid;
 #[path = "current_authority.rs"]
-mod current_authority;
+pub(super) mod current_authority;
 pub const SESSION: &str = "11111111-1111-4111-8111-111111111111";
 
 fn waypoint(id: &str) -> TypedWaypoint {
@@ -90,6 +90,7 @@ pub fn ready_ticket(ws: &std::path::Path) -> Uuid {
 }
 pub fn linked() -> Fx {
     let fx = linked_with_input(b"plan me");
+    fx.attach_execution_contracts();
     current_authority::confirm(&fx.ws, fx.id, SESSION, &fx.session);
     fx
 }
@@ -129,6 +130,103 @@ pub fn linked_with_input(input: &[u8]) -> Fx {
     }
 }
 impl Fx {
+    pub fn attach_execution_contracts(&self) {
+        let lifecycle = MissionLifecycle::open(&self.ws);
+        let mut source = lifecycle.get_mission_source(self.id).unwrap();
+        let contract_source: TypedDraft = serde_json::from_str(include_str!(
+            "../../../mission-api/tests/fixtures/execution-contract-v4.json"
+        ))
+        .unwrap();
+        source.schema_version = 4;
+        for waypoint in &mut source.waypoints {
+            let mut contract = contract_source.waypoints[0]
+                .execution_contract
+                .clone()
+                .unwrap();
+            let work_kind = waypoint
+                .work_kind
+                .unwrap_or(WaypointWorkKind::Implementation);
+            contract.work_kind = work_kind;
+            contract.declared_dependency_ids = waypoint.depends_on.clone();
+            if contract.declared_dependency_ids.is_empty() {
+                contract.no_dependencies_reason =
+                    Some("This fixture waypoint has no prerequisites.".into());
+            } else {
+                contract.no_dependencies_reason = None;
+            }
+            contract.outcome_category = match work_kind {
+                WaypointWorkKind::Implementation => WaypointOutcomeCategoryV4::WorkingBehavior,
+                WaypointWorkKind::Documentation => WaypointOutcomeCategoryV4::Artifact,
+                WaypointWorkKind::Research => WaypointOutcomeCategoryV4::ResearchReview,
+            };
+            contract.expected_outcome =
+                format!("{} has one verified outcome", waypoint.waypoint_id);
+            let evidence_class = match work_kind {
+                WaypointWorkKind::Implementation => ExecutionEvidenceClassV4::ExecutableBehavior,
+                WaypointWorkKind::Documentation => ExecutionEvidenceClassV4::DeterministicArtifact,
+                WaypointWorkKind::Research => ExecutionEvidenceClassV4::ResearchRecord,
+            };
+            for check in &mut contract.checks {
+                if check.kind == ExecutionCheckKindV4::Acceptance
+                    || check.kind == ExecutionCheckKindV4::Regression
+                {
+                    check.evidence_class = evidence_class;
+                }
+            }
+            for evidence in &mut contract.evidence_requirements {
+                evidence.class = evidence_class;
+            }
+            waypoint.work_kind = Some(work_kind);
+            waypoint.execution_contract = Some(contract);
+        }
+        lifecycle
+            .publish_draft(self.id, source, self.plan().revision)
+            .unwrap();
+    }
+
+    pub fn scope_findings(&self) -> Vec<WaypointScopeFindingV4> {
+        self.plan()
+            .waypoints
+            .iter()
+            .map(|waypoint| {
+                let contract = waypoint.execution_contract.as_ref().unwrap();
+                let criterion = || ScopeCriterionFindingV4 {
+                    verdict: ScopeCriterionVerdictV4::Pass,
+                    rationale: "The declared unit fits the existing single-agent, one-sitting threshold."
+                        .into(),
+                };
+                WaypointScopeFindingV4 {
+                    waypoint_id: waypoint.waypoint_id.clone(),
+                    execution_contract_digest: waypoint
+                        .execution_contract_digest
+                        .clone()
+                        .unwrap(),
+                    outcome_count: 1,
+                    completeness: criterion(),
+                    compactness: criterion(),
+                    approachability: criterion(),
+                    single_coherent_outcome: criterion(),
+                    single_agent_one_sitting: criterion(),
+                    boundary_task: contract.boundary.task.clone(),
+                    boundary_paths: contract.boundary.paths.clone(),
+                    context_ids: contract
+                        .authoritative_context
+                        .iter()
+                        .map(|context| context.id.clone())
+                        .collect(),
+                    acceptance_check_ids: contract
+                        .checks
+                        .iter()
+                        .filter(|check| check.kind == ExecutionCheckKindV4::Acceptance)
+                        .map(|check| check.id.clone())
+                        .collect(),
+                    rationale: "The outcome is concrete and its boundary, context, and acceptance route are explicit."
+                        .into(),
+                }
+            })
+            .collect()
+    }
+
     pub fn approval(&self) -> MissionApproval<'_> {
         MissionApproval::open(&self.ws, &self.session)
     }
@@ -168,8 +266,17 @@ impl Fx {
             cold_review_id,
             goal_coverage_findings: Vec::new(),
             terminal_outcome_finding: None,
+            scope_findings: Vec::new(),
         };
         current_authority::enrich(&self.ws, self.id, &mut input);
+        if !plan.waypoints.is_empty()
+            && plan
+                .waypoints
+                .iter()
+                .all(|waypoint| waypoint.execution_contract.is_some())
+        {
+            input.scope_findings = self.scope_findings();
+        }
         self.approval().record_review(self.id, input)
     }
     pub fn reviewed(&self) {
@@ -199,18 +306,22 @@ impl Fx {
         reference
     }
     pub fn edit_b(&self, request_id: &str, prompt: &str) {
-        MissionLifecycle::open(&self.ws)
+        let lifecycle = MissionLifecycle::open(&self.ws);
+        let mut waypoint = lifecycle
+            .get_mission_source(self.id)
+            .unwrap()
+            .waypoints
+            .into_iter()
+            .find(|waypoint| waypoint.waypoint_id == "b")
+            .unwrap();
+        waypoint.prompt = prompt.into();
+        lifecycle
             .apply_plan_operation(
                 self.id,
                 PlanOperationRequest {
                     request_id: request_id.into(),
                     expected_revision: self.plan().revision,
-                    operation: PlanOperation::UpdateWaypoint {
-                        waypoint: TypedWaypoint {
-                            prompt: prompt.into(),
-                            ..waypoint("b")
-                        },
-                    },
+                    operation: PlanOperation::UpdateWaypoint { waypoint },
                 },
             )
             .unwrap();

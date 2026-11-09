@@ -113,6 +113,9 @@ fn result_review_adds_work_only_through_w3_semantic_change_and_w4_reapproval() {
     extra.part.waypoint_id = "c".into();
     extra.title = "Additional reviewed work".into();
     extra.depends_on = vec!["b".into()];
+    let contract = extra.execution_contract.as_mut().unwrap();
+    contract.declared_dependency_ids = extra.depends_on.clone();
+    contract.no_dependencies_reason = None;
     let before = f.plan();
     lifecycle
         .apply_plan_operation(

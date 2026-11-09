@@ -87,6 +87,10 @@ fn stdio_result_review_addition_is_semantic_and_partial_failure_is_explicit() {
         .clone();
     extra.waypoint_id = "c".into();
     extra.part.waypoint_id = "c".into();
+    extra.depends_on = vec!["b".into()];
+    let contract = extra.execution_contract.as_mut().unwrap();
+    contract.declared_dependency_ids = extra.depends_on.clone();
+    contract.no_dependencies_reason = None;
     let mut review = control(&f, "add reviewed work");
     review["additions"] = json!([{
         "request_id":"add-c","expected_revision":f.plan().revision,

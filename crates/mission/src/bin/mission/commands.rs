@@ -7,7 +7,7 @@ pub(super) enum CommandOperation {
         mission_id: Uuid,
         action: String,
     },
-    /// Record one cold or formal review from strict JSON ReviewInput.
+    /// Record a cold or formal review from strict JSON ReviewInput, including v4 waypoint scope audits.
     RecordReview {
         mission_id: Uuid,
         request_id: String,

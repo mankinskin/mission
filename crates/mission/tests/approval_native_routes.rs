@@ -78,7 +78,7 @@ fn states(f: &Fx) -> Vec<(String, Option<WaypointState>)> {
 }
 #[test]
 fn typed_publish_and_operations_cannot_introduce_in_progress() {
-    let f = linked();
+    let f = approval_fixture::linked_with_input(b"typed publish route");
     let lifecycle = MissionLifecycle::open(&f.ws);
     let mut draft = lifecycle.get_mission_source(f.id).unwrap();
     draft.waypoints[1].prompt = "b published".into();
@@ -377,6 +377,7 @@ fn symlinked_store_ancestor_fails_closed_for_consumers() {
                     cold_review_id: None,
                     goal_coverage_findings: Vec::new(),
                     terminal_outcome_finding: None,
+                    scope_findings: Vec::new(),
                 }
             )
             .is_err()

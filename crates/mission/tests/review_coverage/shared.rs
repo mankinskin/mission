@@ -23,6 +23,7 @@ pub(super) fn route(input: &[u8], kind: WaypointWorkKind) -> Fx {
     lifecycle
         .publish_draft(fx.id, source, fx.plan().revision)
         .unwrap();
+    fx.attach_execution_contracts();
     fx
 }
 
@@ -158,6 +159,7 @@ pub(super) fn input(
             conclusion: TerminalOutcomeConclusionV4::ReachesRequesterTarget,
             observable_terminal_outcome: OUTCOME.into(),
         }),
+        scope_findings: fx.scope_findings(),
     }
 }
 

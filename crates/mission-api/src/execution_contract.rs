@@ -40,6 +40,41 @@ pub struct WaypointExecutionContractV4 {
     pub no_provider_reason: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(test, allow(dead_code))]
+#[serde(deny_unknown_fields)]
+pub struct WaypointScopeFindingV4 {
+    pub waypoint_id: String,
+    pub execution_contract_digest: String,
+    pub outcome_count: usize,
+    pub completeness: ScopeCriterionFindingV4,
+    pub compactness: ScopeCriterionFindingV4,
+    pub approachability: ScopeCriterionFindingV4,
+    pub single_coherent_outcome: ScopeCriterionFindingV4,
+    pub single_agent_one_sitting: ScopeCriterionFindingV4,
+    pub boundary_task: String,
+    pub boundary_paths: Vec<String>,
+    pub context_ids: Vec<String>,
+    pub acceptance_check_ids: Vec<String>,
+    pub rationale: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(test, allow(dead_code))]
+#[serde(rename_all = "snake_case")]
+pub enum ScopeCriterionVerdictV4 {
+    Pass,
+    Fail,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[cfg_attr(test, allow(dead_code))]
+#[serde(deny_unknown_fields)]
+pub struct ScopeCriterionFindingV4 {
+    pub verdict: ScopeCriterionVerdictV4,
+    pub rationale: String,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WaypointOutcomeCategoryV4 {

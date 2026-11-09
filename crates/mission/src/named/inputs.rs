@@ -116,7 +116,10 @@ mutation!(RecordReviewInput {
     goal_coverage_findings: Vec<crate::approval::GoalCoverageFindingV4>,
     /// Source, intent-chain and plan-bound conclusion for this independent review.
     #[serde(default)]
-    terminal_outcome_finding: Option<crate::approval::TerminalOutcomeFindingV4>
+    terminal_outcome_finding: Option<crate::approval::TerminalOutcomeFindingV4>,
+    /// One complete contract-digest-bound scope audit for every current v4 waypoint.
+    #[serde(default)]
+    scope_findings: Vec<crate::WaypointScopeFindingV4>
 });
 mutation!(DecisionInput {
     /// Optional exact Session store directory, not a repository root. Normally omit (or null) to use workspace_root/.workflow-tools/session; set only to select an explicitly separate store directory. No suffix is appended.

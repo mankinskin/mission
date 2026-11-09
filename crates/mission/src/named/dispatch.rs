@@ -198,6 +198,7 @@ pub(super) fn run(tool: &str, arguments: Value) -> Result<Outcome, Error> {
                         cold_review_id: i.cold_review_id,
                         goal_coverage_findings: i.goal_coverage_findings,
                         terminal_outcome_finding: i.terminal_outcome_finding,
+                        scope_findings: i.scope_findings,
                     },
                     &i.request_id,
                 )?;

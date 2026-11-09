@@ -37,6 +37,7 @@ impl<'a> MissionApproval<'a> {
             .effective_intent(&intent_provider)
             .map_err(integrity_error)?;
         coverage::validate_source_goal(effective_intent.as_ref(), &plan, &input)?;
+        scope::validate_scope_review(&plan, &input)?;
         if input.revision != plan.revision
             || input.plan_digest != plan.plan_digest
             || input.evidence_identity != plan.evidence_identity
@@ -61,6 +62,7 @@ impl<'a> MissionApproval<'a> {
                 && record.cold_review_id == input.cold_review_id
                 && record.goal_coverage_findings == input.goal_coverage_findings
                 && record.terminal_outcome_finding == input.terminal_outcome_finding
+                && record.scope_findings == input.scope_findings
                 && record.output_contract_binding.as_deref() == Some(output_binding.as_str())
             {
                 return Ok(record.clone());
@@ -120,8 +122,11 @@ impl<'a> MissionApproval<'a> {
             goal_coverage_findings: input.goal_coverage_findings,
             terminal_outcome_finding: input.terminal_outcome_finding,
             source_goal_binding_sha256: None,
+            scope_findings: input.scope_findings,
+            scope_binding_sha256: None,
         };
         record.source_goal_binding_sha256 = coverage::review_binding_sha256(&record)?;
+        record.scope_binding_sha256 = scope::review_scope_binding_sha256(&record)?;
         append(&tx, &mut journal, Entry::Review(record.clone()))?;
         Ok(record)
     }

@@ -1,153 +1,41 @@
 //! W4 reviewed requester-bound approval. W8 owns real installed-host evidence.
-#[path = "support/current_authority.rs"]
-mod current_authority;
+#[allow(dead_code)]
+#[path = "support/approval_fixture.rs"]
+mod approval_fixture;
 #[path = "support/host_hook.rs"]
 mod host_hook;
 use mission::approval::{
-    ApprovalError, ApprovalStep, EntryPath, MissionApproval, ReviewInput, ReviewKind, ReviewVerdict,
+    ApprovalError, ApprovalStep, EntryPath, ReviewInput, ReviewKind, ReviewVerdict,
 };
-use mission::intake::{ManagedIntakeRequest, submit_and_create};
 use mission::*;
-use session_api::{
-    DecisionKind, RequesterDecisionRef, SessionRuntimeInitRequest, SessionStoreConfig,
-};
-use std::{fs, path::PathBuf, process::Command};
-use uuid::Uuid;
+use session_api::{DecisionKind, RequesterDecisionRef};
+use std::ops::Deref;
 
 const SESSION: &str = "11111111-1111-4111-8111-111111111111";
 
-fn waypoint(id: &str) -> TypedWaypoint {
-    TypedWaypoint {
-        waypoint_id: id.into(),
-        title: format!("{id} title"),
-        prompt: format!("{id} prompt"),
-        part: PartSource {
-            waypoint_id: id.into(),
-            document: Document {
-                blocks: vec![Block::Paragraph {
-                    inlines: vec![Inline::Text {
-                        text: format!("{id} body"),
-                    }],
-                }],
-            },
-        },
-        validation: vec![ValidationGate {
-            command: "cargo test".into(),
-            cwd: None,
-        }],
-        commit_checkpoint: CommitCheckpoint {
-            message: format!("{id} checkpoint"),
-        },
-        non_goals: vec![format!("{id} non-goal")],
-        outcome_plan: Some(WaypointOutcomePlan {
-            expected_outcome: format!("{id} is ready"),
-            alternative_outcomes: vec![AlternativeOutcome {
-                outcome: format!("{id} is blocked"),
-                acceptable_handling: vec!["Inspect the failure".into()],
-            }],
-        }),
-        ..Default::default()
-    }
-}
 struct Fx {
-    _dir: tempfile::TempDir,
-    ws: PathBuf,
-    session: SessionStoreConfig,
-    id: Uuid,
+    inner: approval_fixture::Fx,
+}
+impl Deref for Fx {
+    type Target = approval_fixture::Fx;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
 }
 fn fx() -> Fx {
-    let dir = tempfile::tempdir().unwrap();
-    let ws = dir.path().join("ws");
-    fs::create_dir_all(&ws).unwrap();
-    for args in [
-        vec!["init", "--quiet"],
-        vec!["config", "user.email", "h@e.com"],
-        vec!["config", "user.name", "h"],
-        vec!["commit", "--quiet", "--allow-empty", "-m", "i"],
-    ] {
-        assert!(
-            Command::new("git")
-                .args(args)
-                .current_dir(&ws)
-                .status()
-                .unwrap()
-                .success()
-        );
-    }
-    let session = SessionStoreConfig::new(ws.join(".workflow-tools/session"));
-    session
-        .init_runtime_context(SessionRuntimeInitRequest {
-            session_id: Some(SESSION.into()),
-            predecessor_run_id: None,
-            force_new_run: false,
-        })
-        .unwrap();
-    let receipt = submit_and_create(&ManagedIntakeRequest {
-        session_store: &session,
-        workspace_root: &ws,
-        session_id: SESSION,
-        request_id: "w4",
-        input: b"plan me",
-    })
-    .unwrap();
-    let lifecycle = MissionLifecycle::open(&ws);
-    let mut draft = lifecycle.get_mission_source(receipt.mission_id).unwrap();
-    draft.schema_version = 3;
-    draft.waypoints = vec![waypoint("a"), waypoint("b")];
-    lifecycle
-        .publish_draft(receipt.mission_id, draft, receipt.revision)
-        .unwrap();
-    current_authority::confirm(&ws, receipt.mission_id, SESSION, &session);
     Fx {
-        _dir: dir,
-        ws,
-        session,
-        id: receipt.mission_id,
+        inner: approval_fixture::linked(),
     }
 }
 impl Fx {
-    fn approval(&self) -> MissionApproval<'_> {
-        MissionApproval::open(&self.ws, &self.session)
-    }
-    fn plan(&self) -> ReviewPlan {
-        MissionLifecycle::open(&self.ws)
-            .review_plan(self.id)
-            .unwrap()
-    }
     fn review(
         &self,
         kind: ReviewKind,
         verdict: ReviewVerdict,
         who: &str,
     ) -> Result<(), ApprovalError> {
-        let plan = self.plan();
-        let cold_review_id = if kind == ReviewKind::Formal {
-            self.approval()
-                .reviews(self.id)?
-                .iter()
-                .rev()
-                .find(|r| {
-                    r.kind == ReviewKind::ColdWalkthrough
-                        && r.verdict == ReviewVerdict::Pass
-                        && r.revision == plan.revision
-                })
-                .map(|r| r.review_id.clone())
-        } else {
-            None
-        };
-        let mut input = ReviewInput {
-            kind,
-            verdict,
-            reviewer: who.into(),
-            revision: plan.revision,
-            plan_digest: plan.plan_digest.clone(),
-            evidence_identity: plan.evidence_identity.clone(),
-            cold_review_id,
-            goal_coverage_findings: Vec::new(),
-            terminal_outcome_finding: None,
-        };
-        current_authority::enrich(&self.ws, self.id, &mut input);
-        self.approval().record_review(self.id, input).map(|_| ())
+        self.inner.review(kind, verdict, who).map(|_| ())
     }
     fn reviewed(&self) {
         self.review(ReviewKind::ColdWalkthrough, ReviewVerdict::Pass, "cold")
@@ -157,18 +45,21 @@ impl Fx {
     }
     fn edit(&self, request_id: &str) {
         let lifecycle = MissionLifecycle::open(&self.ws);
+        let mut waypoint = lifecycle
+            .get_mission_source(self.id)
+            .unwrap()
+            .waypoints
+            .into_iter()
+            .find(|waypoint| waypoint.waypoint_id == "a")
+            .unwrap();
+        waypoint.prompt = format!("{request_id} changed");
         lifecycle
             .apply_plan_operation(
                 self.id,
                 PlanOperationRequest {
                     request_id: request_id.into(),
                     expected_revision: self.plan().revision,
-                    operation: PlanOperation::UpdateWaypoint {
-                        waypoint: TypedWaypoint {
-                            prompt: format!("{request_id} changed"),
-                            ..waypoint("a")
-                        },
-                    },
+                    operation: PlanOperation::UpdateWaypoint { waypoint },
                 },
             )
             .unwrap();
@@ -258,8 +149,9 @@ fn review_requires_cold_then_distinct_formal_on_current_digest() {
         cold_review_id: None,
         goal_coverage_findings: Vec::new(),
         terminal_outcome_finding: None,
+        scope_findings: Vec::new(),
     };
-    current_authority::enrich(&f.ws, f.id, &mut stale_input);
+    approval_fixture::current_authority::enrich(&f.ws, f.id, &mut stale_input);
     f.edit("e1");
     let error = f.approval().record_review(f.id, stale_input).unwrap_err();
     assert_eq!(error.code(), "approval_stale");

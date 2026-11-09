@@ -166,6 +166,17 @@ classes. Legacy sources without `work_kind` remain readable and unchanged.
 `mission_plan_get` exposes provider-verified `effective_intent` alongside review
 records, whose source-goal findings are retained in the JSON projection.
 
+For schema-v4 execution contracts, both review kinds also submit one
+`WaypointScopeFindingV4` per waypoint. Each finding cites the provider-computed
+`execution_contract_digest`, the exact declared boundary, authoritative context
+IDs, and acceptance-check IDs. It records completeness, compactness,
+approachability, a single coherent outcome, and the existing single-agent/
+one-sitting scope judgment, with a rationale for every judgment. Missing or
+failed findings cannot authorize a passing review; a failed size/approachability
+assessment requires ticket-backed decomposition. Mission validates these
+declarations and bindings, not semantic scope size, filesystem isolation, or a
+universal file/token limit.
+
 The CLI can record the same typed review through
 `mission record-review <mission-uuid> <request-id> '<ReviewInput JSON>'`.
 The generic MCP `mission_operation` accepts `operation: "record_review"` with
@@ -183,19 +194,20 @@ strings do not grant approval. Semantic edits require a fresh bound challenge
 and receipt; the generic compatibility tool cannot substitute a grant.
 
 New challenges and approve-receipt consumption require a confirmed requester
-baseline and fresh source-goal findings from both reviews. The challenge and
-grant bind the original source, baseline, amendment chain and both review
-identities. Activation, dispatch, resume and direct entry revalidate those
-bindings under the publication lock. Intent amendments revoke eligibility even
-when the editable plan objective is unchanged; legal evidence/progress-only
-revisions preserve the reviewed semantic route.
+baseline, complete execution contracts, and fresh source-goal and scope findings
+from both reviews. The challenge and grant bind the original source, baseline,
+amendment chain, ordered provider contract digests, scope findings, and both
+review identities. Activation, dispatch, resume and direct entry revalidate
+those bindings under the publication lock. Intent amendments or semantic
+contract changes revoke eligibility; legal evidence/progress-only revisions
+preserve the reviewed semantic route.
 
 Legacy reviews and grants remain readable without rewriting their bytes.
-Without upgraded fidelity bindings they return
+Without upgraded source-goal, execution-contract and scope bindings they return
 `approval_policy_upgrade_required` for new approval or entry, never execution
-authority. Explicitly confirm the baseline and obtain fresh coverage reviews
-before requesting a new approval. This is not an automatic installed-store
-upgrade.
+authority. Add complete v4 contracts, record fresh reviews with passing scope
+audits, and explicitly confirm the baseline before requesting a new approval.
+This is not an automatic installed-store upgrade.
 
 Recording reviews, preparing a challenge, and accepting approval validate the
 complete published output and every available archived output state under the
