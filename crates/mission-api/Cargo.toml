@@ -12,6 +12,7 @@ path = "src/lib.rs"
 default = []
 # Disposable evidence fixtures only; never enabled by production transports.
 test-evidence-provider = []
+meta-workspace-tests = []
 
 [[test]]
 name = "provider_evidence"
@@ -27,9 +28,9 @@ sha2 = "0.10"
 thiserror = "2"
 fs4 = "0.11"
 uuid = { version = "1", features = ["serde", "v4"] }
-spec-api = { path = "../../../spec/crates/spec-api" }
-ticket-api = { path = "../../../ticket/crates/ticket-api" }
-test-api = { path = "../../../test/crates/test-api" }
+spec-api = { git = "https://github.com/mankinskin/spec", branch = "main" }
+ticket-api = { git = "https://github.com/mankinskin/ticket", branch = "main" }
+test-api = { git = "https://github.com/mankinskin/test", branch = "main" }
 toml = "0.8"
 
 [dev-dependencies]

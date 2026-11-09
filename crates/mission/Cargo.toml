@@ -8,7 +8,8 @@ description = "Public Mission facade with CLI and MCP transports"
 default = []
 # Integration-test injection only. Neither cli nor mcp enables this feature.
 test-evidence-provider = ["mission-api/test-evidence-provider"]
-cli = ["dep:clap", "dep:transport-harness", "transport-harness/cli"]
+meta-workspace-tests = ["mission-api/meta-workspace-tests"]
+cli = ["dep:clap", "dep:schemars", "dep:transport-harness", "transport-harness/cli"]
 mcp = ["dep:clap", "dep:rmcp", "dep:schemars", "dep:transport-harness", "transport-harness/mcp"]
 
 [[bin]]
@@ -24,9 +25,9 @@ required-features = ["mcp"]
 [dependencies]
 memory-kernel = { git = "https://github.com/mankinskin/memory-kernel", branch = "main" }
 mission-api = { path = "../mission-api" }
-session-api = { path = "../../../session/crates/session-api" }
+session-api = { git = "https://github.com/mankinskin/session", branch = "main" }
 sha2 = "0.10"
-ticket-api = { path = "../../../ticket/crates/ticket-api" }
+ticket-api = { git = "https://github.com/mankinskin/ticket", branch = "main" }
 clap = { version = "4", features = ["derive"], optional = true }
 rmcp = { version = "0.14", features = ["server", "transport-io"], optional = true }
 schemars = { version = "1", optional = true }
@@ -42,19 +43,19 @@ tempfile = "3"
 
 [[test]]
 name = "approval_native_routes"
-required-features = ["cli", "test-evidence-provider"]
+required-features = ["cli", "test-evidence-provider", "meta-workspace-tests"]
 
 [[test]]
 name = "named_mcp"
-required-features = ["cli", "mcp", "test-evidence-provider"]
+required-features = ["cli", "mcp", "test-evidence-provider", "meta-workspace-tests"]
 
 [[test]]
 name = "provider_evidence"
-required-features = ["cli", "mcp", "test-evidence-provider"]
+required-features = ["cli", "mcp", "test-evidence-provider", "meta-workspace-tests"]
 
 [[test]]
 name = "w5_reopen"
-required-features = ["test-evidence-provider"]
+required-features = ["test-evidence-provider", "meta-workspace-tests"]
 
 [[test]]
 name = "intent_authority"
@@ -62,8 +63,44 @@ required-features = ["cli", "mcp"]
 
 [[test]]
 name = "fidelity_entry"
-required-features = ["cli", "mcp"]
+required-features = ["cli", "mcp", "meta-workspace-tests"]
 
 [[test]]
 name = "mission_native_routing"
-required-features = ["cli", "mcp"]
+required-features = ["cli", "mcp", "meta-workspace-tests"]
+
+[[test]]
+name = "approval_entry_gate"
+required-features = ["meta-workspace-tests"]
+
+[[test]]
+name = "approval_integrity"
+required-features = ["meta-workspace-tests"]
+
+[[test]]
+name = "approval_status_projection"
+required-features = ["meta-workspace-tests"]
+
+[[test]]
+name = "fidelity_scope"
+required-features = ["meta-workspace-tests"]
+
+[[test]]
+name = "fidelity_scope_transports"
+required-features = ["meta-workspace-tests"]
+
+[[test]]
+name = "requester_approval"
+required-features = ["meta-workspace-tests"]
+
+[[test]]
+name = "requester_approval_journal"
+required-features = ["meta-workspace-tests"]
+
+[[test]]
+name = "requester_approval_ordering"
+required-features = ["meta-workspace-tests"]
+
+[[test]]
+name = "review_coverage"
+required-features = ["meta-workspace-tests"]

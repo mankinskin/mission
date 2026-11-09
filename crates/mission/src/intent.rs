@@ -7,7 +7,7 @@ use session_api::{
 };
 
 #[derive(Clone, Debug, Deserialize)]
-#[cfg_attr(feature = "mcp", derive(schemars::JsonSchema))]
+#[cfg_attr(any(feature = "cli", feature = "mcp"), derive(schemars::JsonSchema))]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
 pub enum IntentOperation {
     PrepareBaseline {

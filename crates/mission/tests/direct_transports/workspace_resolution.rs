@@ -66,10 +66,9 @@ fn workspace_resolver_selects_portable_canonical_root_and_rejects_symlinks() {
     use mission::resolve_workspace;
     use std::{ffi::OsStr, path::Path};
 
-    let checkout = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(4)
-        .expect("meta-workspace root");
+    let directory = TempDir::new().expect("temporary checkout");
+    let checkout = directory.path();
+    std::fs::create_dir_all(checkout.join("workflow-tools/mission")).unwrap();
     let (canonical, source) =
         resolve_workspace(None, Some(OsStr::new("workflow-tools/mission")), checkout)
             .expect("canonical relative launch root");

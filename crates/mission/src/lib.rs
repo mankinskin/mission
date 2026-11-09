@@ -18,7 +18,7 @@ pub mod intake;
 pub mod intent;
 pub mod lifecycle;
 mod migration;
-#[cfg(feature = "mcp")]
+#[cfg(any(feature = "cli", feature = "mcp"))]
 pub mod named;
 mod provider_evidence;
 

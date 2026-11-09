@@ -1,10 +1,41 @@
 # Mission
 
+Mission's durable roadmap model, storage, approval and lifecycle operations,
+with shared CLI and MCP transports.
+
+## Build and test
+
+This repository builds independently with Rust 2024 and Git. Workflow-domain
+dependencies are fetched from their owning repositories; no sibling checkouts
+are required.
+
+```bash
+cargo build --locked -p mission --features cli,mcp
+cargo test --locked --workspace --features cli,mcp,test-evidence-provider
+cargo run --locked -p mission --features cli --bin mission -- --help
+```
+
+See [INSTALL.md](INSTALL.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
+The `meta-workspace-tests` feature additionally enables Session capture-hook,
+guidance/installer integration tests and cross-domain source checks. It requires this checkout at
+`meta-workspace/workflow-tools/mission` with the surrounding repositories
+initialized; it is deliberately not part of standalone validation.
+
+## Repository history
+
+Crane transplanted 50 commits from the `mission/` subtree of
+[`workflow-tools` at `f756599b540ac9479771a117dfc50bdd97f39a4d`](https://github.com/mankinskin/workflow-tools/commit/f756599b540ac9479771a117dfc50bdd97f39a4d),
+mapping that subtree to this repository root. The imported tree was verified
+against the source Git blobs before standalone build adaptations.
+`workflow-tools` consumes this repository as its `mission/` submodule.
+Consumer Mission stores remain in their owning workspaces and are not moved
+by this source extraction.
+
 ## Store-local Git ignores
 
 Initialization and write preparation maintain
 `.workflow-tools/mission/.gitignore` using the shared
-[memory-kernel policy](../memory-kernel/README.md#store-local-git-ignores).
+[memory-kernel policy](https://github.com/mankinskin/memory-kernel/blob/main/README.md#store-local-git-ignores).
 Hidden advisory locks (including typed and ticket-link `.flock` files) and temporary
 write files are ignored; missing defaults are appended without replacing custom
 rules. Mission sources, accepted bundles, generated projections and recovery
@@ -13,7 +44,7 @@ journals remain trackable. Opening a store alone remains read-only.
 ## Review a generated Mission
 
 **Novice path:** Start from the Mission's `generated/README.md` and choose the
-[Mission Review Agent](../.agents/agents/mission-review.agent.md) in the agent
+[Mission Review Agent](https://github.com/mankinskin/workflow-tools/blob/main/.agents/agents/mission-review.agent.md) in the agent
 picker. Provide that entry path; the role follows its linked Mission artifacts
 and reports evidence-backed gaps without running product tests or claiming
 readiness from publication alone. If the entry is missing or incomplete, the
@@ -24,7 +55,7 @@ review is blocked rather than reconstructed from hidden state.
 criteria link. It checks the linked strict accepted Mission, inventory,
 references, and existing validation receipts without executing tests. For the
 complete, missing, contradictory, and incomplete-entry examples, see the
-[manual walkthrough and synthetic fixtures](../test/docs/mission-reviewer-role/manual-walkthrough.md).
+[manual walkthrough and synthetic fixtures](https://github.com/mankinskin/test/blob/main/docs/mission-reviewer-role/manual-walkthrough.md).
 These examples validate reviewer behavior only; they are not product
 acceptance evidence.
 

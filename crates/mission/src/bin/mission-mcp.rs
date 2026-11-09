@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use clap::{Parser, error::ErrorKind};
 use mission::named::{self, Input};
 use mission::{
     CommitCheckpoint, DirectWaypoint, MISSION_WORKSPACE_ENV, Operation, OperatorResult,
@@ -14,7 +15,6 @@ use rmcp::{
 };
 use serde::Deserialize;
 use transport_harness::HarnessError;
-use transport_harness::cli::clap::{Parser, error::ErrorKind};
 use uuid::Uuid;
 
 #[derive(Parser)]

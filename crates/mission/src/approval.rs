@@ -102,14 +102,14 @@ fn sha(input: &str) -> String {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "mcp", derive(schemars::JsonSchema))]
+#[cfg_attr(any(feature = "cli", feature = "mcp"), derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ReviewKind {
     ColdWalkthrough,
     Formal,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "mcp", derive(schemars::JsonSchema))]
+#[cfg_attr(any(feature = "cli", feature = "mcp"), derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ReviewVerdict {
     Pass,
@@ -128,7 +128,7 @@ pub enum ApprovalStep {
     AfterGrant,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "mcp", derive(schemars::JsonSchema))]
+#[cfg_attr(any(feature = "cli", feature = "mcp"), derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ReviewInput {
     pub kind: ReviewKind,

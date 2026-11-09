@@ -11,7 +11,7 @@ type SourceRequirements = (
 );
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "mcp", derive(schemars::JsonSchema))]
+#[cfg_attr(any(feature = "cli", feature = "mcp"), derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct GoalCoverageFindingV4 {
     pub requirement_id: String,
@@ -19,7 +19,7 @@ pub struct GoalCoverageFindingV4 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "mcp", derive(schemars::JsonSchema))]
+#[cfg_attr(any(feature = "cli", feature = "mcp"), derive(schemars::JsonSchema))]
 #[serde(tag = "disposition", rename_all = "snake_case", deny_unknown_fields)]
 pub enum GoalCoverageDispositionV4 {
     Fulfilled {
@@ -35,7 +35,7 @@ pub enum GoalCoverageDispositionV4 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "mcp", derive(schemars::JsonSchema))]
+#[cfg_attr(any(feature = "cli", feature = "mcp"), derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum PlannedEvidenceClassV4 {
     ExecutableBehavior,
@@ -46,7 +46,7 @@ pub enum PlannedEvidenceClassV4 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "mcp", derive(schemars::JsonSchema))]
+#[cfg_attr(any(feature = "cli", feature = "mcp"), derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct PlannedAcceptanceCheckV4 {
     pub waypoint_id: String,
@@ -57,7 +57,7 @@ pub struct PlannedAcceptanceCheckV4 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "mcp", derive(schemars::JsonSchema))]
+#[cfg_attr(any(feature = "cli", feature = "mcp"), derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum TerminalOutcomeConclusionV4 {
     ReachesRequesterTarget,
@@ -65,7 +65,7 @@ pub enum TerminalOutcomeConclusionV4 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "mcp", derive(schemars::JsonSchema))]
+#[cfg_attr(any(feature = "cli", feature = "mcp"), derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct TerminalOutcomeFindingV4 {
     pub source_sha256: String,

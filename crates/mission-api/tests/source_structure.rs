@@ -1,4 +1,4 @@
-//! Structural acceptance checks for the four workflow implementation roots.
+//! Structural acceptance checks for Mission and optional workspace peers.
 use std::{path::Path, process::Command};
 
 const SOURCE_EXTENSIONS: &[&str] = &[
@@ -8,13 +8,19 @@ const SOURCE_EXTENSIONS: &[&str] = &[
 
 #[test]
 fn workflow_sources_and_tests_fit_the_500_line_limit() {
-    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+    let mission = Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
-        .nth(3)
-        .expect("mission-api belongs to the workflow-tools checkout");
+        .nth(2)
+        .expect("mission-api belongs to the Mission repository");
+    let mut roots = vec![("mission", mission.to_path_buf())];
+    if cfg!(feature = "meta-workspace-tests") {
+        let workspace = mission.parent().expect("workflow-tools checkout");
+        roots.extend(
+            ["ticket", "session", "memory-kernel"].map(|domain| (domain, workspace.join(domain))),
+        );
+    }
     let mut violations = Vec::new();
-    for domain in ["mission", "ticket", "session", "memory-kernel"] {
-        let root = workspace.join(domain);
+    for (domain, root) in roots {
         let output = Command::new("git")
             .arg("-C")
             .arg(&root)
