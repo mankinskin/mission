@@ -2,6 +2,18 @@ use super::*;
 
 pub fn execute(workspace_root: &Path, operation: Operation) -> StatusSnapshot {
     match operation {
+        Operation::Intent {
+            mission_id,
+            operation,
+        } => output_result(
+            mission_id,
+            crate::intent::execute_intent(workspace_root, mission_id, operation).map(
+                |(revision, result)| OutputRecord::Intent {
+                    revision,
+                    result: Box::new(result),
+                },
+            ),
+        ),
         Operation::CreateMission {
             title,
             objective,

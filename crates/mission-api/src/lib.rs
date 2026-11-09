@@ -14,7 +14,11 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
+#[cfg_attr(test, allow(dead_code))]
+mod intent_baseline;
 mod operator_results;
+#[cfg_attr(test, allow(unused_imports))]
+pub use intent_baseline::*;
 mod outcome_plan;
 pub use outcome_plan::*;
 mod output_history;

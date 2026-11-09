@@ -58,6 +58,18 @@ fn managed(receipt: crate::intake::ManagedIntake) -> Result<Outcome, Error> {
 
 pub(super) fn run(tool: &str, arguments: Value) -> Result<Outcome, Error> {
     match tool {
+        "mission_intent" => {
+            let i: IntentInput = parse(arguments)?;
+            let root = root(&i.workspace_root)?;
+            let mission_id = id(&i.mission_id)?;
+            let (revision, output) = crate::intent::execute_intent(&root, mission_id, i.operation)?;
+            Ok((
+                mission_id,
+                revision,
+                workspace(&root, Some(mission_id)),
+                value(output)?,
+            ))
+        }
         "mission_intake_create" => {
             let i: IntakeInput = parse(arguments)?;
             let root = root(&i.workspace_root)?;

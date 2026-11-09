@@ -15,10 +15,11 @@ use uuid::Uuid;
 pub mod approval;
 mod direct;
 pub mod intake;
+pub mod intent;
 pub mod lifecycle;
+mod migration;
 #[cfg(feature = "mcp")]
 pub mod named;
-mod migration;
 
 pub use direct::DirectWaypoint;
 pub use lifecycle::WorkspaceLifecycle;
@@ -120,6 +121,10 @@ fn validate_workspace_path(path: &Path) -> Result<(), String> {
 /// Operations exposed identically by the CLI and MCP adapters.
 #[derive(Clone, Debug)]
 pub enum Operation {
+    Intent {
+        mission_id: Uuid,
+        operation: intent::IntentOperation,
+    },
     CreateMission {
         title: String,
         objective: String,
@@ -281,6 +286,10 @@ pub struct StatusSnapshot {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", content = "record", rename_all = "kebab-case")]
 pub enum OutputRecord {
+    Intent {
+        revision: u64,
+        result: Box<intent::IntentOutput>,
+    },
     Contract {
         contract: MissionOutputContract,
         binding: String,

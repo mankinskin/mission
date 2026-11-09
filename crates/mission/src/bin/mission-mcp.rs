@@ -32,6 +32,9 @@ struct MissionServer {
 
 #[derive(Debug, Deserialize, JsonSchema)]
 struct MissionOperationInput {
+    /// Strict requester-intent action, required for operation=intent.
+    #[serde(default)]
+    intent_action: Option<mission::intent::IntentOperation>,
     /// Exact operation name from the tool description; underscores and hyphens are not interchangeable. Missing operation-specific fields return invalid_params.
     operation: String,
     /// Stored Mission UUID, required except create_draft, create_mission, validate-preview, migrate-dossiers and repair operations with their own request/journal identity.
@@ -365,6 +368,16 @@ impl MissionServer {
         self.named("mission_waypoint_activate", i)
     }
     #[tool(
+        name = "mission_intent",
+        description = "capability=mission.native-planning version=1. Manage schema-v4 requester intent independently of plan objectives. Actions: prepare_baseline, confirm_baseline, prepare_amendment, append_amendment, get. Prepare creates a Session confirmation challenge; confirmation requires a trusted captured host receipt referenced by Session/challenge IDs. No caller-supplied receipt or approval flag. Uses workspace_root/.workflow-tools/session; mutations require expected_revision."
+    )]
+    async fn intent(
+        &self,
+        Parameters(i): Parameters<Input<named::IntentInput>>,
+    ) -> Result<CallToolResult, McpError> {
+        self.named("mission_intent", i)
+    }
+    #[tool(
         name = "mission_handoff",
         description = "capability=mission.native-planning version=1. Transfer active binding from verified source_session to existing destination_session through journaled handoff and managed pin recovery. Requires non-nil UUID request_id/current plan and control sequence/nonempty evidence. Uses canonical workspace_root/.workflow-tools/session. Returns JSON lifecycle snapshot or code!=ok tool error."
     )]
@@ -494,6 +507,12 @@ impl MissionServer {
                     expected_current_revision: input.expected_current_revision.ok_or_else(
                         || McpError::invalid_params("expected_current_revision is required", None),
                     )?,
+                },
+                "intent" => Operation::Intent {
+                    mission_id: required_id()?,
+                    operation: input.intent_action.ok_or_else(|| {
+                        McpError::invalid_params("intent_action is required", None)
+                    })?,
                 },
                 "get_mission_source" => Operation::GetMissionSource {
                     mission_id: required_id()?,

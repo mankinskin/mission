@@ -1,3 +1,5 @@
+#[path = "named_mcp/activation.rs"]
+mod activation;
 #[path = "named_mcp/approval_and_completion.rs"]
 mod approval_and_completion;
 #[path = "support/approval_fixture.rs"]
@@ -8,8 +10,6 @@ mod direct_transports;
 mod host_hook;
 #[path = "named_mcp/lifecycle.rs"]
 mod lifecycle;
-#[path = "named_mcp/activation.rs"]
-mod activation;
 #[path = "named_mcp/planning_and_errors.rs"]
 mod planning_and_errors;
 #[path = "named_mcp/review_recording.rs"]
@@ -18,7 +18,8 @@ mod review_recording;
 use direct_transports::{Mcp, TempDir, json};
 use session_api::{SessionRuntimeInitRequest, SessionStoreConfig};
 
-const NAMED_TOOLS: [&str; 21] = [
+const NAMED_TOOLS: [&str; 22] = [
+    "mission_intent",
     "mission_intake_create",
     "mission_workspace_get",
     "mission_plan_get",

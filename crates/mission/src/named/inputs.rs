@@ -283,3 +283,13 @@ impl From<PlanEdit> for crate::PlanOperation {
         }
     }
 }
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct IntentInput {
+    /// Existing absolute owning workspace; Session authority uses its .workflow-tools/session store.
+    pub workspace_root: PathBuf,
+    /// Stored Mission UUID whose original requester intent is being read or confirmed.
+    pub mission_id: String,
+    /// Strict intent action; mutations require expected_revision and preparation/confirmation reference IDs.
+    pub operation: crate::intent::IntentOperation,
+}

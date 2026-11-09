@@ -47,5 +47,9 @@ name = "named_mcp"
 required-features = ["cli", "mcp"]
 
 [[test]]
+name = "intent_authority"
+required-features = ["cli", "mcp"]
+
+[[test]]
 name = "mission_native_routing"
 required-features = ["cli", "mcp"]
