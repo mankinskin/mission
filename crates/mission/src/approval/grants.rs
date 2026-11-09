@@ -113,6 +113,10 @@ impl<'a> MissionApproval<'a> {
             .ok_or_else(|| broken("missing preceding cold review"))?;
         let formal = review(&binding.formal_review_id)
             .ok_or_else(|| broken("missing preceding formal review"))?;
+        self.verify_fidelity_challenge(tx, journal, binding)?;
+        if grant.fidelity_binding != binding.fidelity_binding {
+            return Err(broken("grant and challenge fidelity bindings disagree"));
+        }
         let output_binding = binding.output_contract_binding.as_deref().ok_or_else(|| {
             stale("legacy challenge lacks output integrity binding; fresh approval required")
         })?;

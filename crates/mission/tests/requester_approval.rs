@@ -1,4 +1,6 @@
 //! W4 reviewed requester-bound approval. W8 owns real installed-host evidence.
+#[path = "support/current_authority.rs"]
+mod current_authority;
 #[path = "support/host_hook.rs"]
 mod host_hook;
 use mission::approval::{
@@ -95,6 +97,7 @@ fn fx() -> Fx {
     lifecycle
         .publish_draft(receipt.mission_id, draft, receipt.revision)
         .unwrap();
+    current_authority::confirm(&ws, receipt.mission_id, SESSION, &session);
     Fx {
         _dir: dir,
         ws,
@@ -132,22 +135,19 @@ impl Fx {
         } else {
             None
         };
-        self.approval()
-            .record_review(
-                self.id,
-                ReviewInput {
-                    kind,
-                    verdict,
-                    reviewer: who.into(),
-                    revision: plan.revision,
-                    plan_digest: plan.plan_digest.clone(),
-                    evidence_identity: plan.evidence_identity.clone(),
-                    cold_review_id,
-                    goal_coverage_findings: Vec::new(),
-                    terminal_outcome_finding: None,
-                },
-            )
-            .map(|_| ())
+        let mut input = ReviewInput {
+            kind,
+            verdict,
+            reviewer: who.into(),
+            revision: plan.revision,
+            plan_digest: plan.plan_digest.clone(),
+            evidence_identity: plan.evidence_identity.clone(),
+            cold_review_id,
+            goal_coverage_findings: Vec::new(),
+            terminal_outcome_finding: None,
+        };
+        current_authority::enrich(&self.ws, self.id, &mut input);
+        self.approval().record_review(self.id, input).map(|_| ())
     }
     fn reviewed(&self) {
         self.review(ReviewKind::ColdWalkthrough, ReviewVerdict::Pass, "cold")
@@ -248,24 +248,20 @@ fn review_requires_cold_then_distinct_formal_on_current_digest() {
     f.review(ReviewKind::Formal, ReviewVerdict::Pass, "formal")
         .unwrap();
     let stale = f.plan();
+    let mut stale_input = ReviewInput {
+        kind: ReviewKind::Formal,
+        verdict: ReviewVerdict::Pass,
+        reviewer: "formal".into(),
+        revision: stale.revision,
+        plan_digest: stale.plan_digest,
+        evidence_identity: stale.evidence_identity,
+        cold_review_id: None,
+        goal_coverage_findings: Vec::new(),
+        terminal_outcome_finding: None,
+    };
+    current_authority::enrich(&f.ws, f.id, &mut stale_input);
     f.edit("e1");
-    let error = f
-        .approval()
-        .record_review(
-            f.id,
-            ReviewInput {
-                kind: ReviewKind::Formal,
-                verdict: ReviewVerdict::Pass,
-                reviewer: "formal".into(),
-                revision: stale.revision,
-                plan_digest: stale.plan_digest,
-                evidence_identity: stale.evidence_identity,
-                cold_review_id: None,
-                goal_coverage_findings: Vec::new(),
-                terminal_outcome_finding: None,
-            },
-        )
-        .unwrap_err();
+    let error = f.approval().record_review(f.id, stale_input).unwrap_err();
     assert_eq!(error.code(), "approval_stale");
     assert_eq!(
         f.approval()

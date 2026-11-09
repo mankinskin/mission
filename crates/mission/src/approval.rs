@@ -180,6 +180,8 @@ struct ChallengeBinding {
     output_contract_binding: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     review_journal_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    fidelity_binding: Option<FidelityBindingV4>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -192,6 +194,8 @@ pub struct ApprovalGrant {
     pub review_snapshot_digest: String,
     pub cold_review_id: String,
     pub formal_review_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fidelity_binding: Option<FidelityBindingV4>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -458,6 +462,7 @@ impl<'a> MissionApproval<'a> {
 mod challenge;
 mod coverage;
 mod decision;
+mod fidelity;
 mod grants;
 mod review;
 
@@ -465,3 +470,4 @@ pub use coverage::{
     GoalCoverageDispositionV4, GoalCoverageFindingV4, PlannedAcceptanceCheckV4,
     PlannedEvidenceClassV4, TerminalOutcomeConclusionV4, TerminalOutcomeFindingV4,
 };
+pub use fidelity::FidelityBindingV4;

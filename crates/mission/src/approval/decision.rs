@@ -44,6 +44,7 @@ impl<'a> MissionApproval<'a> {
         }
         let approve = receipt.kind == DecisionKind::Approve;
         if approve {
+            self.verify_fidelity_challenge(&tx, &journal, &record)?;
             let current_binding = self.verify_integrity(&tx)?;
             let reviewed_binding = record.output_contract_binding.as_deref()
                 .ok_or_else(|| stale("challenge has no output integrity binding; fresh reviews and challenge required"))?;
@@ -88,6 +89,7 @@ impl<'a> MissionApproval<'a> {
             review_snapshot_digest: record.review_snapshot_digest.clone(),
             cold_review_id: record.cold_review_id.clone(),
             formal_review_id: record.formal_review_id.clone(),
+            fidelity_binding: record.fidelity_binding.clone(),
         };
         let decision_now = Disposition {
             disposition_id: disposition.clone(),

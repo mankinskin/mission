@@ -66,7 +66,7 @@ fn read(mcp: &mut Mcp, args: &Value) -> Value {
 }
 
 #[test]
-fn stdio_fresh_named_reviews_prepare_challenge_without_grant_or_api_seeding() {
+fn stdio_legacy_pass_reviews_remain_readable_but_cannot_prepare_approval() {
     let (_dir, workspace, session_id, mut mcp, args) = fresh();
     let listed = mcp.request(5, "tools/list", json!({}));
     let tool = listed["tools"]
@@ -115,13 +115,11 @@ fn stdio_fresh_named_reviews_prepare_challenge_without_grant_or_api_seeding() {
             "expected_revision":args["expected_revision"]
         }),
     );
-    assert_eq!(prepared["code"], "ok", "{prepared}");
-    assert!(
-        prepared["result"]["host_prompt"]
-            .as_str()
-            .unwrap()
-            .starts_with("mission-decision approve ")
+    assert_eq!(
+        prepared["code"], "approval_policy_upgrade_required",
+        "{prepared}"
     );
+    assert!(prepared["result"].get("host_prompt").is_none());
     let current = read(&mut mcp, &args);
     assert_eq!(
         current["result"]["reviews"],

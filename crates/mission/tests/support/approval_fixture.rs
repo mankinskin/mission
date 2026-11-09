@@ -7,6 +7,8 @@ use session_api::{RequesterDecisionRef, SessionRuntimeInitRequest, SessionStoreC
 use std::{collections::BTreeMap, fs, path::PathBuf, process::Command};
 use ticket_api::storage::store::TicketStore;
 use uuid::Uuid;
+#[path = "current_authority.rs"]
+mod current_authority;
 pub const SESSION: &str = "11111111-1111-4111-8111-111111111111";
 
 fn waypoint(id: &str) -> TypedWaypoint {
@@ -87,7 +89,9 @@ pub fn ready_ticket(ws: &std::path::Path) -> Uuid {
     id
 }
 pub fn linked() -> Fx {
-    linked_with_input(b"plan me")
+    let fx = linked_with_input(b"plan me");
+    current_authority::confirm(&fx.ws, fx.id, SESSION, &fx.session);
+    fx
 }
 pub fn linked_with_input(input: &[u8]) -> Fx {
     let (dir, ws) = git_workspace();
@@ -154,20 +158,19 @@ impl Fx {
         } else {
             None
         };
-        self.approval().record_review(
-            self.id,
-            ReviewInput {
-                kind,
-                verdict,
-                reviewer: who.into(),
-                revision: plan.revision,
-                plan_digest: plan.plan_digest,
-                evidence_identity: plan.evidence_identity,
-                cold_review_id,
-                goal_coverage_findings: Vec::new(),
-                terminal_outcome_finding: None,
-            },
-        )
+        let mut input = ReviewInput {
+            kind,
+            verdict,
+            reviewer: who.into(),
+            revision: plan.revision,
+            plan_digest: plan.plan_digest,
+            evidence_identity: plan.evidence_identity,
+            cold_review_id,
+            goal_coverage_findings: Vec::new(),
+            terminal_outcome_finding: None,
+        };
+        current_authority::enrich(&self.ws, self.id, &mut input);
+        self.approval().record_review(self.id, input)
     }
     pub fn reviewed(&self) {
         self.review(ReviewKind::ColdWalkthrough, ReviewVerdict::Pass, "cold")

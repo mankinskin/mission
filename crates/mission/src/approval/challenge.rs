@@ -26,6 +26,7 @@ impl<'a> MissionApproval<'a> {
         let (cold, formal) = current_reviews(&journal, &plan).ok_or_else(|| {
             required("passing current cold and distinct formal reviews are required")
         })?;
+        let fidelity_binding = self.fidelity_binding(&tx, &plan, &cold, &formal)?;
         if [&cold, &formal].iter().any(|review| {
             review.output_contract_binding.as_deref() != Some(output_binding.as_str())
         }) {
@@ -55,6 +56,7 @@ impl<'a> MissionApproval<'a> {
             formal_review_id: formal.review_id,
             output_contract_binding: Some(output_binding),
             review_journal_digest: Some(review_journal_digest),
+            fidelity_binding: Some(fidelity_binding),
         };
         let existing = journal.iter().find_map(|r| match &r.entry {
             Entry::Challenge(c) if c.challenge_id == challenge_id => Some(c.clone()),

@@ -182,6 +182,21 @@ only the corresponding receipt kind. Raw actor text, booleans and decision
 strings do not grant approval. Semantic edits require a fresh bound challenge
 and receipt; the generic compatibility tool cannot substitute a grant.
 
+New challenges and approve-receipt consumption require a confirmed requester
+baseline and fresh source-goal findings from both reviews. The challenge and
+grant bind the original source, baseline, amendment chain and both review
+identities. Activation, dispatch, resume and direct entry revalidate those
+bindings under the publication lock. Intent amendments revoke eligibility even
+when the editable plan objective is unchanged; legal evidence/progress-only
+revisions preserve the reviewed semantic route.
+
+Legacy reviews and grants remain readable without rewriting their bytes.
+Without upgraded fidelity bindings they return
+`approval_policy_upgrade_required` for new approval or entry, never execution
+authority. Explicitly confirm the baseline and obtain fresh coverage reviews
+before requesting a new approval. This is not an automatic installed-store
+upgrade.
+
 Recording reviews, preparing a challenge, and accepting approval validate the
 complete published output and every available archived output state under the
 publication lock, including file inventories, byte digests, sizes, typed source,
