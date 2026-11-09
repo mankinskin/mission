@@ -100,6 +100,10 @@ pub struct ReviewWaypoint {
     pub validation_status: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outcome_plan: Option<WaypointOutcomePlan>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_contract: Option<WaypointExecutionContractV4>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_contract_digest: Option<String>,
     /// Evidenced means bound operator evidence, not formal review.
     pub review_status: String,
     pub evidence: Vec<ReviewEvidence>,
@@ -181,6 +185,8 @@ struct DigestWaypoint<'a> {
     requirement_ids: &'a [String],
     references: &'a [String],
     outcome_plan: Option<&'a WaypointOutcomePlan>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    execution_contract: Option<&'a WaypointExecutionContractV4>,
 }
 
 mod helpers;

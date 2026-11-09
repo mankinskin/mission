@@ -282,6 +282,7 @@ pub(super) fn parse_waypoint(
         source_label,
         fragment: WaypointFragment {
             outcome_plan: None,
+            execution_contract: None,
             waypoint_id,
             title,
             depends_on: Vec::new(),

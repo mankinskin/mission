@@ -80,11 +80,13 @@ impl MissionLifecycle {
             .map(|waypoint| waypoint.waypoint_id.clone())
             .collect();
         for (index, waypoint) in draft.waypoints.iter_mut().enumerate() {
-            waypoint.depends_on = if index == 0 {
-                vec![]
-            } else {
-                vec![waypoint_ids[index - 1].clone()]
-            };
+            if draft.schema_version != CONTRACT_SOURCE_SCHEMA_VERSION {
+                waypoint.depends_on = if index == 0 {
+                    vec![]
+                } else {
+                    vec![waypoint_ids[index - 1].clone()]
+                };
+            }
         }
         self.save_typed(&draft, expected_revision, true)?;
         Ok(draft)
@@ -140,6 +142,7 @@ impl MissionLifecycle {
             })?;
             waypoints.push(TypedWaypoint {
                 outcome_plan: waypoint.outcome_plan,
+                execution_contract: waypoint.execution_contract,
                 work_kind: waypoint.work_kind,
                 waypoint_id: waypoint.waypoint_id,
                 title: waypoint.title,
@@ -187,6 +190,10 @@ impl MissionLifecycle {
             markdown.push_str(&format!("\n## {}\n\n", waypoint.title));
             render_blocks(&mut markdown, &waypoint.part.document.blocks, 0);
             outcome_plan::render_outcome_plan(&mut markdown, waypoint.outcome_plan.as_ref());
+            execution_contract::render_execution_contract(
+                &mut markdown,
+                waypoint.execution_contract.as_ref(),
+            );
             if let Some(content) = relationships.get(&waypoint.waypoint_id) {
                 markdown.push_str(content);
             }
@@ -269,6 +276,10 @@ impl MissionLifecycle {
             output.push_str(&format!("\n## {}\n\n", waypoint.title));
             render_blocks(&mut output, &waypoint.part.document.blocks, 0);
             outcome_plan::render_outcome_plan(&mut output, waypoint.outcome_plan.as_ref());
+            execution_contract::render_execution_contract(
+                &mut output,
+                waypoint.execution_contract.as_ref(),
+            );
         }
         output
     }
@@ -339,6 +350,7 @@ pub(crate) fn accepted_from_typed(
         waypoint.non_goals = input.non_goals.clone();
         waypoint.relationships = input.relationships.clone();
         waypoint.outcome_plan = input.outcome_plan.clone();
+        waypoint.execution_contract = input.execution_contract.clone();
         waypoint.part_markdown.clear();
         render_blocks(&mut waypoint.part_markdown, &input.part.document.blocks, 0);
         let refs = &input.ownership_refs;
@@ -361,10 +373,10 @@ pub(crate) fn accepted_from_typed(
         waypoints.push(waypoint);
     }
     bundle.manifest.revision = draft.revision;
-    bundle.manifest.schema_version = if draft.schema_version == OUTCOME_SOURCE_SCHEMA_VERSION {
-        OUTCOME_BUNDLE_SCHEMA_VERSION
-    } else {
-        SCHEMA_VERSION
+    bundle.manifest.schema_version = match draft.schema_version {
+        CONTRACT_SOURCE_SCHEMA_VERSION => CONTRACT_BUNDLE_SCHEMA_VERSION,
+        OUTCOME_SOURCE_SCHEMA_VERSION => OUTCOME_BUNDLE_SCHEMA_VERSION,
+        _ => SCHEMA_VERSION,
     };
     bundle.manifest.title = draft.title.clone();
     bundle.manifest.objective = draft.objective.clone();

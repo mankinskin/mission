@@ -1,7 +1,7 @@
 use super::*;
 use schemars::JsonSchema;
 
-/// Legacy authoring version; v3 requires explicit authored outcome plans.
+/// Legacy authoring version; v3 adds authored outcomes and v4 contracts.
 pub const TYPED_SOURCE_SCHEMA_VERSION: u32 = 2;
 pub const PART_SOURCE_SCHEMA_VERSION: u32 = 1;
 
@@ -23,6 +23,8 @@ pub struct TypedDraft {
 pub struct TypedWaypoint {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outcome_plan: Option<WaypointOutcomePlan>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_contract: Option<WaypointExecutionContractV4>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub work_kind: Option<WaypointWorkKind>,
     pub waypoint_id: String,
@@ -89,6 +91,8 @@ pub(super) struct StoredSource {
 pub(super) struct StoredWaypoint {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) outcome_plan: Option<WaypointOutcomePlan>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) execution_contract: Option<WaypointExecutionContractV4>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) work_kind: Option<WaypointWorkKind>,
     pub(super) waypoint_id: String,

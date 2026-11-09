@@ -95,6 +95,7 @@ pub(crate) fn native_input(
             let linked = index == linked_index;
             WaypointFragment {
                 outcome_plan: Some(outcome(seed)),
+                execution_contract: None,
                 waypoint_id: seed.id.into(),
                 title: seed.title.into(),
                 depends_on: index
@@ -197,6 +198,7 @@ pub(crate) fn typed_draft(identity: FixtureIdentity) -> TypedDraft {
             .iter()
             .map(|seed| TypedWaypoint {
                 outcome_plan: Some(outcome(seed)),
+                execution_contract: None,
                 work_kind: None,
                 waypoint_id: seed.id.into(),
                 title: seed.title.into(),

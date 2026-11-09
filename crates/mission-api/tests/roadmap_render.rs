@@ -4,6 +4,7 @@ use uuid::Uuid;
 fn bundle() -> MissionBundle {
     let waypoint = |id: &str, depends_on: Vec<String>, title: &str| WaypointFragment {
         outcome_plan: None,
+        execution_contract: None,
         waypoint_id: id.into(),
         title: title.into(),
         depends_on,

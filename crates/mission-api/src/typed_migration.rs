@@ -1,4 +1,4 @@
-//! Recoverable conversion of native v1/v2 records into typed v2/v3 sources.
+//! Recoverable conversion of native v1/v2/v3 records into typed v2/v3/v4 sources.
 //!
 //! The accepted bundle remains an immutable historical representation.  The
 //! typed source is added alongside it, and the normal store revision is
@@ -253,7 +253,7 @@ pub(super) fn convert(
     for waypoint in &accepted.bundle.waypoints {
         if let Err(diagnostic) = outcome_plan::validate_outcome_plan(
             waypoint.outcome_plan.as_ref(),
-            accepted.bundle.manifest.schema_version == OUTCOME_BUNDLE_SCHEMA_VERSION,
+            accepted.bundle.manifest.schema_version >= OUTCOME_BUNDLE_SCHEMA_VERSION,
             &waypoint.waypoint_id,
         ) {
             diagnostics.push(diagnostic);
@@ -264,11 +264,10 @@ pub(super) fn convert(
     }
     Ok(TypedDraft {
         mission_id: accepted.mission_id,
-        schema_version: if accepted.bundle.manifest.schema_version == OUTCOME_BUNDLE_SCHEMA_VERSION
-        {
-            OUTCOME_SOURCE_SCHEMA_VERSION
-        } else {
-            TYPED_SOURCE_SCHEMA_VERSION
+        schema_version: match accepted.bundle.manifest.schema_version {
+            CONTRACT_BUNDLE_SCHEMA_VERSION => CONTRACT_SOURCE_SCHEMA_VERSION,
+            OUTCOME_BUNDLE_SCHEMA_VERSION => OUTCOME_SOURCE_SCHEMA_VERSION,
+            _ => TYPED_SOURCE_SCHEMA_VERSION,
         },
         revision: accepted.bundle.manifest.revision,
         title: accepted.bundle.manifest.title.clone(),
@@ -302,7 +301,11 @@ pub(super) fn convert(
                     .transpose()?;
                 Ok(TypedWaypoint {
                     outcome_plan: w.outcome_plan.clone(),
-                    work_kind: None,
+                    execution_contract: w.execution_contract.clone(),
+                    work_kind: w
+                        .execution_contract
+                        .as_ref()
+                        .map(|contract| contract.work_kind),
                     waypoint_id: w.waypoint_id.clone(),
                     title: w.title.clone(),
                     prompt: w.prompt.clone(),

@@ -230,6 +230,7 @@ impl MissionLifecycle {
     pub(super) fn fragment(input: DirectWaypoint) -> WaypointFragment {
         WaypointFragment {
             outcome_plan: None,
+            execution_contract: None,
             session_package: input.waypoint_id.clone(),
             waypoint_id: input.waypoint_id,
             title: input.title,

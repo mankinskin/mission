@@ -26,6 +26,7 @@ fn bundle() -> MissionBundle {
         },
         waypoints: vec![WaypointFragment {
             outcome_plan: None,
+            execution_contract: None,
             waypoint_id: "first".into(),
             title: "First".into(),
             depends_on: vec![],

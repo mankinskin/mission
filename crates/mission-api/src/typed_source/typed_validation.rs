@@ -16,13 +16,17 @@ pub(crate) fn typed_error(code: &'static str, message: &str) -> MissionError {
 pub(crate) fn validate_typed(draft: &TypedDraft, publishing: bool) -> Result<(), MissionError> {
     if !matches!(
         draft.schema_version,
-        TYPED_SOURCE_SCHEMA_VERSION | OUTCOME_SOURCE_SCHEMA_VERSION
+        TYPED_SOURCE_SCHEMA_VERSION
+            | OUTCOME_SOURCE_SCHEMA_VERSION
+            | CONTRACT_SOURCE_SCHEMA_VERSION
     ) {
         return Err(typed_error(
             "invalid-schema-version",
             &format!(
-                "source schema_version must be {} (legacy) or {} (planned outcomes).",
-                TYPED_SOURCE_SCHEMA_VERSION, OUTCOME_SOURCE_SCHEMA_VERSION
+                "source schema_version must be {}, {}, or {}.",
+                TYPED_SOURCE_SCHEMA_VERSION,
+                OUTCOME_SOURCE_SCHEMA_VERSION,
+                CONTRACT_SOURCE_SCHEMA_VERSION
             ),
         ));
     }
@@ -36,7 +40,7 @@ pub(crate) fn validate_typed(draft: &TypedDraft, publishing: bool) -> Result<(),
     for waypoint in &draft.waypoints {
         outcome_plan::validate_outcome_plan(
             waypoint.outcome_plan.as_ref(),
-            draft.schema_version == OUTCOME_SOURCE_SCHEMA_VERSION,
+            draft.schema_version >= OUTCOME_SOURCE_SCHEMA_VERSION,
             &waypoint.waypoint_id,
         )
         .map_err(one_diagnostic)?;
@@ -120,6 +124,18 @@ pub(crate) fn validate_typed(draft: &TypedDraft, publishing: bool) -> Result<(),
             }
         }
     }
+    if draft.schema_version == CONTRACT_SOURCE_SCHEMA_VERSION {
+        execution_contract::validate_contract_set(&draft.waypoints)?;
+    } else if draft
+        .waypoints
+        .iter()
+        .any(|waypoint| waypoint.execution_contract.is_some())
+    {
+        return Err(typed_error(
+            "execution-contract-schema-mismatch",
+            "execution_contract is supported only by typed source schema v4.",
+        ));
+    }
     Ok(())
 }
 
@@ -167,6 +183,11 @@ fn validate_inlines(inlines: &[Inline]) -> Result<(), MissionError> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "typed_validation_tests.rs"]
+mod execution_contract_tests;
+
 pub(crate) fn render_blocks(out: &mut String, blocks: &[Block], depth: usize) {
     for block in blocks {
         match block {

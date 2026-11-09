@@ -174,7 +174,7 @@ fn invalid_native_plans_and_versions_preserve_all_accepted_and_generated_bytes()
         }
         assert_eq!(snapshot(workspace.path()), before);
     }
-    for version in [0, 3, 99] {
+    for version in [0, 4, 99] {
         let mut bad = valid.clone();
         bad["manifest"]["schema_version"] = json!(version);
         let bad: MissionBundle = serde_json::from_value(bad).unwrap();

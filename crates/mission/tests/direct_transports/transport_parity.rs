@@ -81,6 +81,123 @@ fn cli_and_live_mcp_preserve_typed_v3_plans_and_reject_missing_plans_identically
 }
 
 #[test]
+fn v4_contract_round_trips_through_cli_generic_and_named_mcp() {
+    let workspace = tempfile::Builder::new()
+        .prefix(".w5-contract-transport-")
+        .tempdir_in(env!("CARGO_MANIFEST_DIR"))
+        .unwrap();
+    let created = cli(
+        workspace.path(),
+        &["create-draft".into(), "Contract".into(), "Bounded".into()],
+    );
+    assert_ok(&created);
+    let id = created["mission_id"].as_str().unwrap();
+    let fixture_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../mission-api/tests/fixtures/execution-contract-v4.json");
+    let mut source: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(fixture_path).unwrap()).unwrap();
+    source["mission_id"] = json!(id);
+    let published = cli(
+        workspace.path(),
+        &[
+            "publish-draft".into(),
+            id.into(),
+            source.to_string(),
+            "1".into(),
+        ],
+    );
+    assert_ok(&published);
+    assert_eq!(
+        published["source"]["waypoints"][0]["execution_contract"]["schema_version"],
+        4
+    );
+
+    let mut mcp = Mcp::start(workspace.path());
+    mcp.initialize();
+    let tools = mcp.request(2, "tools/list", json!({}));
+    let named_schema = tools["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "mission_waypoint_update")
+        .unwrap();
+    assert!(
+        named_schema["inputSchema"]
+            .to_string()
+            .contains("execution_contract")
+    );
+    let generic_schema = tools["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "mission_operation")
+        .unwrap();
+    assert!(
+        generic_schema["inputSchema"]
+            .to_string()
+            .contains("execution_contract")
+    );
+
+    let generic_read = mcp.call(
+        3,
+        "mission_operation",
+        json!({"operation":"get_mission_source","mission_id":id}),
+    );
+    assert_ok(&generic_read);
+    assert_eq!(generic_read["source"], published["source"]);
+
+    let mut generic_update = generic_read["source"].clone();
+    generic_update["waypoints"][0]["execution_contract"]["rationale"] =
+        json!("Generic typed update.");
+    let generic_saved = mcp.call(
+        4,
+        "mission_operation",
+        json!({
+            "operation":"save_draft",
+            "mission_id":id,
+            "draft":generic_update,
+            "expected_current_revision":published["revision"]
+        }),
+    );
+    assert_ok(&generic_saved);
+    let cli_read = cli(workspace.path(), &["get-mission-source".into(), id.into()]);
+    assert_ok(&cli_read);
+    assert_eq!(
+        cli_read["source"]["waypoints"][0]["execution_contract"]["rationale"],
+        "Generic typed update."
+    );
+
+    let mut waypoint = cli_read["source"]["waypoints"][0].clone();
+    waypoint["execution_contract"]["rationale"] = json!("Named typed update.");
+    let named_update = mcp.call(
+        5,
+        "mission_waypoint_update",
+        json!({
+            "workspace_root":workspace.path(),
+            "mission_id":id,
+            "request_id":"named-contract-update",
+            "expected_revision":cli_read["revision"],
+            "waypoint":waypoint
+        }),
+    );
+    assert_eq!(named_update["code"], "ok", "{named_update}");
+
+    let final_read = cli(workspace.path(), &["get-mission-source".into(), id.into()]);
+    assert_ok(&final_read);
+    assert_eq!(
+        final_read["source"]["waypoints"][0]["execution_contract"]["rationale"],
+        "Named typed update."
+    );
+    let rendered = cli(workspace.path(), &["render-mission".into(), id.into()]);
+    assert_ok(&rendered);
+    assert!(
+        rendered
+            .to_string()
+            .contains("Execution contract (declared; not executed by Mission)")
+    );
+}
+
+#[test]
 fn output_contract_and_separate_reaction_round_trip_between_cli_and_mcp() {
     let workspace = TempDir::new().unwrap();
     let created = cli(

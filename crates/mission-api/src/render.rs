@@ -225,6 +225,10 @@ fn render_materialized_with_consumer(
             &waypoint.validation,
         );
         outcome_plan::render_outcome_plan(&mut roadmap, waypoint.outcome_plan.as_ref());
+        execution_contract::render_execution_contract(
+            &mut roadmap,
+            waypoint.execution_contract.as_ref(),
+        );
         let previous = index.checked_sub(1).map(|previous| {
             format!(
                 "{:02}-{}.md",
@@ -280,6 +284,10 @@ fn render_materialized_with_consumer(
             part.push('\n');
             outcome_plan::render_outcome_plan(&mut part, waypoint.outcome_plan.as_ref());
         }
+        execution_contract::render_execution_contract(
+            &mut part,
+            waypoint.execution_contract.as_ref(),
+        );
         operator_results::render(
             &mut part,
             &bundle.manifest.operator_results,

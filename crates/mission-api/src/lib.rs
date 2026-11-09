@@ -19,6 +19,8 @@ mod intent_baseline;
 mod operator_results;
 #[cfg_attr(test, allow(unused_imports))]
 pub use intent_baseline::*;
+mod execution_contract;
+pub use execution_contract::*;
 mod outcome_plan;
 pub use outcome_plan::*;
 mod output_history;
@@ -126,6 +128,8 @@ pub struct ValidationGate {
 pub struct WaypointFragment {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outcome_plan: Option<WaypointOutcomePlan>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_contract: Option<WaypointExecutionContractV4>,
     #[serde(alias = "id")]
     pub waypoint_id: String,
     pub title: String,
@@ -271,6 +275,7 @@ mod tests {
     fn waypoint(id: &str, depends_on: Vec<String>) -> WaypointFragment {
         WaypointFragment {
             outcome_plan: None,
+            execution_contract: None,
             waypoint_id: id.into(),
             title: id.into(),
             depends_on,

@@ -6,6 +6,7 @@ use uuid::Uuid;
 fn waypoint(id: &str, depends_on: &[&str]) -> WaypointFragment {
     WaypointFragment {
         outcome_plan: None,
+        execution_contract: None,
         waypoint_id: id.into(),
         title: id.into(),
         depends_on: depends_on.iter().map(|v| (*v).into()).collect(),

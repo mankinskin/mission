@@ -312,6 +312,7 @@ pub(super) fn load_source_from_directory(
             serde_json::from_slice(&fs::read(mission_dir.join(waypoint.part_file))?)?;
         waypoints.push(TypedWaypoint {
             outcome_plan: waypoint.outcome_plan,
+            execution_contract: waypoint.execution_contract,
             work_kind: waypoint.work_kind,
             waypoint_id: waypoint.waypoint_id,
             title: waypoint.title,

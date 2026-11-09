@@ -13,8 +13,10 @@ pub const SHARED_SCHEMA_VERSION: u32 = 1;
 pub enum SharedSourceSchema {
     MissionBundleV1,
     MissionBundleV2,
+    MissionBundleV3,
     MissionSourceV2,
     MissionSourceV3,
+    MissionSourceV4,
     TicketUnversioned,
 }
 
@@ -76,28 +78,41 @@ impl SharedEntity {
     pub fn from_mission(mission: &AcceptedMission) -> Result<Self, Diagnostic> {
         if !matches!(
             mission.bundle.manifest.schema_version,
-            SCHEMA_VERSION | OUTCOME_BUNDLE_SCHEMA_VERSION
+            SCHEMA_VERSION | OUTCOME_BUNDLE_SCHEMA_VERSION | CONTRACT_BUNDLE_SCHEMA_VERSION
         ) {
             return Err(contract_diag(
                 "mission-shared-schema-unsupported",
                 "/bundle/manifest/schema_version",
-                "Expected native Mission v1 or v2; use the existing journaled Mission migration for supported conversions, never version coercion.",
+                "Expected native Mission v1, v2, or v3; use the existing journaled Mission migration for supported conversions, never version coercion.",
             ));
         }
         for waypoint in &mission.bundle.waypoints {
             outcome_plan::validate_outcome_plan(
                 waypoint.outcome_plan.as_ref(),
-                mission.bundle.manifest.schema_version == OUTCOME_BUNDLE_SCHEMA_VERSION,
+                mission.bundle.manifest.schema_version >= OUTCOME_BUNDLE_SCHEMA_VERSION,
                 &waypoint.waypoint_id,
+            )?;
+        }
+        if mission.bundle.manifest.schema_version == CONTRACT_BUNDLE_SCHEMA_VERSION {
+            execution_contract::validate_bundle_contracts(&mission.bundle).map_err(
+                |diagnostics| {
+                    diagnostics.into_iter().next().unwrap_or_else(|| {
+                        contract_diag(
+                            "mission-execution-contract-invalid",
+                            "/execution_contract",
+                            "execution contract validation failed without a diagnostic.",
+                        )
+                    })
+                },
             )?;
         }
         Self::project(
             mission.mission_id,
             &mission.bundle.manifest.title,
-            if mission.bundle.manifest.schema_version == OUTCOME_BUNDLE_SCHEMA_VERSION {
-                SharedSourceSchema::MissionBundleV2
-            } else {
-                SharedSourceSchema::MissionBundleV1
+            match mission.bundle.manifest.schema_version {
+                CONTRACT_BUNDLE_SCHEMA_VERSION => SharedSourceSchema::MissionBundleV3,
+                OUTCOME_BUNDLE_SCHEMA_VERSION => SharedSourceSchema::MissionBundleV2,
+                _ => SharedSourceSchema::MissionBundleV1,
             },
         )
     }
@@ -105,28 +120,45 @@ impl SharedEntity {
     pub fn from_typed_mission(source: &TypedDraft) -> Result<Self, Diagnostic> {
         if !matches!(
             source.schema_version,
-            TYPED_SOURCE_SCHEMA_VERSION | OUTCOME_SOURCE_SCHEMA_VERSION
+            TYPED_SOURCE_SCHEMA_VERSION
+                | OUTCOME_SOURCE_SCHEMA_VERSION
+                | CONTRACT_SOURCE_SCHEMA_VERSION
         ) {
             return Err(contract_diag(
                 "mission-shared-schema-unsupported",
                 "/schema_version",
-                "Expected typed Mission source v2 or v3; preserve source and use the owning migration API.",
+                "Expected typed Mission source v2, v3, or v4; preserve source and use the owning migration API.",
             ));
         }
         for waypoint in &source.waypoints {
             outcome_plan::validate_outcome_plan(
                 waypoint.outcome_plan.as_ref(),
-                source.schema_version == OUTCOME_SOURCE_SCHEMA_VERSION,
+                source.schema_version >= OUTCOME_SOURCE_SCHEMA_VERSION,
                 &waypoint.waypoint_id,
             )?;
+        }
+        if source.schema_version == CONTRACT_SOURCE_SCHEMA_VERSION {
+            execution_contract::validate_contract_set(&source.waypoints).map_err(|error| {
+                error
+                    .diagnostics()
+                    .and_then(|diagnostics| diagnostics.first())
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        contract_diag(
+                            "mission-execution-contract-invalid",
+                            "/execution_contract",
+                            "execution contract validation failed without a diagnostic.",
+                        )
+                    })
+            })?;
         }
         Self::project(
             source.mission_id,
             &source.title,
-            if source.schema_version == OUTCOME_SOURCE_SCHEMA_VERSION {
-                SharedSourceSchema::MissionSourceV3
-            } else {
-                SharedSourceSchema::MissionSourceV2
+            match source.schema_version {
+                CONTRACT_SOURCE_SCHEMA_VERSION => SharedSourceSchema::MissionSourceV4,
+                OUTCOME_SOURCE_SCHEMA_VERSION => SharedSourceSchema::MissionSourceV3,
+                _ => SharedSourceSchema::MissionSourceV2,
             },
         )
     }

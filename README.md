@@ -396,6 +396,36 @@ Alternatives are not acceptance criteria, branches, progress or state changes,
 dependency edges, scheduling, dispatch, or automatic recovery. Actual
 `operator_results` remain separate, with unchanged validation and rendering.
 
+### Bounded waypoint execution contracts
+
+Native bundle **v3** and typed source **v4** require one complete
+`execution_contract` per waypoint. It declares an outcome category separately
+from work kind; expected outcome and rationale; authoritative context;
+task/path boundary and dependencies; independently checkable preconditions and
+postconditions; acceptance, preflight and regression checks; evidence
+requirements; tool actions, permissions and read/write roots; environment and
+preflight; finite failure attempts and block/escalation handling; and either a
+producer/consumer handover or an explicit no-handover reason. Optional
+dependency, regression-check and provider routes likewise require an explicit
+reason when omitted. Unknown fields, missing contract content, invalid or
+duplicate IDs, unsafe roots and dangling references fail validation.
+
+Write roots must be equal to or nested within a declared boundary path
+(component-aware); read roots need not be so constrained. Handover producer
+checks must support a producer postcondition, consumer checks must support a
+consumer precondition, and the consumer must depend on the producer. Checks
+are descriptive command declarations with evidence classifications only. Mission
+does not run those commands, provide runtime isolation, or enforce tool permissions.
+W6 authority binding and W7 provider admission/completion enforcement are not
+implemented by this contract change.
+
+`waypoint_execution_contract_digest` computes lowercase SHA-256 over compact
+JSON serialization of the complete typed contract. The review plan exposes
+that digest per waypoint and includes the contract in its semantic plan digest.
+When no contract is present, the optional field is omitted, preserving legacy
+v2/v3 typed-source and v1/v2 bundle bytes and digests; these versions remain
+readable without implicit upgrade.
+
 Native bundle Requirements can add reference-only `canonical_criteria`:
 
 ```json

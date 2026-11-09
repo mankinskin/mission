@@ -73,10 +73,21 @@ pub fn validate_bundle(bundle: &MissionBundle) -> Result<(), Vec<Diagnostic>> {
     for (index, waypoint) in bundle.waypoints.iter().enumerate() {
         if let Err(diagnostic) = outcome_plan::validate_outcome_plan(
             waypoint.outcome_plan.as_ref(),
-            bundle.manifest.schema_version == OUTCOME_BUNDLE_SCHEMA_VERSION,
+            bundle.manifest.schema_version >= OUTCOME_BUNDLE_SCHEMA_VERSION,
             &waypoint.waypoint_id,
         ) {
             diagnostics.push(diagnostic);
+        }
+        if bundle.manifest.schema_version < CONTRACT_BUNDLE_SCHEMA_VERSION
+            && waypoint.execution_contract.is_some()
+        {
+            diagnostics.push(diag(
+                "execution-contract-schema-mismatch",
+                Path::new("waypoint.json"),
+                "/execution_contract",
+                Some(&waypoint.waypoint_id),
+                "execution_contract is supported only by native bundle schema v3.",
+            ));
         }
         if let Err(diagnostic) = waypoint.relationships.validate() {
             diagnostics.push(diagnostic);
@@ -199,6 +210,11 @@ pub fn validate_bundle(bundle: &MissionBundle) -> Result<(), Vec<Diagnostic>> {
                 ));
             }
         }
+        if bundle.manifest.schema_version == CONTRACT_BUNDLE_SCHEMA_VERSION
+            && let Err(contract_diagnostics) = execution_contract::validate_bundle_contracts(bundle)
+        {
+            diagnostics.extend(contract_diagnostics);
+        }
     }
 
     diagnostics.extend(operator_results::validate(bundle));
@@ -284,15 +300,17 @@ pub fn validate_bundle(bundle: &MissionBundle) -> Result<(), Vec<Diagnostic>> {
             }
         }
     }
-    for (index, id) in order.iter().enumerate().skip(1) {
-        if let Some(waypoint) = waypoint_by_id.get(id.as_str()) {
-            let predecessor = &order[index - 1];
-            if !waypoint
-                .depends_on
-                .iter()
-                .any(|dependency| dependency == predecessor)
-            {
-                diagnostics.push(diag("missing-immediate-predecessor", Path::new("manifest.json"), "/execution_order", Some(id), "Each waypoint after the first must explicitly depend on its immediate predecessor checkpoint."));
+    if bundle.manifest.schema_version != CONTRACT_BUNDLE_SCHEMA_VERSION {
+        for (index, id) in order.iter().enumerate().skip(1) {
+            if let Some(waypoint) = waypoint_by_id.get(id.as_str()) {
+                let predecessor = &order[index - 1];
+                if !waypoint
+                    .depends_on
+                    .iter()
+                    .any(|dependency| dependency == predecessor)
+                {
+                    diagnostics.push(diag("missing-immediate-predecessor", Path::new("manifest.json"), "/execution_order", Some(id), "Each waypoint after the first must explicitly depend on its immediate predecessor checkpoint."));
+                }
             }
         }
     }
@@ -342,14 +360,14 @@ pub(crate) fn validate_manifest_shape(manifest: &BundleManifest, path: &Path) ->
     let mut diagnostics = Vec::new();
     if !matches!(
         manifest.schema_version,
-        SCHEMA_VERSION | OUTCOME_BUNDLE_SCHEMA_VERSION
+        SCHEMA_VERSION | OUTCOME_BUNDLE_SCHEMA_VERSION | CONTRACT_BUNDLE_SCHEMA_VERSION
     ) {
         diagnostics.push(diag(
             "unsupported-schema-version",
             path,
             "/schema_version",
             None,
-            "Only native schema_version 1 (legacy) and 2 (planned outcomes) are supported.",
+            "Only native schema_version 1, 2 (planned outcomes), and 3 (execution contracts) are supported.",
         ));
     }
     if manifest.revision == 0

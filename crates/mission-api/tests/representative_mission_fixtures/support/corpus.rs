@@ -17,6 +17,7 @@ pub(crate) fn bundle() -> MissionBundle {
         },
         waypoints: vec![WaypointFragment {
             outcome_plan: None,
+            execution_contract: None,
             waypoint_id: "verify".into(),
             title: "Verify".into(),
             depends_on: vec![],

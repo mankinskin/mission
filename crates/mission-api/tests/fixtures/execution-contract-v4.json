@@ -1,0 +1,152 @@
+{
+  "mission_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "schema_version": 4,
+  "revision": 1,
+  "title": "Contract fixture",
+  "objective": "Verify a bounded contract.",
+  "waypoints": [
+    {
+      "waypoint_id": "w1",
+      "title": "One bounded task",
+      "prompt": "Implement the declared outcome.",
+      "part": {
+        "waypoint_id": "w1",
+        "document": {
+          "blocks": []
+        }
+      },
+      "work_kind": "implementation",
+      "outcome_plan": {
+        "expected_outcome": "A verified implementation",
+        "alternative_outcomes": [
+          {
+            "outcome": "Blocked",
+            "acceptable_handling": [
+              "Escalate with diagnostics"
+            ]
+          }
+        ]
+      },
+      "validation": [
+        {
+          "command": "cargo test -p mission-api",
+          "cwd": "."
+        }
+      ],
+      "commit_checkpoint": {
+        "message": "feat(mission-api): define contracts"
+      },
+      "execution_contract": {
+        "schema_version": 4,
+        "outcome_category": "working_behavior",
+        "expected_outcome": "A verified implementation",
+        "work_kind": "implementation",
+        "rationale": "The declared unit is independently deliverable.",
+        "authoritative_context": [
+          {
+            "id": "context-spec",
+            "reference": "ce://default/spec/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa#EA-01",
+            "description": "Execution contract acceptance"
+          }
+        ],
+        "boundary": {
+          "task": "ticket:bounded-work",
+          "paths": [
+            "workflow-tools/mission"
+          ]
+        },
+        "declared_dependency_ids": [],
+        "no_dependencies_reason": "This waypoint is the first independent unit.",
+        "preconditions": [
+          {
+            "id": "pre-source",
+            "description": "The accepted source is available.",
+            "check_ids": [
+              "check-preflight"
+            ]
+          }
+        ],
+        "postconditions": [
+          {
+            "id": "post-behavior",
+            "description": "The implementation passes its acceptance check.",
+            "check_ids": [
+              "check-acceptance"
+            ]
+          }
+        ],
+        "checks": [
+          {
+            "id": "check-preflight",
+            "command": "cargo check -p mission-api",
+            "cwd": ".",
+            "kind": "preflight",
+            "evidence_class": "deterministic_artifact"
+          },
+          {
+            "id": "check-acceptance",
+            "command": "cargo test -p mission-api",
+            "cwd": ".",
+            "kind": "acceptance",
+            "evidence_class": "executable_behavior"
+          },
+          {
+            "id": "check-regression",
+            "command": "cargo test -p mission-api",
+            "cwd": ".",
+            "kind": "regression",
+            "evidence_class": "executable_behavior"
+          }
+        ],
+        "evidence_requirements": [
+          {
+            "id": "evidence-test",
+            "class": "executable_behavior",
+            "check_ids": [
+              "check-acceptance"
+            ]
+          }
+        ],
+        "regression_check_ids": [
+          "check-regression"
+        ],
+        "tool_policy": {
+          "actions": [
+            "filesystem_read",
+            "filesystem_write",
+            "cli_read_only"
+          ],
+          "read_roots": [
+            "workflow-tools"
+          ],
+          "write_roots": [
+            "workflow-tools/mission"
+          ],
+          "permissions": [
+            "read",
+            "write",
+            "execute"
+          ]
+        },
+        "environment": {
+          "profile": "rust-workspace",
+          "description": "Repository-selected Rust toolchain.",
+          "preflight_check_ids": [
+            "check-preflight"
+          ]
+        },
+        "failure_policy": {
+          "trigger": "A required check fails.",
+          "diagnostic_action": "Inspect the failure and rerun after a justified fix.",
+          "max_attempts": 1,
+          "exhaustion": "block",
+          "escalation_target": "Ticket owner"
+        },
+        "handover": null,
+        "no_handover_reason": "This is a terminal task with no downstream consumer.",
+        "provider_route": null,
+        "no_provider_reason": "No external runtime provider is required."
+      }
+    }
+  ]
+}

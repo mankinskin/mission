@@ -84,6 +84,9 @@ pub(super) fn render_outcome_plan(output: &mut String, plan: Option<&WaypointOut
 }
 
 pub(super) fn renderer_version(bundle: &MissionBundle) -> &'static str {
+    if bundle.manifest.schema_version == CONTRACT_BUNDLE_SCHEMA_VERSION {
+        return "mission-api/8";
+    }
     let has_relationships = bundle.waypoints.iter().any(|waypoint| {
         waypoint.ticket_ref.is_some()
             || !waypoint.relationships.is_empty()

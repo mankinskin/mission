@@ -223,6 +223,13 @@ pub(crate) fn build_review_plan(
             .iter()
             .find(|fragment| fragment.waypoint_id == waypoint.waypoint_id)
             .ok_or_else(|| not_found(&waypoint.waypoint_id))?;
+        if waypoint.execution_contract != fragment.execution_contract {
+            return Err(plan_error(
+                "projection_diverged",
+                "typed source and accepted waypoint execution contracts differ.",
+                Some(&waypoint.waypoint_id),
+            ));
+        }
         pairs.push((waypoint, fragment, references(fragment)?));
     }
     let plan_digest = sha(&serde_json::to_vec(&DigestInput {
@@ -245,6 +252,7 @@ pub(crate) fn build_review_plan(
                 requirement_ids: &fragment.requirement_ids,
                 references: refs,
                 outcome_plan: waypoint.outcome_plan.as_ref(),
+                execution_contract: waypoint.execution_contract.as_ref(),
             })
             .collect(),
     })?);
@@ -273,42 +281,50 @@ pub(crate) fn build_review_plan(
     let waypoints = pairs
         .iter()
         .enumerate()
-        .map(|(index, (waypoint, fragment, refs))| {
-            let evidence: Vec<ReviewEvidence> = items
-                .iter()
-                .filter(|(result, _, _)| result.waypoint_id == waypoint.waypoint_id)
-                .map(|(result, _, bound)| ReviewEvidence {
-                    outcome: result.outcome.clone(),
-                    operator_command: result.operator_command.clone(),
-                    evidence_pointer: result.evidence_pointer.clone(),
-                    bound_plan_digest: bound.clone(),
-                    current: bound.as_deref() == Some(plan_digest.as_str()),
+        .map(
+            |(index, (waypoint, fragment, refs))| -> Result<ReviewWaypoint, MissionError> {
+                let evidence: Vec<ReviewEvidence> = items
+                    .iter()
+                    .filter(|(result, _, _)| result.waypoint_id == waypoint.waypoint_id)
+                    .map(|(result, _, bound)| ReviewEvidence {
+                        outcome: result.outcome.clone(),
+                        operator_command: result.operator_command.clone(),
+                        evidence_pointer: result.evidence_pointer.clone(),
+                        bound_plan_digest: bound.clone(),
+                        current: bound.as_deref() == Some(plan_digest.as_str()),
+                    })
+                    .collect();
+                Ok(ReviewWaypoint {
+                    position: index + 1,
+                    waypoint_id: waypoint.waypoint_id.clone(),
+                    work_kind: waypoint.work_kind,
+                    title: waypoint.title.clone(),
+                    prompt: waypoint.prompt.clone(),
+                    part: waypoint.part.document.clone(),
+                    commit_checkpoint: waypoint.commit_checkpoint.clone(),
+                    depends_on: waypoint.depends_on.clone(),
+                    non_goals: waypoint.non_goals.clone(),
+                    references: refs.clone(),
+                    requirement_ids: fragment.requirement_ids.clone(),
+                    validation: waypoint.validation.clone(),
+                    validation_status: "declared".into(),
+                    outcome_plan: waypoint.outcome_plan.clone(),
+                    execution_contract: waypoint.execution_contract.clone(),
+                    execution_contract_digest: waypoint
+                        .execution_contract
+                        .as_ref()
+                        .map(waypoint_execution_contract_digest)
+                        .transpose()?,
+                    review_status: if evidence.iter().any(|item| item.current) {
+                        "evidenced".into()
+                    } else {
+                        "pending".into()
+                    },
+                    evidence,
                 })
-                .collect();
-            ReviewWaypoint {
-                position: index + 1,
-                waypoint_id: waypoint.waypoint_id.clone(),
-                work_kind: waypoint.work_kind,
-                title: waypoint.title.clone(),
-                prompt: waypoint.prompt.clone(),
-                part: waypoint.part.document.clone(),
-                commit_checkpoint: waypoint.commit_checkpoint.clone(),
-                depends_on: waypoint.depends_on.clone(),
-                non_goals: waypoint.non_goals.clone(),
-                references: refs.clone(),
-                requirement_ids: fragment.requirement_ids.clone(),
-                validation: waypoint.validation.clone(),
-                validation_status: "declared".into(),
-                outcome_plan: waypoint.outcome_plan.clone(),
-                review_status: if evidence.iter().any(|item| item.current) {
-                    "evidenced".into()
-                } else {
-                    "pending".into()
-                },
-                evidence,
-            }
-        })
-        .collect();
+            },
+        )
+        .collect::<Result<Vec<_>, MissionError>>()?;
     Ok(ReviewPlan {
         mission_id: accepted.mission_id,
         schema_version: source.schema_version,
